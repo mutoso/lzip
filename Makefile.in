@@ -90,9 +90,9 @@ dist :
 	  $(DISTNAME)/doc/$(progname).1 \
 	  $(DISTNAME)/doc/$(progname).info \
 	  $(DISTNAME)/doc/$(progname).texinfo \
+	  $(DISTNAME)/testsuite/*.cc \
 	  $(DISTNAME)/testsuite/*.lz \
 	  $(DISTNAME)/testsuite/*.sh \
-	  $(DISTNAME)/testsuite/*.cc \
 	  $(DISTNAME)/*.cc \
 	  $(DISTNAME)/*.h
 	rm -f $(DISTNAME)

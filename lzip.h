@@ -153,7 +153,7 @@ public:
       {
       unsigned int c = n;
       for( int k = 0; k < 8; ++k )
-        { if( c & 1 ) c = 0xEDB88320 ^ ( c >> 1 ); else c = c >> 1; }
+        { if( c & 1 ) c = 0xEDB88320 ^ ( c >> 1 ); else c >>= 1; }
       data[n] = c;
       }
     }

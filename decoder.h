@@ -145,6 +145,28 @@ public:
   };
 
 
+class Len_decoder
+  {
+  Bit_model choice1;
+  Bit_model choice2;
+  Bit_model bm_low[pos_states][len_low_symbols];
+  Bit_model bm_mid[pos_states][len_mid_symbols];
+  Bit_model bm_high[len_high_symbols];
+
+public:
+  int decode( Range_decoder & range_decoder, const int pos_state )
+    {
+    if( range_decoder.decode_bit( choice1 ) == 0 )
+      return range_decoder.decode_tree( bm_low[pos_state], len_low_bits );
+    if( range_decoder.decode_bit( choice2 ) == 0 )
+      return len_low_symbols +
+             range_decoder.decode_tree( bm_mid[pos_state], len_mid_bits );
+    return len_low_symbols + len_mid_symbols +
+           range_decoder.decode_tree( bm_high, len_high_bits );
+    }
+  };
+
+
 class Literal_decoder
   {
   typedef Bit_model Bm_array[0x300];
@@ -165,28 +187,6 @@ public:
   uint8_t decode_matched( Range_decoder & range_decoder,
                           const int prev_byte, const int match_byte )
     { return range_decoder.decode_matched( bm_literal[state(prev_byte)], match_byte ); }
-  };
-
-
-class Len_decoder
-  {
-  Bit_model choice1;
-  Bit_model choice2;
-  Bit_model bm_low[pos_states][len_low_symbols];
-  Bit_model bm_mid[pos_states][len_mid_symbols];
-  Bit_model bm_high[len_high_symbols];
-
-public:
-  int decode( Range_decoder & range_decoder, const int pos_state )
-    {
-    if( range_decoder.decode_bit( choice1 ) == 0 )
-      return range_decoder.decode_tree( bm_low[pos_state], len_low_bits );
-    if( range_decoder.decode_bit( choice2 ) == 0 )
-      return len_low_symbols +
-             range_decoder.decode_tree( bm_mid[pos_state], len_mid_bits );
-    return len_low_symbols + len_mid_symbols +
-           range_decoder.decode_tree( bm_high, len_high_bits );
-    }
   };
 
 
@@ -263,7 +263,7 @@ public:
 
   ~LZ_decoder() { delete[] buffer; }
 
+  uint32_t crc() const throw() { return _crc ^ 0xFFFFFFFF; }
   long long decode( const Pretty_print & pp );
   long long file_position() const throw() { return partial_file_pos + pos; }
-  uint32_t crc() const throw() { return _crc ^ 0xFFFFFFFF; }
   };

@@ -190,26 +190,6 @@ void LZ_encoder::fill_distance_prices() throw()
   {
   for( int dis_state = 0; dis_state < max_dis_states; ++dis_state )
     {
-    int i;
-    for( i = 0; i < start_dis_model; ++i )
-      dis_prices[dis_state][i] = dis_slot_prices[dis_state][i];
-    for( ; i < modeled_distances; ++i )
-      {
-      const int dis_slot = get_dis_slot( i );
-      const int direct_bits = ( dis_slot >> 1 ) - 1;
-      const int base = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
-
-      dis_prices[dis_state][i] = dis_slot_prices[dis_state][dis_slot] +
-          price_symbol_reversed( bm_dis + base - dis_slot, i - base, direct_bits );
-      }
-    }
-  }
-
-
-void LZ_encoder::fill_dis_slot_prices() throw()
-  {
-  for( int dis_state = 0; dis_state < max_dis_states; ++dis_state )
-    {
     int slot = 0;
     for( ; slot < end_dis_model && slot < num_dis_slots; ++slot )
       dis_slot_prices[dis_state][slot] =
@@ -218,6 +198,18 @@ void LZ_encoder::fill_dis_slot_prices() throw()
       dis_slot_prices[dis_state][slot] =
         price_symbol( bm_dis_slot[dis_state], slot, dis_slot_bits ) +
         (((( slot >> 1 ) - 1 ) - dis_align_bits ) << price_shift );
+
+    int dis = 0;
+    for( ; dis < start_dis_model; ++dis )
+      dis_prices[dis_state][dis] = dis_slot_prices[dis_state][dis];
+    for( ; dis < modeled_distances; ++dis )
+      {
+      const int dis_slot = get_dis_slot( dis );
+      const int direct_bits = ( dis_slot >> 1 ) - 1;
+      const int base = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
+      dis_prices[dis_state][dis] = dis_slot_prices[dis_state][dis_slot] +
+          price_symbol_reversed( bm_dis + base - dis_slot, dis - base, direct_bits );
+      }
     }
   }
 
@@ -449,14 +441,14 @@ LZ_encoder::LZ_encoder( const File_header & header, const int ides,
     const int k = 1 << ( ( slot / 2 ) - 1 );
     for( int i = 0; i < k; ++i, ++c ) dis_slots[c] = slot;
     }
-
-  fill_dis_slot_prices(); fill_distance_prices(); fill_align_prices();
+  fill_align_prices();
   }
 
 
 bool LZ_encoder::encode()
   {
-  long long last_filling_pos = 0;
+  std::vector< Pair > result;
+  int fill_counter = 0;
   int rep_distances[num_rep_distances];
   State state;
   uint8_t prev_byte = 0;
@@ -465,10 +457,12 @@ bool LZ_encoder::encode()
   while( true )
     {
     if( matchfinder.finished() ) { flush( state ); return true; }
+    if( fill_counter <= 0 ) { fill_distance_prices(); fill_counter = 512; }
 
-    std::vector< Pair > result;
+    result.clear();
     int ahead = best_pair_sequence( rep_distances, state, result );
     if( ahead <= 0 || !result.size() ) return false;
+    fill_counter -= ahead;
 
     for( int i = result.size() - 1; i >= 0; --i )
       {
@@ -543,12 +537,6 @@ bool LZ_encoder::encode()
         prev_byte = matchfinder[len-1-ahead];
         }
       ahead -= len;
-      }
-    if( matchfinder.file_position() - last_filling_pos >= (1 << 9) )
-      {
-      fill_dis_slot_prices();
-      fill_distance_prices();
-      last_filling_pos = matchfinder.file_position();
       }
     }
   }

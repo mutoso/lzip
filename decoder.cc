@@ -54,6 +54,7 @@ void LZ_decoder::flush()
   }
 
 
+      // return value: -1 = OK, -2 = trailer error, >=0 = decoder error
 long long LZ_decoder::verify_trailer( const Pretty_print & pp )
   {
   flush();
@@ -80,7 +81,7 @@ long long LZ_decoder::verify_trailer( const Pretty_print & pp )
       }
     error = true;
     }
-  if( error ) return range_decoder.file_position() - sizeof trailer;
+  if( error ) return -2;
   return -1;
   }
 

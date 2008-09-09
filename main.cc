@@ -107,7 +107,7 @@ void show_version() throw()
   }
 
 
-long long getnum( const char * ptr, const int bs, const int verbosity,
+long long getnum( const char * ptr, const int bs,
                   const long long min = LONG_LONG_MIN + 1,
                   const long long max = LONG_LONG_MAX ) throw()
   {
@@ -176,7 +176,7 @@ int real_bits( const int value ) throw()
   }
 
 
-int get_dict_bits( const char * arg, const int verbosity ) throw()
+int get_dict_bits( const char * arg ) throw()
   {
   char *tail;
   int bits = std::strtol( arg, &tail, 0 );
@@ -184,7 +184,7 @@ int get_dict_bits( const char * arg, const int verbosity ) throw()
     return bits;
   const int min_size = 1 << min_dictionary_bits;
   const int max_size = 1 << max_dictionary_bits;
-  int size = getnum( arg, 0, verbosity, ( min_size / 2 ) + 1, max_size );
+  int size = getnum( arg, 0, ( min_size / 2 ) + 1, max_size );
   bits = real_bits( size - 1 );
   if( size > ( 1 << bits ) ) ++bits;
   return bits;
@@ -268,9 +268,9 @@ int decompress( const int ides, const int odes, const Pretty_print & pp ) throw(
       LZ_decoder decoder( header, ibuf, odes );
 
       const long long file_pos = decoder.decode( pp );
-      if( file_pos >= 0 )
+      if( file_pos != -1 )
         {
-        if( verbosity >= 0 )
+        if( verbosity >= 0 && file_pos >= 0 )
           { pp();
             std::fprintf( stderr, "decoder error at pos %lld\n", file_pos ); }
         return 2;
@@ -506,7 +506,7 @@ int main( const int argc, const char * argv[] ) throw()
   // to the corresponding LZMA compression modes.
   const lzma_options option_mapping[] =
     {
-    { 22,   8 },		// -1
+    { 22,  10 },		// -1
     { 22,  12 },		// -2
     { 22,  16 },		// -3
     { 22,  32 },		// -4
@@ -568,13 +568,13 @@ int main( const int argc, const char * argv[] ) throw()
                 encoder_options = option_mapping[code-'1']; break;
       case 'c': to_stdout = true; break;
       case 'd': program_mode = m_decompress; break;
-      case 'D': encoder_options.dictionary_bits = get_dict_bits( arg, verbosity );
+      case 'D': encoder_options.dictionary_bits = get_dict_bits( arg );
                 break;
       case 'f': force = true; break;
       case 'h': show_help(); return 0;
       case 'k': keep_input_files = true; break;
       case 'L': encoder_options.match_len_limit =
-                getnum( arg, 0, verbosity, 5, max_match_len ); break;
+                getnum( arg, 0, 5, max_match_len ); break;
       case 'q': verbosity = -1; break;
       case 't': program_mode = m_test; break;
       case 'v': if( verbosity < 4 ) ++verbosity; break;
@@ -649,7 +649,7 @@ int main( const int argc, const char * argv[] ) throw()
         struct utimbuf t;
         t.actime = in_stats.st_atime;
         t.modtime = in_stats.st_mtime;
-        tmp = utime ( output_filename.c_str(), &t );
+        tmp = utime( output_filename.c_str(), &t );
         }
       if( tmp )
 	{

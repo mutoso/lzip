@@ -3,15 +3,17 @@ Description
 Lzip is a lossless file compressor based on the LZMA (Lempel-Ziv-Markov
 chain-Algorithm) algorithm. The high compression of LZMA comes from
 combining two basic, well-proven compression ideas: sliding dictionaries
-i.e. LZ77/78, and markov models (i.e. the thing used by every
+(i.e. LZ77/78), and markov models (i.e. the thing used by every
 compression algorithm that uses a range encoder or similar order-0
-entropy coder as its last stage). LZMA combines large dictionary sizes
-with segregation of contexts in the model of the range encoder according
+entropy coder as its last stage) with segregation of contexts according
 to what the bits are used for.
 
-Lzip achieves notably better compression ratios and a decompression
-speed several times faster than bzip2 at the cost of much more memory
-and time requirements during compression.
+Lzip is not a replacement for gzip or bzip2, but a complement; which one
+is best to use depends on user's needs. Gzip is the fastest and most
+widely used. Bzip2 compresses better than gzip but is slower, both
+compressing and decompressing. Lzip decompresses almost as fast as gzip
+and compresses better than bzip2, but requires more memory and time
+during compression.
 
 The amount of memory required for compression is about 6 times the
 dictionary size, for decompression is a little more than dictionary
@@ -45,3 +47,13 @@ chance in 4000 million for each file processed. Be aware, though, that
 the check occurs upon decompression, so it can only tell you that
 something is wrong. It can't help you recover the original uncompressed
 data.
+
+
+Copyright (C) 2008 Antonio Diaz Diaz.
+
+This file is free documentation: you have unlimited permission to copy,
+distribute and modify it.
+
+The file Makefile.in is a data file used by configure to produce the
+Makefile. It has the same copyright owner and permissions that this
+file.

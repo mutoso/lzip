@@ -66,13 +66,14 @@ public:
 
   ~Matchfinder() { delete[] prev_pos_tree; delete[] prev_positions; delete[] buffer; }
 
-  const uint8_t * ptr_to_current_pos() const throw() { return buffer + pos; }
   uint8_t operator[]( const int i ) const throw() { return buffer[pos+i]; }
-  long long file_position() const throw() { return partial_file_pos + pos; }
-  uint32_t crc() const throw() { return _crc ^ 0xFFFFFFFF; }
-  bool finished() const throw() { return pos >= stream_pos; }
   int available_bytes() const throw() { return stream_pos - pos; }
+  uint32_t crc() const throw() { return _crc ^ 0xFFFFFFFF; }
+  long long file_position() const throw() { return partial_file_pos + pos; }
+  bool finished() const throw() { return pos >= stream_pos; }
   bool move_pos() throw();
+  const uint8_t * ptr_to_current_pos() const throw() { return buffer + pos; }
+
   int longest_match_len( int * const distances = 0 ) throw();
 
   int true_match_len( const int index, const int distance, int len_limit ) const throw()
@@ -426,7 +427,6 @@ class LZ_encoder
 
   void fill_align_prices() throw();
   void fill_distance_prices() throw();
-  void fill_dis_slot_prices() throw();
 
   int get_dis_slot( const unsigned int dis ) const throw()
     {

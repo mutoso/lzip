@@ -15,13 +15,15 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-/* A test program written to test robustness to decompression of
-   corrupted data.  Usage is
-       unzcrash "lzip -d" filename.lz
-   and the program will read the specified file and then repeatedly
-   decompress it, each time with a different bit of the compressed data
-   inverted, so as to test all possible one-bit errors. This should not
-   cause any invalid memory accesses. If it does, I want to know about it!
+/*  A test program written to test robustness to decompression of
+    corrupted data.  Usage is
+      unzcrash "lzip -tv" filename.lz
+    and the program will read the specified file and then repeatedly
+    decompress it, each time with a different bit of the compressed data
+    inverted, so as to test all possible one-bit errors. This should not
+    cause any invalid memory accesses. If it does, I want to know about it!
+    Compile this file with the command
+      g++ -O2 -Wall -W -o unzcrash testsuite/unzcrash.cc
 */
 
 #include <cstdio>
@@ -56,7 +58,7 @@ int main( const int argc, const char * argv[] )
     return 1;
     }
 
-  const int buffer_size = 65536;
+  const int buffer_size = 1 << 20;
   uint8_t buffer[buffer_size];
   const int size = std::fread( buffer, 1, buffer_size, f );
   if( size >= buffer_size )

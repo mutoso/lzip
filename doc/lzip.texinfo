@@ -5,8 +5,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 20 August 2008
-@set VERSION 0.1
+@set UPDATED 9 September 2008
+@set VERSION 0.2
 
 @dircategory Data Compression
 @direntry
@@ -55,13 +55,15 @@ chain-Algorithm) algorithm. The high compression of LZMA comes from
 combining two basic, well-proven compression ideas: sliding dictionaries
 (i.e. LZ77/78), and markov models (i.e. the thing used by every
 compression algorithm that uses a range encoder or similar order-0
-entropy coder as its last stage). LZMA combines large dictionary sizes
-with segregation of contexts in the model of the range encoder according
+entropy coder as its last stage) with segregation of contexts according
 to what the bits are used for.
 
-Lzip achieves notably better compression ratios and a decompression
-speed several times faster than bzip2 at the cost of much more memory
-and time requirements during compression.
+Lzip is not a replacement for gzip or bzip2, but a complement; which one
+is best to use depends on user's needs. Gzip is the fastest and most
+widely used. Bzip2 compresses better than gzip but is slower, both
+compressing and decompressing. Lzip decompresses almost as fast as gzip
+and compresses better than bzip2, but requires more memory and time
+during compression.
 
 The amount of memory required for compression is about 6 times the
 dictionary size, for decompression is a little more than dictionary
@@ -70,10 +72,10 @@ requirement is set at compression time by the choice of dictionary size.
 
 Lzip has a similar interface to gzip and bzip2. It replaces every file
 given in the command line with a compressed version of itself, with the
-name "<original_name>.lz". Each compressed file has the same
-modification date, permissions, and, when possible, ownership as the
-corresponding original, so that these properties can be correctly
-restored at decompression time.
+name "original_name.lz". Each compressed file has the same modification
+date, permissions, and, when possible, ownership as the corresponding
+original, so that these properties can be correctly restored at
+decompression time.
 
 If no file names are specified, Lzip compresses (or decompresses) from
 standard input to standard output. In this case, Lzip will decline to
@@ -188,7 +190,7 @@ decompressing.
 
 @multitable {Level} {Dictionary size} {Match length limit}
 @item Level @tab Dictionary size @tab Match length limit
-@item -1 @tab  4MiB @tab   8 bytes
+@item -1 @tab  4MiB @tab  10 bytes
 @item -2 @tab  4MiB @tab  12 bytes
 @item -3 @tab  4MiB @tab  16 bytes
 @item -4 @tab  4MiB @tab  32 bytes
@@ -273,6 +275,11 @@ Size of the uncompressed original file.
 @chapter Reporting Bugs
 @cindex bugs
 @cindex getting help
+
+There are probably bugs in Lzip. There are certainly errors and
+omissions in this manual. If you report them, they will get fixed. If
+you don't, no one will ever know about them and they will remain unfixed
+for all eternity, if not longer.
 
 If you find a bug in Lzip, please send electronic mail to
 @email{ant_diaz@@teleline.es}. Include the version number, which you can
