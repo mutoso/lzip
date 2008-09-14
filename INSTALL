@@ -10,7 +10,7 @@ Procedure
 ---------
 1. Unpack the archive if you have not done so already:
 
-	bunzip2 -c lzip[version].tar.bz2 | tar -xf -
+	bzip2 -cd lzip[version].tar.bz2 | tar -xf -
 
 This creates the directory ./lzip[version] containing the source from
 the main archive.

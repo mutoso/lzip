@@ -99,6 +99,7 @@ int Matchfinder::longest_match_len( int * const distances ) throw()
     const uint8_t * const newdata = buffer + newpos;
     int len = 0;
     while( newdata[len] == data[len] ) if( ++len >= len_limit ) break;
+//    if( len < min_match_len ) break;		// 15% slower, 1% better
 
     const int delta = pos - newpos;
     if( distances ) while( maxlen < len ) distances[++maxlen] = delta - 1;
@@ -107,26 +108,13 @@ int Matchfinder::longest_match_len( int * const distances ) throw()
 
     if( len < len_limit )
       {
-      if( len < min_match_len ) break;
       if( newdata[len] < data[len] )
-        {
-        *ptr0 = newpos;
-        ptr0 = newptr0 + 1;
-        newpos = *ptr0;
-        }
+        { *ptr0 = newpos; ptr0 = newptr0 + 1; newpos = *ptr0; }
       else
-        {
-        *ptr1 = newpos;
-        ptr1 = newptr0;
-        newpos = *ptr1;
-        }
+        { *ptr1 = newpos; ptr1 = newptr0;     newpos = *ptr1; }
       }
     else
-      {
-      *ptr0 = newptr0[0];
-      *ptr1 = newptr0[1];
-      break;
-      }
+      { *ptr0 = newptr0[0]; *ptr1 = newptr0[1]; break; }
     if( --count <= 0 ) break;
     }
   return maxlen;
@@ -216,8 +204,7 @@ void LZ_encoder::fill_distance_prices() throw()
 
 // Return value: ( dis == -1 ) && ( len == 1 ) means literal
 int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
-                                    const State & state,
-                                    std::vector< Pair > & result )
+                                    const State & state )
   {
   int main_len;
   if( longest_match_found > 0 )		// from previous call
@@ -236,14 +223,16 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
     }
   if( replens[rep_index] >= match_len_limit )
     {
-    result.push_back( Pair( rep_index, replens[rep_index] ) );
+    trials[0].dis = rep_index;
+    trials[0].price = replens[rep_index];
     if( !move_pos( replens[rep_index] ) ) return 0;
     return replens[rep_index];
     }
 
   if( main_len >= match_len_limit )
     {
-    result.push_back( Pair( match_distances[match_len_limit] + num_rep_distances, main_len ) );
+    trials[0].dis = match_distances[match_len_limit] + num_rep_distances;
+    trials[0].price = main_len;
     if( !move_pos( main_len ) ) return 0;
     return main_len;
     }
@@ -272,7 +261,8 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
 
   if( main_len < min_match_len )
     {
-    result.push_back( Pair( trials[1].dis, 1 ) );
+    trials[0].dis = trials[1].dis;
+    trials[0].price = 1;
     if( !matchfinder.move_pos() ) return 0;
     return 1;
     }
@@ -307,14 +297,14 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
     {
     if( ++cur >= num_trials )
       {
-      backward( cur, result );
+      backward( cur );
       return cur;
       }
     const int newlen = read_match_distances();
     if( newlen >= match_len_limit )
       {
       longest_match_found = newlen;
-      backward( cur, result );
+      backward( cur );
       return cur;
       }
 
@@ -447,7 +437,6 @@ LZ_encoder::LZ_encoder( const File_header & header, const int ides,
 
 bool LZ_encoder::encode()
   {
-  std::vector< Pair > result;
   int fill_counter = 0;
   int rep_distances[num_rep_distances];
   State state;
@@ -459,16 +448,15 @@ bool LZ_encoder::encode()
     if( matchfinder.finished() ) { flush( state ); return true; }
     if( fill_counter <= 0 ) { fill_distance_prices(); fill_counter = 512; }
 
-    result.clear();
-    int ahead = best_pair_sequence( rep_distances, state, result );
-    if( ahead <= 0 || !result.size() ) return false;
+    int ahead = best_pair_sequence( rep_distances, state );
+    if( ahead <= 0 ) return false;
     fill_counter -= ahead;
 
-    for( int i = result.size() - 1; i >= 0; --i )
+    for( int i = 0; ahead > 0; )
       {
       const int pos_state = ( matchfinder.file_position() - ahead ) & pos_state_mask;
-      int dis = result[i].dis;
-      const int len = result[i].len;
+      int dis = trials[i].dis;
+      const int len = trials[i].price;
 
       bool bit = ( dis < 0 && len == 1 );
       range_encoder.encode_bit( bm_match[state()][pos_state], !bit );
@@ -536,7 +524,7 @@ bool LZ_encoder::encode()
           }
         prev_byte = matchfinder[len-1-ahead];
         }
-      ahead -= len;
+      ahead -= len; i += len;
       }
     }
   }

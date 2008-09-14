@@ -1,5 +1,7 @@
-Changes in version 0.2:
+Changes in version 0.3:
 
-Some small efficiency improvements have been made.
+This release compresses a 15% faster but produces files a 1% larger.
 
-Some small documentation changes have been made.
+Option "--test" now takes precedence over option "--stdout".
+
+When finished decompressing, "done" is shown instead of "ok".

@@ -379,18 +379,12 @@ class LZ_encoder
          infinite_price = 0x0FFFFFFF,
          num_rep_distances = 4 };	// must be 4
 
-  struct Pair
-    {
-    int dis, len;
-    Pair( const int d, const int l ) : dis( d ), len( l ) {}
-    };
-
   struct Trial
     {
     State state;
     int dis;
     int prev_index;
-    int price;				// cumulative price
+    int price;		// dual use var; cumulative price, match length
     int reps[num_rep_distances];
     void update( const int d, const int p_i, const int pr )
       { if( pr < price ) { dis = d; prev_index = p_i; price = pr; } }
@@ -510,18 +504,20 @@ class LZ_encoder
     return true;
     }
 
-  void backward( int cur, std::vector< Pair > & result ) const
+  void backward( int cur )
     {
+    int & dis = trials[cur].dis;
     while( cur > 0 )
       {
       const int prev_index = trials[cur].prev_index;
-      result.push_back( Pair( trials[cur].dis, cur - prev_index ) );
+      std::swap( dis, trials[prev_index].dis );
+      trials[prev_index].price = cur - prev_index;	// len
       cur = prev_index;
       }
     }
 
   int best_pair_sequence( const int reps[num_rep_distances],
-                          const State & state, std::vector< Pair > & result );
+                          const State & state );
 
   void flush( const State & state );
 

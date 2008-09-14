@@ -236,7 +236,8 @@ int compress( const int ides, const int odes, lzma_options encoder_options,
   }
 
 
-int decompress( const int ides, const int odes, const Pretty_print & pp ) throw()
+int decompress( const int ides, const int odes, const Pretty_print & pp,
+                const bool testing ) throw()
   {
   Input_buffer ibuf( ides );
   for( bool first_pass = true; ; first_pass = false, pp.reset() )
@@ -275,7 +276,9 @@ int decompress( const int ides, const int odes, const Pretty_print & pp ) throw(
             std::fprintf( stderr, "decoder error at pos %lld\n", file_pos ); }
         return 2;
         }
-      if( verbosity > 0 ) std::fprintf( stderr, "ok\n" );
+      if( verbosity > 0 )
+        { if( testing ) std::fprintf( stderr, "ok\n" );
+          else std::fprintf( stderr, "done\n" ); }
       }
     catch( std::bad_alloc )
       {
@@ -592,6 +595,12 @@ int main( const int argc, const char * argv[] ) throw()
   else set_signals();
 
   Pretty_print pp( filenames );
+  if( program_mode == m_test )
+    {
+    outhandle = open_outstream( program_mode, 0, force );
+    if( outhandle < 0 ) return 1;
+    }
+
   int retval = 0;
   for( unsigned int i = 0; i < filenames.size(); ++i )
     {
@@ -603,11 +612,6 @@ int main( const int argc, const char * argv[] ) throw()
       input_filename.clear();
       inhandle = STDIN_FILENO;
       if( program_mode != m_test ) outhandle = STDOUT_FILENO;
-      else
-        {
-        outhandle = open_outstream( program_mode, 0, force );
-        if( outhandle < 0 ) return 1;
-        }
       }
     else
       {
@@ -615,11 +619,14 @@ int main( const int argc, const char * argv[] ) throw()
       const int eindex = extension_index();
       inhandle = open_instream( &in_stats, program_mode, eindex, force );
       if( inhandle < 0 ) continue;
-      if( to_stdout ) outhandle = STDOUT_FILENO;
-      else
+      if( program_mode != m_test )
         {
-        outhandle = open_outstream( program_mode, eindex, force );
-        if( outhandle < 0 ) return 1;
+        if( to_stdout ) outhandle = STDOUT_FILENO;
+        else
+          {
+          outhandle = open_outstream( program_mode, eindex, force );
+          if( outhandle < 0 ) return 1;
+          }
         }
       }
 
@@ -632,7 +639,7 @@ int main( const int argc, const char * argv[] ) throw()
     if( program_mode == m_compress )
       tmp = compress( inhandle, outhandle, encoder_options, pp );
     else
-      tmp = decompress( inhandle, outhandle, pp );
+      tmp = decompress( inhandle, outhandle, pp, program_mode == m_test );
     if( tmp > retval ) retval = tmp;
     if( retval && program_mode != m_test ) cleanup_and_fail( retval );
 

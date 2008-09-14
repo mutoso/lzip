@@ -11,7 +11,7 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip
 ****
 
-This manual is for Lzip (version 0.2, 9 September 2008).
+This manual is for Lzip (version 0.3, 15 September 2008).
 
 * Menu:
 
@@ -280,10 +280,10 @@ Concept Index
 
 Tag Table:
 Node: Top203
-Node: Introduction701
-Node: Invoking Lzip3893
-Node: File Format7067
-Node: Problems8094
-Node: Concept Index8620
+Node: Introduction702
+Node: Invoking Lzip3894
+Node: File Format7068
+Node: Problems8095
+Node: Concept Index8621
 
 End Tag Table

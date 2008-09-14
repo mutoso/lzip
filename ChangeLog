@@ -1,3 +1,11 @@
+2008-09-15  Antonio Diaz  <ant_diaz@teleline.es>
+
+	* Version 0.3 released.
+	* encoder.cc (longest_match_len): Is now 15% faster, 1% worse.
+	* main.cc (main): Make "-t" option override "-c".
+	* main.cc (decompress): Show "done" instead of "ok" when not testing.
+	* encoder.h: Use trials[] to return the list of pairs.
+
 2008-09-09  Antonio Diaz  <ant_diaz@teleline.es>
 
 	* Version 0.2 released.
