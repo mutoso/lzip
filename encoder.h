@@ -510,8 +510,9 @@ class LZ_encoder
     while( cur > 0 )
       {
       const int prev_index = trials[cur].prev_index;
-      std::swap( dis, trials[prev_index].dis );
-      trials[prev_index].price = cur - prev_index;	// len
+      Trial & prev_trial = trials[prev_index];
+      std::swap( dis, prev_trial.dis );
+      prev_trial.price = cur - prev_index;		// len
       cur = prev_index;
       }
     }

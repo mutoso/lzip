@@ -65,10 +65,7 @@ long long LZ_decoder::verify_trailer( const Pretty_print & pp )
   for( unsigned int i = 0; i < sizeof trailer; ++i )
     ((uint8_t *)&trailer)[i] = range_decoder.read_byte();
   if( trailer.file_crc() != file_crc )
-    {
-    if( verbosity >= 0 ) pp( "bad crc for uncompressed file" );
-    error = true;
-    }
+    { pp( "bad crc for uncompressed file" ); error = true; }
   if( trailer.file_size() != file_size )
     {
     if( verbosity >= 0 )

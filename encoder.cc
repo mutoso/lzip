@@ -93,28 +93,28 @@ int Matchfinder::longest_match_len( int * const distances ) throw()
   int * ptr0 = prev_pos_tree + ( ( cyclic_pos << 1 ) & dictionary_mask );
   int * ptr1 = ptr0 + 1;
 
-  for( int count = 256; ; )
+  for( int count = 256;; )
     {
     if( newpos < min_pos ) { *ptr0 = *ptr1 = -1; break; }
     const uint8_t * const newdata = buffer + newpos;
-    int len = 0;
-    while( newdata[len] == data[len] ) if( ++len >= len_limit ) break;
-//    if( len < min_match_len ) break;		// 15% slower, 1% better
+    if( newdata[0] != data[0] || newdata[1] != data[1] ) break;
+    int len = 2;
+    while( len < len_limit && newdata[len] == data[len] ) ++len;
 
     const int delta = pos - newpos;
     if( distances ) while( maxlen < len ) distances[++maxlen] = delta - 1;
 
-    int * const newptr0 = prev_pos_tree + ( ( ( cyclic_pos - delta ) << 1 ) & dictionary_mask );
+    int * const newptr = prev_pos_tree + ( ( ( cyclic_pos - delta ) << 1 ) & dictionary_mask );
 
     if( len < len_limit )
       {
       if( newdata[len] < data[len] )
-        { *ptr0 = newpos; ptr0 = newptr0 + 1; newpos = *ptr0; }
+        { *ptr0 = newpos; ptr0 = newptr + 1; newpos = *ptr0; }
       else
-        { *ptr1 = newpos; ptr1 = newptr0;     newpos = *ptr1; }
+        { *ptr1 = newpos; ptr1 = newptr;     newpos = *ptr1; }
       }
     else
-      { *ptr0 = newptr0[0]; *ptr1 = newptr0[1]; break; }
+      { *ptr0 = newptr[0]; *ptr1 = newptr[1]; break; }
     if( --count <= 0 ) break;
     }
   return maxlen;

@@ -116,8 +116,7 @@ long long getnum( const char * ptr, const int bs,
   long long result = strtoll( ptr, &tail, 0 );
   if( tail == ptr )
     {
-    if( verbosity >= 0 )
-      show_error( "bad or missing numerical argument", 0, true );
+    show_error( "bad or missing numerical argument", 0, true );
     std::exit( 1 );
     }
 
@@ -147,8 +146,7 @@ long long getnum( const char * ptr, const int bs,
       }
     if( bad_multiplier )
       {
-      if( verbosity >= 0 )
-        show_error( "bad multiplier in numerical argument", 0, true );
+      show_error( "bad multiplier in numerical argument", 0, true );
       std::exit( 1 );
       }
     for( int i = 0; i < exponent; ++i )
@@ -160,7 +158,7 @@ long long getnum( const char * ptr, const int bs,
   if( !errno && ( result < min || result > max ) ) errno = ERANGE;
   if( errno )
     {
-    if( verbosity >= 0 ) show_error( "numerical argument out of limits" );
+    show_error( "numerical argument out of limits" );
     std::exit( 1 );
     }
   return result;
@@ -199,14 +197,13 @@ int compress( const int ides, const int odes, lzma_options encoder_options,
   header.dictionary_bits = encoder_options.dictionary_bits;
   const int rd = writeblock( odes, (char *)&header, sizeof header );
   if( rd != sizeof header )
-    { if( verbosity >= 0 ) pp( "error writing file header" ); return 1; }
+    { pp( "error writing file header" ); return 1; }
 
   try {
     if( verbosity > 0 ) pp();
     LZ_encoder encoder( header, ides, odes, encoder_options.match_len_limit );
 
-    if( !encoder.encode() )
-      { if( verbosity >= 0 ) pp( "encoder error" ); return 2; }
+    if( !encoder.encode() ) { pp( "encoder error" ); return 2; }
 
     if( verbosity > 0 )
       {
@@ -214,7 +211,7 @@ int compress( const int ides, const int odes, lzma_options encoder_options,
       long long out_size = encoder.output_file_position();
 
       if( in_size <= 0 || out_size <= 0 )
-        fprintf( stderr, "no data compressed.\n" );
+        std::fprintf( stderr, "no data compressed.\n" );
       else
         std::fprintf( stderr, "%6.3f:1, %6.3f bits/byte, "
                               "%5.2f%% saved, %lld in, %lld out.\n",
@@ -226,12 +223,10 @@ int compress( const int ides, const int odes, lzma_options encoder_options,
     }
   catch( std::bad_alloc )
     {
-    if( verbosity >= 0 )
-      pp( "not enough memory. Try a smaller dictionary size" );
+    pp( "not enough memory. Try a smaller dictionary size" );
     return 1;
     }
-  catch( Error e )
-    { if( verbosity >= 0 ) pp( e.s ); return 1; }
+  catch( Error e ) { pp( e.s ); return 1; }
   return 0;
   }
 
@@ -247,8 +242,7 @@ int decompress( const int ides, const int odes, const Pretty_print & pp,
       ((uint8_t *)&header)[i] = ibuf.read_byte();
     if( ibuf.finished() )
       {
-      if( first_pass )
-        { if( verbosity >= 0 ) pp( "error reading file header" ); return 1; }
+      if( first_pass ) { pp( "error reading file header" ); return 1; }
       else break;
       }
     if( !header.verify_magic() )
@@ -262,7 +256,7 @@ int decompress( const int ides, const int odes, const Pretty_print & pp,
       }
     if( header.dictionary_bits < min_dictionary_bits ||
         header.dictionary_bits > max_dictionary_bits )
-      { if( verbosity >= 0 ) pp( "invalid value in file header" ); return 2; }
+      { pp( "invalid value in file header" ); return 2; }
 
     try {
       if( verbosity > 0 ) pp();
@@ -282,12 +276,10 @@ int decompress( const int ides, const int odes, const Pretty_print & pp,
       }
     catch( std::bad_alloc )
       {
-      if( verbosity >= 0 )
-        pp( "not enough memory. Find a machine with more memory" );
+      pp( "not enough memory. Find a machine with more memory" );
       return 1;
       }
-    catch( Error e )
-      { if( verbosity >= 0 ) pp( e.s ); return 1; }
+    catch( Error e ) { pp( e.s ); return 1; }
     }
   return 0;
   }
@@ -394,15 +386,13 @@ bool check_tty( const Mode program_mode, const int inhandle ) throw()
   {
   if( program_mode == m_compress && isatty( outhandle ) )
     {
-    if( verbosity >= 0 )
-      show_error( "I won't write compressed data to a terminal.", 0, true );
+    show_error( "I won't write compressed data to a terminal.", 0, true );
     return false;
     }
   if( ( program_mode == m_decompress || program_mode == m_test ) &&
       isatty( inhandle ) )
     {
-    if( verbosity >= 0 )
-      show_error( "I won't read compressed data from a terminal.", 0, true );
+    show_error( "I won't read compressed data from a terminal.", 0, true );
     return false;
     }
   return true;
@@ -414,10 +404,10 @@ void cleanup_and_fail( const int retval ) throw()
   if( delete_output_on_interrupt )
     {
     if( verbosity >= 0 )
-      fprintf( stderr, "%s: Deleting output file `%s', if it exists.\n",
+      std::fprintf( stderr, "%s: Deleting output file `%s', if it exists.\n",
                program_name, output_filename.c_str() );
     if( outhandle >= 0 ) { close( outhandle ); outhandle = -1; }
-    if( std::remove( output_filename.c_str() ) != 0 && verbosity >= 0 )
+    if( std::remove( output_filename.c_str() ) != 0 )
       show_error( "WARNING: deletion of output file (apparently) failed." );
     }
   std::exit( retval );
@@ -426,8 +416,7 @@ void cleanup_and_fail( const int retval ) throw()
 
 void signal_handler( const int ) throw()
   {
-  if( verbosity >= 0 )
-    show_error( "Control-C or similar caught, quitting." );
+  show_error( "Control-C or similar caught, quitting." );
   cleanup_and_fail( 0 );
   }
 
@@ -445,16 +434,36 @@ void set_signals() throw()
 int verbosity = 0;
 
 
+void Pretty_print::operator()( const char * const msg ) const throw()
+  {
+  if( verbosity >= 0 )
+    {
+    if( first_post )
+      {
+      first_post = false;
+      std::fprintf( stderr, "  %s: ", _name.c_str() );
+      for( unsigned int i = 0; i < longest_name - _name.size(); ++i )
+        std::fprintf( stderr, " " );
+      if( !msg ) std::fflush( stderr );
+      }
+    if( msg ) std::fprintf( stderr, "%s.\n", msg );
+    }
+  }
+
+
 void show_error( const char * msg, const int errcode, const bool help ) throw()
   {
-  if( msg && msg[0] != 0 )
+  if( verbosity >= 0 )
     {
-    std::fprintf( stderr, "%s: %s", program_name, msg );
-    if( errcode > 0 ) std::fprintf( stderr, ": %s", strerror( errcode ) );
-    std::fprintf( stderr, "\n" );
+    if( msg && msg[0] != 0 )
+      {
+      std::fprintf( stderr, "%s: %s", program_name, msg );
+      if( errcode > 0 ) std::fprintf( stderr, ": %s", strerror( errcode ) );
+      std::fprintf( stderr, "\n" );
+      }
+    if( help && invocation_name && invocation_name[0] != 0 )
+      std::fprintf( stderr, "Try `%s --help' for more information.\n", invocation_name );
     }
-  if( help && invocation_name && invocation_name[0] != 0 )
-    std::fprintf( stderr, "Try `%s --help' for more information.\n", invocation_name );
   }
 
 
@@ -554,8 +563,7 @@ int main( const int argc, const char * argv[] ) throw()
 
   Arg_parser parser( argc, argv, options );
   if( parser.error().size() )				// bad option
-    { if( verbosity >= 0 ) show_error( parser.error().c_str(), 0, true );
-      return 1; }
+    { show_error( parser.error().c_str(), 0, true ); return 1; }
 
   int argind = 0;
   for( ; argind < parser.arguments(); ++argind )
@@ -587,12 +595,15 @@ int main( const int argc, const char * argv[] ) throw()
       }
     }
 
+  bool filenames_given = false;
   for( ; argind < parser.arguments(); ++argind )
-    if( parser.argument( argind ) != "-" )
-      filenames.push_back( parser.argument( argind ) );
+    {
+    if( parser.argument( argind ) != "-" ) filenames_given = true;
+    filenames.push_back( parser.argument( argind ) );
+    }
 
   if( filenames.empty() ) filenames.push_back("-");
-  else set_signals();
+  if( filenames_given ) set_signals();
 
   Pretty_print pp( filenames );
   if( program_mode == m_test )
@@ -661,8 +672,7 @@ int main( const int argc, const char * argv[] ) throw()
       if( tmp )
 	{
         if( tmp > retval ) retval = tmp;
-	if( verbosity >= 0 )
-          show_error( "I can't change output file attributes." );
+        show_error( "I can't change output file attributes." );
         cleanup_and_fail( retval );
 	}
       }

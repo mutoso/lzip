@@ -1,7 +1,7 @@
-Changes in version 0.3:
+Changes in version 0.4:
 
-This release compresses a 15% faster but produces files a 1% larger.
+This release regains the compression ratio of version 0.2 with a speed
+that is a 5% faster.
 
-Option "--test" now takes precedence over option "--stdout".
-
-When finished decompressing, "done" is shown instead of "ok".
+A compilation problem on sistems where "size_t" is different from
+"unsigned int" has been fixed.

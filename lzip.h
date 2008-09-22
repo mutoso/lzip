@@ -110,8 +110,8 @@ public:
     for( unsigned int i = 0; i < filenames.size(); ++i )
       {
       const std::string & s = filenames[i];
-      if( s == "-" ) longest_name = std::max( longest_name, stdin_name_len );
-      else longest_name = std::max( longest_name, s.size() );
+      const unsigned int len = ( s == "-" ) ? stdin_name_len : s.size();
+      if( len > longest_name ) longest_name = len;
       }
     if( longest_name == 0 ) longest_name = stdin_name_len;
     }
@@ -124,21 +124,8 @@ public:
     }
 
   void reset() const throw() { if( _name.size() ) first_post = true; }
-
   const char * name() const throw() { return _name.c_str(); }
-
-  void operator()( const char * const msg = 0 ) const throw()
-    {
-    if( first_post )
-      {
-      first_post = false;
-      std::fprintf( stderr, "  %s: ", _name.c_str() );
-      for( unsigned int i = 0; i < longest_name - _name.size(); ++i )
-        std::fprintf( stderr, " " );
-      if( !msg ) std::fflush( stderr );
-      }
-    if( msg ) std::fprintf( stderr, "%s.\n", msg );
-    }
+  void operator()( const char * const msg = 0 ) const throw();
   };
 
 
