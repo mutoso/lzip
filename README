@@ -13,7 +13,8 @@ is best to use depends on user's needs. Gzip is the fastest and most
 widely used. Bzip2 compresses better than gzip but is slower, both
 compressing and decompressing. Lzip decompresses almost as fast as gzip
 and compresses better than bzip2, but requires more memory and time
-during compression.
+during compression. These features make lzip well suited for software
+distribution and data archival.
 
 The amount of memory required for compression is about 6 times the
 dictionary size, for decompression is a little more than dictionary

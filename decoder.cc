@@ -86,10 +86,10 @@ long long LZ_decoder::verify_trailer( const Pretty_print & pp )
      // Returns position of failure or -1 if no error.
 long long LZ_decoder::decode( const Pretty_print & pp )
   {
-  int rep0 = 0;
-  int rep1 = 0;
-  int rep2 = 0;
-  int rep3 = 0;
+  unsigned int rep0 = 0;
+  unsigned int rep1 = 0;
+  unsigned int rep2 = 0;
+  unsigned int rep3 = 0;
   State state;
   uint8_t prev_byte = 0;
 
@@ -120,7 +120,7 @@ long long LZ_decoder::decode( const Pretty_print & pp )
           }
         else
           {
-          int distance;
+          unsigned int distance;
           if( range_decoder.decode_bit( bm_rep1[state()] ) == 0 )
             distance = rep1;
           else
@@ -149,20 +149,19 @@ long long LZ_decoder::decode( const Pretty_print & pp )
         else
           {
           const int direct_bits = ( dis_slot >> 1 ) - 1;
-          unsigned int dis = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
+          rep0 = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
           if( dis_slot < end_dis_model )
-            dis += range_decoder.decode_tree_reversed( bm_dis + dis - dis_slot, direct_bits );
+            rep0 += range_decoder.decode_tree_reversed( bm_dis + rep0 - dis_slot, direct_bits );
           else
             {
-            dis += range_decoder.decode( direct_bits - dis_align_bits ) << dis_align_bits;
-            dis += range_decoder.decode_tree_reversed( bm_align, dis_align_bits );
-            if( dis == 0xFFFFFFFF )	// End Of Stream mark
+            rep0 += range_decoder.decode( direct_bits - dis_align_bits ) << dis_align_bits;
+            rep0 += range_decoder.decode_tree_reversed( bm_align, dis_align_bits );
+            if( rep0 == 0xFFFFFFFF )	// End Of Stream mark
               {
               if( len == min_match_len ) return verify_trailer( pp );
               return range_decoder.file_position();
               }
             }
-          rep0 = dis;
           }
         }
       if( !copy_block( rep0, len ) ) return range_decoder.file_position();

@@ -110,7 +110,7 @@ public:
     for( unsigned int i = 0; i < filenames.size(); ++i )
       {
       const std::string & s = filenames[i];
-      const unsigned int len = ( s == "-" ) ? stdin_name_len : s.size();
+      const unsigned int len = ( ( s == "-" ) ? stdin_name_len : s.size() );
       if( len > longest_name ) longest_name = len;
       }
     if( longest_name == 0 ) longest_name = stdin_name_len;

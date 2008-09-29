@@ -5,8 +5,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 23 September 2008
-@set VERSION 0.4
+@set UPDATED 30 September 2008
+@set VERSION 0.5
 
 @dircategory Data Compression
 @direntry
@@ -63,7 +63,8 @@ is best to use depends on user's needs. Gzip is the fastest and most
 widely used. Bzip2 compresses better than gzip but is slower, both
 compressing and decompressing. Lzip decompresses almost as fast as gzip
 and compresses better than bzip2, but requires more memory and time
-during compression.
+during compression. These features make lzip well suited for software
+distribution and data archival.
 
 The amount of memory required for compression is about 6 times the
 dictionary size, for decompression is a little more than dictionary
@@ -198,7 +199,7 @@ decompressing.
 @item -6 @tab  8MiB @tab  64 bytes
 @item -7 @tab 16MiB @tab  64 bytes
 @item -8 @tab 16MiB @tab 128 bytes
-@item -9 @tab 32MiB @tab 252 bytes
+@item -9 @tab 32MiB @tab 273 bytes
 @end multitable
 
 @item --fast

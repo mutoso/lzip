@@ -471,7 +471,7 @@ void internal_error( const char * msg ) throw()
   {
   std::string s( "internal error: " ); s += msg;
   show_error( s.c_str() );
-  exit( 3 );
+  std::exit( 3 );
   }
 
 
@@ -526,7 +526,7 @@ int main( const int argc, const char * argv[] ) throw()
     { 23,  64 },		// -6
     { 24,  64 },		// -7
     { 24, 128 },		// -8
-    { 25, 252 } };		// -9
+    { 25, 273 } };		// -9
   lzma_options encoder_options = option_mapping[5];	// default = "-6"
   Mode program_mode = m_compress;
   int inhandle = -1;

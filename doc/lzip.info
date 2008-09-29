@@ -11,7 +11,7 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip
 ****
 
-This manual is for Lzip (version 0.4, 23 September 2008).
+This manual is for Lzip (version 0.5, 30 September 2008).
 
 * Menu:
 
@@ -46,7 +46,8 @@ one is best to use depends on user's needs. Gzip is the fastest and most
 widely used. Bzip2 compresses better than gzip but is slower, both
 compressing and decompressing. Lzip decompresses almost as fast as gzip
 and compresses better than bzip2, but requires more memory and time
-during compression.
+during compression. These features make lzip well suited for software
+distribution and data archival.
 
    The amount of memory required for compression is about 6 times the
 dictionary size, for decompression is a little more than dictionary
@@ -175,7 +176,7 @@ The format for running Lzip is:
      -6      8MiB              64 bytes
      -7      16MiB             64 bytes
      -8      16MiB             128 bytes
-     -9      32MiB             252 bytes
+     -9      32MiB             273 bytes
 
 `--fast'
 `--best'
@@ -281,9 +282,9 @@ Concept Index
 Tag Table:
 Node: Top203
 Node: Introduction702
-Node: Invoking Lzip3894
-Node: File Format7068
-Node: Problems8095
-Node: Concept Index8621
+Node: Invoking Lzip3976
+Node: File Format7150
+Node: Problems8177
+Node: Concept Index8703
 
 End Tag Table

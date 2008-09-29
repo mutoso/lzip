@@ -239,8 +239,8 @@ class LZ_decoder
       {
       update_crc( _crc, buffer[newpos] );
       buffer[pos] = buffer[newpos];
-      if( ++newpos >= buffer_size ) newpos = 0;
       if( ++pos >= buffer_size ) flush();
+      if( ++newpos >= buffer_size ) newpos = 0;
       }
     return true;
     }

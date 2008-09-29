@@ -1,7 +1,3 @@
-Changes in version 0.4:
+Changes in version 0.5:
 
-This release regains the compression ratio of version 0.2 with a speed
-that is a 5% faster.
-
-A compilation problem on sistems where "size_t" is different from
-"unsigned int" has been fixed.
+The decompression speed has been improved a 1%.
