@@ -86,7 +86,7 @@ void show_help() throw()
   std::printf( "  -L, --match-length=<n>     set match length limit in bytes [64]\n" );
   std::printf( "  -q, --quiet                suppress all messages\n" );
   std::printf( "  -t, --test                 test compressed file integrity\n" );
-  std::printf( "  -v, --verbose              be verbose\n" );
+  std::printf( "  -v, --verbose              be verbose (a 2nd -v gives more)\n" );
   std::printf( "  -z, --compress             force compression\n" );
   std::printf( "  -1 .. -9                   set compression level [default 6]\n" );
   std::printf( "      --fast                 alias for -1\n" );
@@ -104,6 +104,29 @@ void show_version() throw()
   std::printf( "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\n" );
   std::printf( "This is free software: you are free to change and redistribute it.\n" );
   std::printf( "There is NO WARRANTY, to the extent permitted by law.\n" );
+  }
+
+
+const char * format_num( long long num, long long max = 1023,
+                         const int set_prefix = 0 ) throw()
+  {
+  const char * const si_prefix[8] =
+    { "k", "M", "G", "T", "P", "E", "Z", "Y" };
+  const char * const binary_prefix[8] =
+    { "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi", "Yi" };
+  static bool si = false;
+  static char buf[16];
+
+  if( set_prefix ) si = ( set_prefix > 0 );
+  const int factor = ( si ) ? 1000 : 1024;
+  const char * const *prefix = ( si ) ? si_prefix : binary_prefix;
+  const char *p = "";
+  max = std::max( 999LL, std::min( 999999LL, max ) );
+
+  for( int i = 0; i < 8 && llabs( num ) > llabs( max ); ++i )
+    { num /= factor; p = prefix[i]; }
+  snprintf( buf, sizeof buf, "%lld %s", num, p );
+  return buf;
   }
 
 
@@ -200,12 +223,12 @@ int compress( const int ides, const int odes, lzma_options encoder_options,
     { pp( "error writing file header" ); return 1; }
 
   try {
-    if( verbosity > 0 ) pp();
+    if( verbosity >= 1 ) pp();
     LZ_encoder encoder( header, ides, odes, encoder_options.match_len_limit );
 
     if( !encoder.encode() ) { pp( "encoder error" ); return 2; }
 
-    if( verbosity > 0 )
+    if( verbosity >= 1 )
       {
       long long in_size = encoder.input_file_position();
       long long out_size = encoder.output_file_position();
@@ -259,7 +282,14 @@ int decompress( const int ides, const int odes, const Pretty_print & pp,
       { pp( "invalid value in file header" ); return 2; }
 
     try {
-      if( verbosity > 0 ) pp();
+      if( verbosity >= 1 )
+        {
+        pp();
+        if( verbosity >= 2 )
+          std::fprintf( stderr, "version %d, dictionary size %6sB.  ",
+                        header.version,
+                        format_num( 1 << header.dictionary_bits ) );
+        }
       LZ_decoder decoder( header, ibuf, odes );
 
       const long long file_pos = decoder.decode( pp );
@@ -270,7 +300,7 @@ int decompress( const int ides, const int odes, const Pretty_print & pp,
             std::fprintf( stderr, "decoder error at pos %lld\n", file_pos ); }
         return 2;
         }
-      if( verbosity > 0 )
+      if( verbosity >= 1 )
         { if( testing ) std::fprintf( stderr, "ok\n" );
           else std::fprintf( stderr, "done\n" ); }
       }

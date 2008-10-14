@@ -21,12 +21,12 @@ dictionary size, for decompression is a little more than dictionary
 size. It is also important to appreciate that the decompression memory
 requirement is set at compression time by the choice of dictionary size.
 
-Lzip has a similar interface to gzip and bzip2. It replaces every file
-given in the command line with a compressed version of itself, with the
-name "original_name.lz". Each compressed file has the same modification
-date, permissions, and, when possible, ownership as the corresponding
-original, so that these properties can be correctly restored at
-decompression time.
+Lzip has a user interface similar to the one of gzip or bzip2. It
+replaces every file given in the command line with a compressed version
+of itself, with the name "original_name.lz". Each compressed file has
+the same modification date, permissions, and, when possible, ownership
+as the corresponding original, so that these properties can be correctly
+restored at decompression time.
 
 If no file names are specified, Lzip compresses (or decompresses) from
 standard input to standard output. In this case, Lzip will decline to

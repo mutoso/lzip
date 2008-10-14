@@ -11,7 +11,7 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip
 ****
 
-This manual is for Lzip (version 0.5, 30 September 2008).
+This manual is for Lzip (version 1.0, 14 October 2008).
 
 * Menu:
 
@@ -54,11 +54,11 @@ dictionary size, for decompression is a little more than dictionary
 size. It is also important to appreciate that the decompression memory
 requirement is set at compression time by the choice of dictionary size.
 
-   Lzip has a similar interface to gzip and bzip2. It replaces every
-file given in the command line with a compressed version of itself,
-with the name "original_name.lz". Each compressed file has the same
-modification date, permissions, and, when possible, ownership as the
-corresponding original, so that these properties can be correctly
+   Lzip has a user interface similar to the one of gzip or bzip2. It
+replaces every file given in the command line with a compressed version
+of itself, with the name "original_name.lz". Each compressed file has
+the same modification date, permissions, and, when possible, ownership
+as the corresponding original, so that these properties can be correctly
 restored at decompression time.
 
    If no file names are specified, Lzip compresses (or decompresses)
@@ -146,7 +146,7 @@ The format for running Lzip is:
 
 `--quiet'
 `-q'
-     Quiet operation.
+     Quiet operation. Suppress all messages.
 
 `--test'
 `-t'
@@ -157,6 +157,7 @@ The format for running Lzip is:
 `--verbose'
 `-v'
      Verbose mode. Show the compression ratio for each file processed.
+     Further -v's increase the verbosity level.
 
 `--compress'
 `-z'
@@ -281,10 +282,10 @@ Concept Index
 
 Tag Table:
 Node: Top203
-Node: Introduction702
-Node: Invoking Lzip3976
-Node: File Format7150
-Node: Problems8177
-Node: Concept Index8703
+Node: Introduction700
+Node: Invoking Lzip3989
+Node: File Format7234
+Node: Problems8261
+Node: Concept Index8787
 
 End Tag Table
