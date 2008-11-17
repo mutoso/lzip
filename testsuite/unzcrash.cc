@@ -1,28 +1,21 @@
-/*  Lzip - A LZMA file compressor
+/*  Unzcrash - A test program written to test robustness to
+               decompression of corrupted data.
+    Inspired by unzcrash.c from Julian Seward's bzip2.
     Copyright (C) 2008 Antonio Diaz Diaz.
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
+    This program is free software: you have unlimited permission
+    to copy, distribute and modify it.
 
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
-/*  A test program written to test robustness to decompression of
-    corrupted data.  Usage is
+    Usage is:
       unzcrash "lzip -tv" filename.lz
-    and the program will read the specified file and then repeatedly
-    decompress it, each time with a different bit of the compressed data
-    inverted, so as to test all possible one-bit errors. This should not
-    cause any invalid memory accesses. If it does, I want to know about it!
-    Compile this file with the command
+
+    This program reads the specified file and then repeatedly
+    decompresses it, each time with a different bit of the compressed
+    data inverted, so as to test all possible one-bit errors. This
+    should not cause any invalid memory accesses. If it does, please,
+    report it as a bug.
+
+    Compile this file with the command:
       g++ -O2 -Wall -W -o unzcrash testsuite/unzcrash.cc
 */
 
@@ -47,7 +40,7 @@ int main( const int argc, const char * argv[] )
   {
   if( argc < 3 )
     {
-    std::fprintf( stderr, "Usage: unzcrash <command> <data-file>\n" );
+    std::fprintf( stderr, "Usage: unzcrash \"lzip -tv\" filename.lz\n" );
     return 1;
     }
 

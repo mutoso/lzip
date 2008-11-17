@@ -44,6 +44,16 @@
 #include "decoder.h"
 #include "encoder.h"
 
+#ifndef LLONG_MAX
+#define LLONG_MAX  0x7FFFFFFFFFFFFFFFLL
+#endif
+#ifndef LLONG_MIN
+#define LLONG_MIN  (-LLONG_MAX - 1LL)
+#endif
+#ifndef ULLONG_MAX
+#define ULLONG_MAX 0xFFFFFFFFFFFFFFFFULL
+#endif
+
 
 namespace {
 
@@ -80,11 +90,11 @@ void show_help() throw()
   std::printf( "  -V, --version              output version information and exit\n" );
   std::printf( "  -c, --stdout               send output to standard output\n" );
   std::printf( "  -d, --decompress           force decompression\n" );
-  std::printf( "  -D, --dictionary-size=<n>  set dictionary size in bytes [8MiB]\n" );
   std::printf( "  -f, --force                overwrite existing output files\n" );
   std::printf( "  -k, --keep                 keep (don't delete) input files\n" );
-  std::printf( "  -L, --match-length=<n>     set match length limit in bytes [64]\n" );
+  std::printf( "  -m, --match-length=<n>     set match length limit in bytes [64]\n" );
   std::printf( "  -q, --quiet                suppress all messages\n" );
+  std::printf( "  -s, --dictionary-size=<n>  set dictionary size in bytes [8MiB]\n" );
   std::printf( "  -t, --test                 test compressed file integrity\n" );
   std::printf( "  -v, --verbose              be verbose (a 2nd -v gives more)\n" );
   std::printf( "  -z, --compress             force compression\n" );
@@ -93,7 +103,7 @@ void show_help() throw()
   std::printf( "      --best                 alias for -9\n" );
   std::printf( "If no file names are given, lzip compresses or decompresses\n" );
   std::printf( "from standard input to standard output.\n" );
-  std::printf( "\nReport bugs to ant_diaz@teleline.es\n");
+  std::printf( "\nReport bugs to lzip-bug@nongnu.org\n");
   }
 
 
@@ -131,8 +141,8 @@ const char * format_num( long long num, long long max = 1023,
 
 
 long long getnum( const char * ptr, const int bs,
-                  const long long min = LONG_LONG_MIN + 1,
-                  const long long max = LONG_LONG_MAX ) throw()
+                  const long long min = LLONG_MIN + 1,
+                  const long long max = LLONG_MAX ) throw()
   {
   errno = 0;
   char *tail;
@@ -174,7 +184,7 @@ long long getnum( const char * ptr, const int bs,
       }
     for( int i = 0; i < exponent; ++i )
       {
-      if( LONG_LONG_MAX / factor >= llabs( result ) ) result *= factor;
+      if( LLONG_MAX / factor >= llabs( result ) ) result *= factor;
       else { errno = ERANGE; break; }
       }
     }
@@ -220,7 +230,7 @@ int compress( const int ides, const int odes, lzma_options encoder_options,
   header.dictionary_bits = encoder_options.dictionary_bits;
   const int rd = writeblock( odes, (char *)&header, sizeof header );
   if( rd != sizeof header )
-    { pp( "error writing file header" ); return 1; }
+    { pp(); show_error( "error writing file header", errno ); return 1; }
 
   try {
     if( verbosity >= 1 ) pp();
@@ -249,7 +259,7 @@ int compress( const int ides, const int odes, lzma_options encoder_options,
     pp( "not enough memory. Try a smaller dictionary size" );
     return 1;
     }
-  catch( Error e ) { pp( e.s ); return 1; }
+  catch( Error e ) { pp(); show_error( e.s, errno ); return 1; }
   return 0;
   }
 
@@ -277,6 +287,14 @@ int decompress( const int ides, const int odes, const Pretty_print & pp,
                         program_name ); }
       return 2;
       }
+    if( !header.verify_version() )
+      {
+      if( verbosity >= 0 )
+        { pp();
+          std::fprintf( stderr, "file format not supported, newer %s needed.\n",
+                        program_name ); }
+      return 2;
+      }
     if( header.dictionary_bits < min_dictionary_bits ||
         header.dictionary_bits > max_dictionary_bits )
       { pp( "invalid value in file header" ); return 2; }
@@ -292,12 +310,19 @@ int decompress( const int ides, const int odes, const Pretty_print & pp,
         }
       LZ_decoder decoder( header, ibuf, odes );
 
-      const long long file_pos = decoder.decode( pp );
-      if( file_pos != -1 )
+      const int result = decoder.decode( pp );
+      if( result != 0 )
         {
-        if( verbosity >= 0 && file_pos >= 0 )
-          { pp();
-            std::fprintf( stderr, "decoder error at pos %lld\n", file_pos ); }
+        if( verbosity >= 0 && result <= 2 )
+          {
+          pp();
+          if( result == 1 )
+            std::fprintf( stderr, "decoder error at pos %lld\n",
+                          decoder.input_file_position() );
+          if( result == 2 )
+            std::fprintf( stderr, "file ends unexpectedly at pos %lld\n",
+                          decoder.input_file_position() );
+          }
         return 2;
         }
       if( verbosity >= 1 )
@@ -309,7 +334,7 @@ int decompress( const int ides, const int odes, const Pretty_print & pp,
       pp( "not enough memory. Find a machine with more memory" );
       return 1;
       }
-    catch( Error e ) { pp( e.s ); return 1; }
+    catch( Error e ) { pp(); show_error( e.s, errno ); return 1; }
     }
   return 0;
   }
@@ -366,8 +391,8 @@ int open_instream( struct stat * in_statsp, const Mode program_mode,
   if( ides < 0 )
     {
     if( verbosity >= 0 )
-      std::fprintf( stderr, "%s: Can't open input file `%s'.\n",
-                    program_name, input_filename.c_str() );
+      std::fprintf( stderr, "%s: Can't open input file `%s': %s.\n",
+                    program_name, input_filename.c_str(), strerror( errno ) );
     }
   else
     {
@@ -405,8 +430,8 @@ int open_outstream( const Mode program_mode, const int eindex, const bool force 
       std::fprintf( stderr, "%s: Output file %s already exists, skipping.\n",
                     program_name, output_filename.c_str() );
     else
-      std::fprintf( stderr, "%s: Can't create output file `%s'.\n",
-                    program_name, output_filename.c_str() );
+      std::fprintf( stderr, "%s: Can't create output file `%s': %s.\n",
+                    program_name, output_filename.c_str(), strerror( errno ) );
     }
   return odes;
   }
@@ -579,12 +604,12 @@ int main( const int argc, const char * argv[] ) throw()
     { '9', "best",            Arg_parser::no  },
     { 'c', "stdout",          Arg_parser::no  },
     { 'd', "decompress",      Arg_parser::no  },
-    { 'D', "dictionary-size", Arg_parser::yes },
     { 'f', "force",           Arg_parser::no  },
     { 'h', "help",            Arg_parser::no  },
     { 'k', "keep",            Arg_parser::no  },
-    { 'L', "match-length",    Arg_parser::yes },
+    { 'm', "match-length",    Arg_parser::yes },
     { 'q', "quiet",           Arg_parser::no  },
+    { 's', "dictionary-size", Arg_parser::yes },
     { 't', "test",            Arg_parser::no  },
     { 'v', "verbose",         Arg_parser::no  },
     { 'V', "version",         Arg_parser::no  },
@@ -609,14 +634,14 @@ int main( const int argc, const char * argv[] ) throw()
                 encoder_options = option_mapping[code-'1']; break;
       case 'c': to_stdout = true; break;
       case 'd': program_mode = m_decompress; break;
-      case 'D': encoder_options.dictionary_bits = get_dict_bits( arg );
-                break;
       case 'f': force = true; break;
       case 'h': show_help(); return 0;
       case 'k': keep_input_files = true; break;
-      case 'L': encoder_options.match_len_limit =
+      case 'm': encoder_options.match_len_limit =
                 getnum( arg, 0, 5, max_match_len ); break;
       case 'q': verbosity = -1; break;
+      case 's': encoder_options.dictionary_bits = get_dict_bits( arg );
+                break;
       case 't': program_mode = m_test; break;
       case 'v': if( verbosity < 4 ) ++verbosity; break;
       case 'V': show_version(); return 0;

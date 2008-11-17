@@ -5,8 +5,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 14 October 2008
-@set VERSION 1.0
+@set UPDATED 17 November 2008
+@set VERSION 1.1
 
 @dircategory Data Compression
 @direntry
@@ -51,12 +51,12 @@ to copy, distribute and modify it.
 @cindex introduction
 
 Lzip is a lossless file compressor based on the LZMA (Lempel-Ziv-Markov
-chain-Algorithm) algorithm. The high compression of LZMA comes from
-combining two basic, well-proven compression ideas: sliding dictionaries
-(i.e. LZ77/78), and markov models (i.e. the thing used by every
-compression algorithm that uses a range encoder or similar order-0
-entropy coder as its last stage) with segregation of contexts according
-to what the bits are used for.
+chain-Algorithm) algorithm designed by Igor Pavlov. The high compression
+of LZMA comes from combining two basic, well-proven compression ideas:
+sliding dictionaries (i.e. LZ77/78), and markov models (i.e. the thing
+used by every compression algorithm that uses a range encoder or similar
+order-0 entropy coder as its last stage) with segregation of contexts
+according to what the bits are used for.
 
 Lzip is not a replacement for gzip or bzip2, but a complement; which one
 is best to use depends on user's needs. Gzip is the fastest and most
@@ -78,8 +78,8 @@ the same modification date, permissions, and, when possible, ownership
 as the corresponding original, so that these properties can be correctly
 restored at decompression time.
 
-If no file names are specified, Lzip compresses (or decompresses) from
-standard input to standard output. In this case, Lzip will decline to
+If no file names are specified, lzip compresses (or decompresses) from
+standard input to standard output. In this case, lzip will decline to
 write compressed output to a terminal, as this would be entirely
 incomprehensible and therefore pointless.
 
@@ -97,11 +97,11 @@ the compressed file as follows:
 @item anyothername @tab becomes @tab anyothername.out
 @end multitable
 
-As a self-check for your protection, Lzip stores in the file trailer the
+As a self-check for your protection, lzip stores in the file trailer the
 32-bit CRC of the original file and the size of the original file, to
 make sure that the decompressed version of the file is identical to the
 original. This guards against corruption of the compressed data, and
-against undetected bugs in Lzip (hopefully very unlikely). The chances
+against undetected bugs in lzip (hopefully very unlikely). The chances
 of data corruption going undetected are microscopic, less than one
 chance in 4000 million for each file processed. Be aware, though, that
 the check occurs upon decompression, so it can only tell you that
@@ -111,7 +111,7 @@ data.
 Return values: 0 for a normal exit, 1 for environmental problems (file
 not found, invalid flags, I/O errors, etc), 2 to indicate a corrupt or
 invalid input file, 3 for an internal consistency error (eg, bug) which
-caused Lzip to panic.
+caused lzip to panic.
 
 
 @node Invoking Lzip
@@ -121,7 +121,7 @@ caused Lzip to panic.
 @cindex usage
 @cindex version
 
-The format for running Lzip is:
+The format for running lzip is:
 
 @example
 lzip [@var{options}] [@var{files}]
@@ -136,7 +136,7 @@ Print an informative help message describing the options and exit.
 
 @item --version
 @itemx -V
-Print the version number of Lzip on the standard output and exit.
+Print the version number of lzip on the standard output and exit.
 
 @item --stdout
 @itemx -c
@@ -145,13 +145,6 @@ Compress or decompress to standard output.
 @item --decompress
 @itemx -d
 Decompress.
-
-@item --dictionary-size=@var{size}
-@itemx -D @var{size}
-Set the dictionary size in bytes. Dictionary size is always a power of
-two. You may specify it as the number of bits to use or as a size
-between 4KiB and 1GiB. If the specified size is not a power of two,
-it is rounded upwards.
 
 @item --force
 @itemx -f
@@ -162,7 +155,7 @@ Force overwrite of output file.
 Keep (don't delete) input files during compression or decompression.
 
 @item --match-length=@var{length}
-@itemx -L @var{length}
+@itemx -m @var{length}
 Set match length limit in bytes. Valid values range from 5 to 273.
 Larger values usually give better compression ratios but longer
 compression times.
@@ -170,6 +163,13 @@ compression times.
 @item --quiet
 @itemx -q
 Quiet operation. Suppress all messages.
+
+@item --dictionary-size=@var{size}
+@itemx -s @var{size}
+Set the dictionary size in bytes. Dictionary size is always a power of
+two. You may specify it as the number of bits to use or as a size
+between 4KiB and 1GiB. If the specified size is not a power of two,
+it is rounded upwards.
 
 @item --test
 @itemx -t
@@ -228,18 +228,18 @@ Table of SI and binary prefixes (unit multipliers):
 @end multitable
 
 @sp 1
-NOTE: Don't believe everything Usamericans tell you. 10^9 is a thousand
-millions, a billion is a million millions (million^2), a trillion is a
-million million millions (million^3), and so on. Please, don't "embrace
-and extend" the meaning of prefixes, making communication among all
-people difficult. Thanks.
+NOTE: This manual follows the international standard for prefixes and
+not the Usamerican anomaly. 10^9 is a thousand millions, a billion is a
+million millions (million^2), a trillion is a million million millions
+(million^3), and so on. Please, don't "embrace and extend" the meaning
+of prefixes, making communication among all people difficult. Thanks.
 
 
 @node File Format
 @chapter File Format
 @cindex File Format
 
-The compressed file format produced by Lzip is this:
+The compressed file format produced by lzip is this:
 
 @verbatim
 +---+---+---+---+----+----+=============+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -278,13 +278,13 @@ Size of the uncompressed original file.
 @cindex bugs
 @cindex getting help
 
-There are probably bugs in Lzip. There are certainly errors and
+There are probably bugs in lzip. There are certainly errors and
 omissions in this manual. If you report them, they will get fixed. If
 you don't, no one will ever know about them and they will remain unfixed
 for all eternity, if not longer.
 
-If you find a bug in Lzip, please send electronic mail to
-@email{ant_diaz@@teleline.es}. Include the version number, which you can
+If you find a bug in lzip, please send electronic mail to
+@email{lzip-bug@@nongnu.org}. Include the version number, which you can
 find by running @w{@samp{lzip --version}}.
 
 

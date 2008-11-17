@@ -246,7 +246,7 @@ class LZ_decoder
     }
 
   void flush();
-  long long verify_trailer( const Pretty_print & pp );
+  bool verify_trailer( const Pretty_print & pp );
 
 public:
   LZ_decoder( const File_header & header, Input_buffer & ibuf, const int odes )
@@ -264,6 +264,10 @@ public:
   ~LZ_decoder() { delete[] buffer; }
 
   uint32_t crc() const throw() { return _crc ^ 0xFFFFFFFF; }
-  long long decode( const Pretty_print & pp );
-  long long file_position() const throw() { return partial_file_pos + pos; }
+  int decode( const Pretty_print & pp );
+
+  long long input_file_position() const throw()
+    { return range_decoder.file_position(); }
+  long long output_file_position() const throw()
+    { return partial_file_pos + pos; }
   };

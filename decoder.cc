@@ -54,18 +54,25 @@ void LZ_decoder::flush()
   }
 
 
-      // return value: -1 = OK, -2 = trailer error, >=0 = decoder error
-long long LZ_decoder::verify_trailer( const Pretty_print & pp )
+bool LZ_decoder::verify_trailer( const Pretty_print & pp )
   {
   flush();
-  const long long file_size = file_position();
+  const long long file_size = output_file_position();
   const uint32_t file_crc = crc();
   bool error = false;
   File_trailer trailer;
   for( unsigned int i = 0; i < sizeof trailer; ++i )
     ((uint8_t *)&trailer)[i] = range_decoder.read_byte();
   if( trailer.file_crc() != file_crc )
-    { pp( "bad crc for uncompressed file" ); error = true; }
+    {
+    if( verbosity >= 0 )
+      {
+      pp();
+      std::fprintf( stderr, "bad crc for uncompressed file; expected %08X, obtained %08X.\n",
+                    trailer.file_crc(), file_crc );
+      }
+    error = true;
+    }
   if( trailer.file_size() != file_size )
     {
     if( verbosity >= 0 )
@@ -78,13 +85,13 @@ long long LZ_decoder::verify_trailer( const Pretty_print & pp )
       }
     error = true;
     }
-  if( error ) return -2;
-  return -1;
+  return !error;
   }
 
 
-     // Returns position of failure or -1 if no error.
-long long LZ_decoder::decode( const Pretty_print & pp )
+    // Return value: 0 = OK, 1 = decoder error, 2 = unexpected EOF,
+    //               3 = trailer error, 4 = unknown marker found.
+int LZ_decoder::decode( const Pretty_print & pp )
   {
   unsigned int rep0 = 0;
   unsigned int rep1 = 0;
@@ -95,8 +102,8 @@ long long LZ_decoder::decode( const Pretty_print & pp )
 
   while( true )
     {
-    if( range_decoder.finished() ) return range_decoder.file_position();
-    const int pos_state = file_position() & pos_state_mask;
+    if( range_decoder.finished() ) return 2;
+    const int pos_state = output_file_position() & pos_state_mask;
     if( range_decoder.decode_bit( bm_match[state()][pos_state] ) == 0 )
       {
       if( state.is_char() )
@@ -156,15 +163,21 @@ long long LZ_decoder::decode( const Pretty_print & pp )
             {
             rep0 += range_decoder.decode( direct_bits - dis_align_bits ) << dis_align_bits;
             rep0 += range_decoder.decode_tree_reversed( bm_align, dis_align_bits );
-            if( rep0 == 0xFFFFFFFF )	// End Of Stream mark
+            if( rep0 == 0xFFFFFFFF )		// Marker found
               {
-              if( len == min_match_len ) return verify_trailer( pp );
-              return range_decoder.file_position();
+              if( len == min_match_len )	// End Of Stream marker
+                { if( verify_trailer( pp ) ) return 0; else return 3; }
+              if( verbosity >= 0 )
+                {
+                pp();
+                std::fprintf( stderr, "unsupported marker code `%d'.\n", len );
+                }
+              return 4;
               }
             }
           }
         }
-      if( !copy_block( rep0, len ) ) return range_decoder.file_position();
+      if( !copy_block( rep0, len ) ) return 1;
       prev_byte = get_byte( 0 );
       }
     }

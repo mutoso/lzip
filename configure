@@ -1,17 +1,17 @@
 #!/bin/sh
 # configure script for Lzip - A LZMA file compressor
-# Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008 Antonio Diaz Diaz.
+# Copyright (C) 2008 Antonio Diaz Diaz.
 #
 # This configure script is free software: you have unlimited permission
 # to copy, distribute and modify it.
 #
-# Date of this version: 2008-10-14
+# Date of this version: 2008-11-17
 
 invocation_name=$0
 args=
 no_create=
 progname=lzip
-progversion=1.0
+progversion=1.1
 srctrigger=lzip.h
 
 # clear some things potentially inherited from environment.
@@ -184,7 +184,7 @@ echo "LDFLAGS = ${LDFLAGS}"
 rm -f Makefile
 cat > Makefile << EOF
 # Makefile for Lzip - A LZMA file compressor
-# Copyright (C) 2003, 2004, 2005, 2006, 2007, 2008 Antonio Diaz Diaz.
+# Copyright (C) 2008 Antonio Diaz Diaz.
 # This file was generated automatically by configure. Do not edit.
 #
 # This Makefile is free software: you have unlimited permission

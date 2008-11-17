@@ -1,3 +1,10 @@
+2008-11-17  Antonio Diaz  <ant_diaz@teleline.es>
+
+	* Version 1.1 released.
+	* Changed short name of option "--dictionary-size" to "-s".
+	* Changed short name of option "--match-length" to "-m".
+	* Changed LONG_LONG_MAX to LLONG_MAX.
+
 2008-10-14  Antonio Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.0 released.

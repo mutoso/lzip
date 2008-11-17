@@ -164,8 +164,12 @@ struct File_header
 
   bool verify_magic() const throw()
     {
-    return ( std::memcmp( magic, magic_string, sizeof magic ) == 0 &&
-             version == 0 );
+    return ( std::memcmp( magic, magic_string, sizeof magic ) == 0 );
+    }
+
+  bool verify_version() const throw()
+    {
+    return ( version == 0 );
     }
   };
 

@@ -80,9 +80,9 @@ public:
     {
     if( index + len_limit > available_bytes() )
       len_limit = available_bytes() - index;
-    const uint8_t * const data = buffer + pos + index;
+    const uint8_t * const data = buffer + pos + index - distance;
     int i = 0;
-    while( i < len_limit && data[i] == data[i-distance] ) ++i;
+    while( i < len_limit && data[i] == data[i+distance] ) ++i;
     return i;
     }
   };

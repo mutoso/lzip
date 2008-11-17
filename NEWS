@@ -1,3 +1,7 @@
-Changes in version 1.0:
+Changes in version 1.1:
 
-Small changes have been made to documentation and user messages.
+Short name of option "--dictionary-size" has been changed to "-s".
+
+Short name of option "--match-length" has been changed to "-m".
+
+A couple of build problems on BSD have been fixed.
