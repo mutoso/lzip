@@ -1,3 +1,15 @@
+2008-12-10  Antonio Diaz  <ant_diaz@teleline.es>
+
+	* Version 1.2 released.
+	* A 1-byte read outside allocated memory has been fixed.
+	* Dictionary size limit has been reduced to 512MiB because
+	  setting it to 1GiB causes overflow of a 32 bit integer.
+	* Added "lzdiff", a diff/cmp wrapper for gzip, bzip2, lzip and
+	  non-compressed files.
+	* Added "lzgrep", a grep wrapper for gzip, bzip2, lzip and
+	  non-compressed files.
+	* "make install-info" should now work on Debian and OS X.
+
 2008-11-17  Antonio Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.1 released.

@@ -1,4 +1,4 @@
-/*  Lzip - A LZMA file compressor
+/*  Lzip - A data compressor based on the LZMA algorithm
     Copyright (C) 2008 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -49,7 +49,7 @@ public:
 
 
 const int min_dictionary_bits = 12;
-const int max_dictionary_bits = 30;
+const int max_dictionary_bits = 29;
 const int literal_context_bits = 3;
 const int pos_state_bits = 2;
 const int pos_states = 1 << pos_state_bits;

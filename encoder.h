@@ -1,4 +1,4 @@
-/*  Lzip - A LZMA file compressor
+/*  Lzip - A data compressor based on the LZMA algorithm
     Copyright (C) 2008 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -62,6 +62,7 @@ public:
     {
     if( !read_block() ) throw Error( "read error" );
     for( int i = 0; i < num_prev_positions; ++i ) prev_positions[i] = -1;
+    for( int i = 0; i < dictionary_size; ++i ) prev_pos_tree[i] = -1;
     }
 
   ~Matchfinder() { delete[] prev_pos_tree; delete[] prev_positions; delete[] buffer; }
@@ -494,11 +495,12 @@ class LZ_encoder
     return len;
     }
 
-  bool move_pos( int n ) throw()
+  bool move_pos( int n, bool skip = false ) throw()
     {
     while( --n >= 0 )
       {
-      matchfinder.longest_match_len();
+      if( skip ) skip = false;
+      else matchfinder.longest_match_len();
       if( !matchfinder.move_pos() ) return false;
       }
     return true;

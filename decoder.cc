@@ -1,4 +1,4 @@
-/*  Lzip - A LZMA file compressor
+/*  Lzip - A data compressor based on the LZMA algorithm
     Copyright (C) 2008 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify

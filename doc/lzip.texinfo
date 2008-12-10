@@ -5,18 +5,18 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 17 November 2008
-@set VERSION 1.1
+@set UPDATED 10 December 2008
+@set VERSION 1.2
 
 @dircategory Data Compression
 @direntry
-* Lzip: (lzip).                 A LZMA file compressor.
+* Lzip: (lzip).                 A data compressor based on the LZMA algorithm.
 @end direntry
 
 
 @titlepage
 @title Lzip
-@subtitle Data recovery tool
+@subtitle A data compressor based on the LZMA algorithm
 @subtitle for Lzip version @value{VERSION}, @value{UPDATED}
 @author by Antonio Diaz Diaz
 
@@ -35,6 +35,8 @@ This manual is for Lzip (version @value{VERSION}, @value{UPDATED}).
 * Introduction::	Purpose and features of Lzip
 * Invoking Lzip::	Command line interface
 * File Format::		Detailed format of the compressed file
+* Lzdiff::		Comparing compressed files
+* Lzgrep::		Searching inside compressed files
 * Problems::		Reporting bugs
 * Concept Index::	Index of concepts
 @end menu
@@ -168,7 +170,7 @@ Quiet operation. Suppress all messages.
 @itemx -s @var{size}
 Set the dictionary size in bytes. Dictionary size is always a power of
 two. You may specify it as the number of bits to use or as a size
-between 4KiB and 1GiB. If the specified size is not a power of two,
+between 4KiB and 512MiB. If the specified size is not a power of two,
 it is rounded upwards.
 
 @item --test
@@ -258,7 +260,7 @@ Just in case something needs to be modified in the future. 0x00 for now.
 
 @item DB (dictionary bits, 1 byte)
 Base 2 logarithm of the dictionary size. Valid values range from 12 to
-30 (4KiB to 1GiB).
+29 (4KiB to 512MiB).
 
 @item Lzma stream
 The lzma stream, finished by an end of stream marker. Uses default values
@@ -269,6 +271,100 @@ CRC of the uncompressed original file.
 
 @item file size (8 bytes)
 Size of the uncompressed original file.
+
+@end table
+
+
+@node Lzdiff
+@chapter Lzdiff
+@cindex Lzdiff
+
+Lzdiff is a wrapper script around the diff and cmp commands that allows
+transparent comparison of any combination of compressed and
+non-compressed files. If any given file is compressed, its uncompressed
+content is used. The supported compressors are gzip, bzip2 and lzip.
+
+The format for running lzdiff is:
+
+@example
+lzdiff [@var{options}] [@var{diff_options}] @var{file1} [@var{file2}]
+@end example
+
+@noindent
+Compares @var{file1} to @var{file2}. If @var{file2} is omitted, compares
+@var{file1} to the uncompressed contents of @var{file1}.[gz|bz2|lz]
+(depending on the default compressor selected). @var{diff_options} are
+passed directly to diff or cmp. The exit status from diff or cmp is
+preserved.
+
+Lzdiff supports the following options:
+
+@table @samp
+@item --help
+Print an informative help message describing the options and exit.
+
+@item --version
+Print the version number of lzdiff on the standard output and exit.
+
+@item --gzip
+Use gzip as default decompressor.
+
+@item --bzip2
+Use bzip2 as default decompressor.
+
+@item --lzip
+Use lzip as default decompressor (default).
+
+@item --diff
+Use diff to compare files (default).
+
+@item --cmp
+Use cmp to compare files.
+
+@end table
+
+Lzdiff has the limitation that messages from the diff or cmp programs
+refer to temporary filenames instead of those specified.
+
+
+@node Lzgrep
+@chapter Lzgrep
+@cindex Lzgrep
+
+Lzgrep is a wrapper script around the grep command that allows
+transparent search on any combination of compressed and non-compressed
+files. If any given file is compressed, its uncompressed content is
+used. If a given file does not exist, lzgrep tries the compressed file
+name corresponding to the default compressor selected. The supported
+compressors are gzip, bzip2 and lzip.
+
+The format for running lzgrep is:
+
+@example
+lzgrep [@var{options}] [@var{grep_options}] @var{pattern} [@var{file}]...
+@end example
+
+@noindent
+@var{grep_options} are passed directly to grep. The exit status from
+grep is preserved.
+
+Lzgrep supports the following options:
+
+@table @samp
+@item --help
+Print an informative help message describing the options and exit.
+
+@item --version
+Print the version number of lzgrep on the standard output and exit.
+
+@item --gzip
+Use gzip as default decompressor.
+
+@item --bzip2
+Use bzip2 as default decompressor.
+
+@item --lzip
+Use lzip as default decompressor (default).
 
 @end table
 

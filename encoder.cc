@@ -1,4 +1,4 @@
-/*  Lzip - A LZMA file compressor
+/*  Lzip - A data compressor based on the LZMA algorithm
     Copyright (C) 2008 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -225,7 +225,7 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
     {
     trials[0].dis = rep_index;
     trials[0].price = replens[rep_index];
-    if( !move_pos( replens[rep_index] ) ) return 0;
+    if( !move_pos( replens[rep_index], true ) ) return 0;
     return replens[rep_index];
     }
 
@@ -233,7 +233,7 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
     {
     trials[0].dis = match_distances[match_len_limit] + num_rep_distances;
     trials[0].price = main_len;
-    if( !move_pos( main_len ) ) return 0;
+    if( !move_pos( main_len, true ) ) return 0;
     return main_len;
     }
 
@@ -442,6 +442,14 @@ bool LZ_encoder::encode()
   State state;
   uint8_t prev_byte = 0;
   for( int i = 0; i < num_rep_distances; ++i ) rep_distances[i] = 0;
+  if( !matchfinder.finished() )			// copy first byte
+    {
+    range_encoder.encode_bit( bm_match[state()][0], 0 );
+    const uint8_t cur_byte = matchfinder[0];
+    literal_encoder.encode( range_encoder, prev_byte, cur_byte );
+    prev_byte = cur_byte;
+    if( !move_pos( 1 ) ) return false;
+    }
 
   while( true )
     {

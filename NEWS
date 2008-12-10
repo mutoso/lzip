@@ -1,7 +1,15 @@
-Changes in version 1.1:
+Changes in version 1.2:
 
-Short name of option "--dictionary-size" has been changed to "-s".
+A 1-byte read outside allocated memory, that could theoretically produce
+a bad compressed file, has been fixed.
 
-Short name of option "--match-length" has been changed to "-m".
+Dictionary size limit has been reduced to 512MiB because setting it to
+1GiB causes overflow of a 32 bit integer.
 
-A couple of build problems on BSD have been fixed.
+Lzdiff, a diff/cmp wrapper for gzip, bzip2 and lzip compressed files has
+been added to the distribution.
+
+Lzgrep, a grep wrapper for gzip, bzip2 and lzip compressed files has
+been added to the distribution.
+
+"make install-info" should now work on Debian and OS X.

@@ -2,7 +2,7 @@ This is lzip.info, produced by makeinfo version 4.8 from lzip.texinfo.
 
 INFO-DIR-SECTION Data Compression
 START-INFO-DIR-ENTRY
-* Lzip: (lzip).                 A LZMA file compressor.
+* Lzip: (lzip).                 A data compressor based on the LZMA algorithm.
 END-INFO-DIR-ENTRY
 
 
@@ -11,13 +11,15 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip
 ****
 
-This manual is for Lzip (version 1.1, 17 November 2008).
+This manual is for Lzip (version 1.2, 10 December 2008).
 
 * Menu:
 
 * Introduction::	Purpose and features of Lzip
 * Invoking Lzip::	Command line interface
 * File Format::		Detailed format of the compressed file
+* Lzdiff::		Comparing compressed files
+* Lzgrep::		Searching inside compressed files
 * Problems::		Reporting bugs
 * Concept Index::	Index of concepts
 
@@ -145,7 +147,7 @@ The format for running lzip is:
 `-s SIZE'
      Set the dictionary size in bytes. Dictionary size is always a
      power of two. You may specify it as the number of bits to use or
-     as a size between 4KiB and 1GiB. If the specified size is not a
+     as a size between 4KiB and 512MiB. If the specified size is not a
      power of two, it is rounded upwards.
 
 `--test'
@@ -208,7 +210,7 @@ million millions (million^2), a trillion is a million million millions
 of prefixes, making communication among all people difficult. Thanks.
 
 
-File: lzip.info,  Node: File Format,  Next: Problems,  Prev: Invoking Lzip,  Up: Top
+File: lzip.info,  Node: File Format,  Next: Lzdiff,  Prev: Invoking Lzip,  Up: Top
 
 3 File Format
 *************
@@ -232,7 +234,7 @@ The compressed file format produced by lzip is this:
 
 `DB (dictionary bits, 1 byte)'
      Base 2 logarithm of the dictionary size. Valid values range from
-     12 to 30 (4KiB to 1GiB).
+     12 to 29 (4KiB to 512MiB).
 
 `Lzma stream'
      The lzma stream, finished by an end of stream marker. Uses default
@@ -246,9 +248,94 @@ The compressed file format produced by lzip is this:
 
 
 
-File: lzip.info,  Node: Problems,  Next: Concept Index,  Prev: File Format,  Up: Top
+File: lzip.info,  Node: Lzdiff,  Next: Lzgrep,  Prev: File Format,  Up: Top
 
-4 Reporting Bugs
+4 Lzdiff
+********
+
+Lzdiff is a wrapper script around the diff and cmp commands that allows
+transparent comparison of any combination of compressed and
+non-compressed files. If any given file is compressed, its uncompressed
+content is used. The supported compressors are gzip, bzip2 and lzip.
+
+   The format for running lzdiff is:
+
+     lzdiff [OPTIONS] [DIFF_OPTIONS] FILE1 [FILE2]
+
+Compares FILE1 to FILE2. If FILE2 is omitted, compares FILE1 to the
+uncompressed contents of FILE1.[gz|bz2|lz] (depending on the default
+compressor selected). DIFF_OPTIONS are passed directly to diff or cmp.
+The exit status from diff or cmp is preserved.
+
+   Lzdiff supports the following options:
+
+`--help'
+     Print an informative help message describing the options and exit.
+
+`--version'
+     Print the version number of lzdiff on the standard output and exit.
+
+`--gzip'
+     Use gzip as default decompressor.
+
+`--bzip2'
+     Use bzip2 as default decompressor.
+
+`--lzip'
+     Use lzip as default decompressor (default).
+
+`--diff'
+     Use diff to compare files (default).
+
+`--cmp'
+     Use cmp to compare files.
+
+
+   Lzdiff has the limitation that messages from the diff or cmp programs
+refer to temporary filenames instead of those specified.
+
+
+File: lzip.info,  Node: Lzgrep,  Next: Problems,  Prev: Lzdiff,  Up: Top
+
+5 Lzgrep
+********
+
+Lzgrep is a wrapper script around the grep command that allows
+transparent search on any combination of compressed and non-compressed
+files. If any given file is compressed, its uncompressed content is
+used. If a given file does not exist, lzgrep tries the compressed file
+name corresponding to the default compressor selected. The supported
+compressors are gzip, bzip2 and lzip.
+
+   The format for running lzgrep is:
+
+     lzgrep [OPTIONS] [GREP_OPTIONS] PATTERN [FILE]...
+
+GREP_OPTIONS are passed directly to grep. The exit status from grep is
+preserved.
+
+   Lzgrep supports the following options:
+
+`--help'
+     Print an informative help message describing the options and exit.
+
+`--version'
+     Print the version number of lzgrep on the standard output and exit.
+
+`--gzip'
+     Use gzip as default decompressor.
+
+`--bzip2'
+     Use bzip2 as default decompressor.
+
+`--lzip'
+     Use lzip as default decompressor (default).
+
+
+
+File: lzip.info,  Node: Problems,  Next: Concept Index,  Prev: Lzgrep,  Up: Top
+
+6 Reporting Bugs
 ****************
 
 There are probably bugs in lzip. There are certainly errors and
@@ -274,6 +361,8 @@ Concept Index
 * getting help:                          Problems.              (line 6)
 * introduction:                          Introduction.          (line 6)
 * invoking:                              Invoking Lzip.         (line 6)
+* Lzdiff:                                Lzdiff.                (line 6)
+* Lzgrep:                                Lzgrep.                (line 6)
 * options:                               Invoking Lzip.         (line 6)
 * usage:                                 Invoking Lzip.         (line 6)
 * version:                               Invoking Lzip.         (line 6)
@@ -281,11 +370,13 @@ Concept Index
 
 
 Tag Table:
-Node: Top203
-Node: Introduction701
-Node: Invoking Lzip4014
-Node: File Format7304
-Node: Problems8331
-Node: Concept Index8856
+Node: Top226
+Node: Introduction809
+Node: Invoking Lzip4122
+Node: File Format7414
+Node: Lzdiff8441
+Node: Lzgrep9753
+Node: Problems10777
+Node: Concept Index11297
 
 End Tag Table

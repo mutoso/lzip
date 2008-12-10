@@ -1,4 +1,4 @@
-/*  Lzip - A LZMA file compressor
+/*  Lzip - A data compressor based on the LZMA algorithm
     Copyright (C) 2008 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -69,7 +69,7 @@ struct { const char * from; const char * to; } const known_extensions[] = {
 
 struct lzma_options
   {
-  int dictionary_bits;		// 12..30
+  int dictionary_bits;		// 12..29
   int match_len_limit;		// 5..273
   };
 
@@ -83,7 +83,7 @@ bool delete_output_on_interrupt = false;
 
 void show_help() throw()
   {
-  std::printf( "%s - A LZMA file compressor.\n", Program_name );
+  std::printf( "%s - A data compressor based on the LZMA algorithm.\n", Program_name );
   std::printf( "\nUsage: %s [options] [files]\n", invocation_name );
   std::printf( "Options:\n" );
   std::printf( "  -h, --help                 display this help and exit\n" );
@@ -297,7 +297,7 @@ int decompress( const int ides, const int odes, const Pretty_print & pp,
       }
     if( header.dictionary_bits < min_dictionary_bits ||
         header.dictionary_bits > max_dictionary_bits )
-      { pp( "invalid value in file header" ); return 2; }
+      { pp( "invalid dictionary size in file header" ); return 2; }
 
     try {
       if( verbosity >= 1 )
@@ -410,10 +410,9 @@ int open_instream( struct stat * in_statsp, const Mode program_mode,
   }
 
 
-int open_outstream( const Mode program_mode, const int eindex, const bool force ) throw()
+int open_outstream( const Mode program_mode, const int eindex,
+                    const bool force ) throw()
   {
-  int odes;
-
   if( program_mode == m_test )
     output_filename = "/dev/null";
   else if( program_mode == m_decompress )
@@ -421,17 +420,22 @@ int open_outstream( const Mode program_mode, const int eindex, const bool force 
   else
     output_filename = input_filename + known_extensions[0].from;
 
+  int odes;
   if( force || ( program_mode == m_test ) )
     odes = open( output_filename.c_str(), O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR );
   else odes = open( output_filename.c_str(), O_CREAT | O_EXCL | O_WRONLY, S_IRUSR | S_IWUSR );
-  if( odes < 0 && verbosity >= 0 )
+  if( odes < 0 )
     {
-    if( errno == EEXIST )
-      std::fprintf( stderr, "%s: Output file %s already exists, skipping.\n",
-                    program_name, output_filename.c_str() );
-    else
-      std::fprintf( stderr, "%s: Can't create output file `%s': %s.\n",
-                    program_name, output_filename.c_str(), strerror( errno ) );
+    if( errno == EEXIST ) odes = -2; else odes = -1;
+    if( verbosity >= 0 )
+      {
+      if( odes == -2 )
+        std::fprintf( stderr, "%s: Output file %s already exists, skipping.\n",
+                      program_name, output_filename.c_str() );
+      else
+        std::fprintf( stderr, "%s: Can't create output file `%s': %s.\n",
+                      program_name, output_filename.c_str(), strerror( errno ) );
+      }
     }
   return odes;
   }
@@ -691,7 +695,12 @@ int main( const int argc, const char * argv[] ) throw()
         else
           {
           outhandle = open_outstream( program_mode, eindex, force );
-          if( outhandle < 0 ) return 1;
+          if( outhandle < 0 )
+            {
+            if( outhandle == -1 && retval < 1 ) retval = 1;
+            close( inhandle ); inhandle = -1;
+            continue;
+            }
           }
         }
       }
@@ -707,7 +716,7 @@ int main( const int argc, const char * argv[] ) throw()
     else
       tmp = decompress( inhandle, outhandle, pp, program_mode == m_test );
     if( tmp > retval ) retval = tmp;
-    if( retval && program_mode != m_test ) cleanup_and_fail( retval );
+    if( tmp && program_mode != m_test ) cleanup_and_fail( retval );
 
     // Set permissions, owner and times.
     if( input_filename.size() && !to_stdout && program_mode != m_test )

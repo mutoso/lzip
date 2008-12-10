@@ -10,6 +10,8 @@ Procedure
 ---------
 1. Unpack the archive if you have not done so already:
 
+	lzip -cd lzip[version].tar.lz | tar -xf -
+or
 	bzip2 -cd lzip[version].tar.bz2 | tar -xf -
 
 This creates the directory ./lzip[version] containing the source from
@@ -30,6 +32,9 @@ the main archive.
 
 5. Optionally, type `make install-man' to install the man page for the
    program.
+
+6. Optionally, type `make install-extra' to install the included wrapper
+   scripts (lzdiff, lzgrep).
 
 
 Another way
