@@ -40,7 +40,7 @@ while [ x"$1" != x ] ; do
 		echo "  --cmp               use cmp to compare files"
 		exit 0 ;;
 	--version | --ve*)
-		echo "Lzdiff 0.1"
+		echo "Lzdiff 0.2"
 		echo "Copyright (C) 2008 Antonio Diaz Diaz."
 		echo "This script is free software: you have unlimited permission"
 		echo "to copy, distribute and modify it."
@@ -119,14 +119,14 @@ esac
 retval=0
 if test -n "${prog1}"; then
 	if test -n "${prog2}"; then
-		tmp_file=`mktemp ${TMPDIR:-/tmp}/lzdiff.XXXXXXXXXX` || {
+		tmp_file=`mktemp "${TMPDIR:-/tmp}"/lzdiff.XXXXXXXXXX` || {
 			echo 'cannot create a temporary file' 1>&2
 			exit 1
 		}
-		${prog2} -cdfq "${file2}" > ${tmp_file} || exit 1
-		${prog1} -cdfq "${file1}" | ${diff_prog} ${args} - ${tmp_file}
+		${prog2} -cdfq "${file2}" > "${tmp_file}" || exit 1
+		${prog1} -cdfq "${file1}" | ${diff_prog} ${args} - "${tmp_file}"
 		retval=$?
-		rm -f ${tmp_file} || retval=$?
+		rm -f "${tmp_file}" || retval=$?
 	else
 		${prog1} -cdfq "${file1}" | ${diff_prog} ${args} - "${file2}"
 		retval=$?

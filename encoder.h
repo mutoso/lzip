@@ -22,8 +22,8 @@ class Matchfinder
   enum { num_prev_positions = 1 << (8 * min_match_len) };
 
   long long partial_file_pos;
-  const int dictionary_size;	// bytes to keep in buffer before pos
-  const int dictionary_mask;
+  int _dictionary_bits;
+  int dictionary_size;		// bytes to keep in buffer before pos
   const int after_size;		// bytes to keep in buffer after pos
   const int buffer_size;
   uint8_t * const buffer;
@@ -34,20 +34,20 @@ class Matchfinder
   uint32_t _crc;
   int cyclic_pos;
   const int match_len_limit;
+  int pos_tree_mask;
   int * const prev_positions;	// last seen position of key
-  int * const prev_pos_tree;
+  int32_t * prev_pos_tree;
   bool at_stream_end;		// stream_pos shows real end of file
 
   bool read_block() throw();
 
 public:
-  Matchfinder( const int dictionary_bits, const int len_limit, const int ides )
+  Matchfinder( const int dict_bits, const int len_limit, const int ides )
     :
     partial_file_pos( 0 ),
-    dictionary_size( 1 << dictionary_bits ),
-    dictionary_mask( dictionary_size - 1 ),
+    _dictionary_bits( dict_bits ),
     after_size( max_match_len ),
-    buffer_size( ( 2 * dictionary_size ) + max_num_trials + after_size ),
+    buffer_size( ( 2 << _dictionary_bits ) + max_num_trials + after_size ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),
     stream_pos( 0 ),
@@ -57,19 +57,27 @@ public:
     cyclic_pos( 0 ),
     match_len_limit( len_limit ),
     prev_positions( new int[num_prev_positions] ),
-    prev_pos_tree( new int[dictionary_size] ),
     at_stream_end( false )
     {
     if( !read_block() ) throw Error( "read error" );
+    if( at_stream_end )
+      while( _dictionary_bits > min_dictionary_bits &&
+             ( 1 << ( _dictionary_bits - 1 ) ) >= stream_pos )
+        --_dictionary_bits;
+    dictionary_size = ( 1 << _dictionary_bits );
+    pos_tree_mask = dictionary_size - 1;
+    prev_pos_tree = new int[pos_tree_mask+1];
     for( int i = 0; i < num_prev_positions; ++i ) prev_positions[i] = -1;
-    for( int i = 0; i < dictionary_size; ++i ) prev_pos_tree[i] = -1;
+    for( int i = 0; i <= pos_tree_mask; ++i ) prev_pos_tree[i] = -1;
     }
 
-  ~Matchfinder() { delete[] prev_pos_tree; delete[] prev_positions; delete[] buffer; }
+  ~Matchfinder()
+    { delete[] prev_pos_tree; delete[] prev_positions; delete[] buffer; }
 
   uint8_t operator[]( const int i ) const throw() { return buffer[pos+i]; }
   int available_bytes() const throw() { return stream_pos - pos; }
   uint32_t crc() const throw() { return _crc ^ 0xFFFFFFFF; }
+  int dictionary_bits() const throw() { return _dictionary_bits; }
   long long file_position() const throw() { return partial_file_pos + pos; }
   bool finished() const throw() { return pos >= stream_pos; }
   bool move_pos() throw();
@@ -197,14 +205,14 @@ class Range_encoder
       cache = low >> 24;
       }
     else ++ff_count;
-    low = (uint32_t)low << 8;
+    low = ( low & 0x00FFFFFF ) << 8;
     }
 
 public:
-  Range_encoder( const int header_size, const int odes )
+  Range_encoder( const int odes )
     :
     low( 0 ),
-    partial_file_pos( header_size ),
+    partial_file_pos( 0 ),
     buffer_size( 65536 ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),
@@ -392,7 +400,7 @@ class LZ_encoder
     };
 
   const int match_len_limit;
-  const int num_dis_slots;
+  int num_dis_slots;
   int longest_match_found;
 
   Bit_model bm_match[State::states][pos_states];
@@ -525,7 +533,7 @@ class LZ_encoder
   void flush( const State & state );
 
 public:
-  LZ_encoder( const File_header & header, const int ides,
+  LZ_encoder( File_header & header, const int ides,
               const int odes, const int len_limit );
 
   bool encode();

@@ -1,6 +1,6 @@
 Description
 
-Lzip is a lossless file compressor based on the LZMA (Lempel-Ziv-Markov
+Lzip is a lossless data compressor based on the LZMA (Lempel-Ziv-Markov
 chain-Algorithm) algorithm designed by Igor Pavlov. The high compression
 of LZMA comes from combining two basic, well-proven compression ideas:
 sliding dictionaries (i.e. LZ77/78), and markov models (i.e. the thing
@@ -16,10 +16,13 @@ and compresses better than bzip2, but requires more memory and time
 during compression. These features make lzip well suited for software
 distribution and data archival.
 
-The amount of memory required for compression is about 6 times the
-dictionary size, for decompression is a little more than dictionary
-size. It is also important to appreciate that the decompression memory
-requirement is set at compression time by the choice of dictionary size.
+The maximum amount of memory required for compression is about 6 times
+the dictionary size limit. For decompression is a little more than the
+dictionary size really used. Lzip will automatically use the smallest
+possible dictionary size for each file without exceeding the given
+limit. It is important to appreciate that the decompression memory
+requirement is affected at compression time by the choice of dictionary
+size limit.
 
 Lzip has a user interface similar to the one of gzip or bzip2. It
 replaces every file given in the command line with a compressed version
@@ -28,8 +31,8 @@ the same modification date, permissions, and, when possible, ownership
 as the corresponding original, so that these properties can be correctly
 restored at decompression time.
 
-If no file names are specified, Lzip compresses (or decompresses) from
-standard input to standard output. In this case, Lzip will decline to
+If no file names are specified, lzip compresses (or decompresses) from
+standard input to standard output. In this case, lzip will decline to
 write compressed output to a terminal, as this would be entirely
 incomprehensible and therefore pointless.
 
@@ -38,11 +41,11 @@ or more compressed files. The result is the concatenation of the
 corresponding uncompressed files. Integrity testing of concatenated
 compressed files is also supported.
 
-As a self-check for your protection, Lzip stores in the file trailer the
+As a self-check for your protection, lzip stores in the file trailer the
 32-bit CRC of the original file and the size of the original file, to
 make sure that the decompressed version of the file is identical to the
 original. This guards against corruption of the compressed data, and
-against undetected bugs in Lzip (hopefully very unlikely). The chances
+against undetected bugs in lzip (hopefully very unlikely). The chances
 of data corruption going undetected are microscopic, less than one
 chance in 4000 million for each file processed. Be aware, though, that
 the check occurs upon decompression, so it can only tell you that

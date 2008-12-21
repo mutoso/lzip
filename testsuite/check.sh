@@ -27,18 +27,18 @@ ${LZIP} -t ${testdir}/COPYING.lz || fail=1
 
 ${LZIP} -k1 in || fail=1
 ${LZIP} -cd in.lz > copy || fail=1
-diff -q in copy || fail=1
+cmp in copy || fail=1
 
 for i in 1 2 3 4 5 6 7 8 9; do
 	${LZIP} -c -$i in > out || fail=1
 	${LZIP} -cd out > copy || fail=1
-	diff -q in copy || fail=1
+	cmp in copy || fail=1
 done
 
 for i in 1 2 3 4 5 6 7 8 9; do
 	${LZIP} -c -$i < in > out || fail=1
 	${LZIP} -d < out > copy || fail=1
-	diff -q in copy || fail=1
+	cmp in copy || fail=1
 done
 
 if test ${fail} = 0; then

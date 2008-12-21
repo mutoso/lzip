@@ -8,9 +8,9 @@ SHELL = /bin/sh
 objs = arg_parser.o decoder.o encoder.o main.o
 
 
-.PHONY : all doc check install install-info install-man install-strip \
-         uninstall uninstall-info uninstall-man \
-         dist clean distclean
+.PHONY : all doc check install install-info install-man install-extra \
+         uninstall uninstall-info uninstall-man uninstall-extra \
+         install-strip dist clean distclean
 
 all : $(progname)
 

@@ -169,7 +169,7 @@ struct File_header
 
   bool verify_version() const throw()
     {
-    return ( version == 0 );
+    return ( version <= 1 );
     }
   };
 

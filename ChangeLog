@@ -1,8 +1,17 @@
+2008-12-21  Antonio Diaz  <ant_diaz@teleline.es>
+
+	* Version 1.3 released.
+	* This version automatically chooses the smallest possible
+	  dictionary size for each file during compression, saving
+	  memory during decompression.
+	* Implemented decompression of version 1 files.
+	* testsuite/check.sh: Replaced "diff -q" with "cmp".
+
 2008-12-10  Antonio Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.2 released.
-	* A 1-byte read outside allocated memory has been fixed.
-	* Dictionary size limit has been reduced to 512MiB because
+	* encoder.cc: A 1-byte read outside allocated memory has been fixed.
+	* lzip.h: Dictionary size limit has been reduced to 512MiB because
 	  setting it to 1GiB causes overflow of a 32 bit integer.
 	* Added "lzdiff", a diff/cmp wrapper for gzip, bzip2, lzip and
 	  non-compressed files.

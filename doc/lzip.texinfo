@@ -5,8 +5,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 10 December 2008
-@set VERSION 1.2
+@set UPDATED 21 December 2008
+@set VERSION 1.3
 
 @dircategory Data Compression
 @direntry
@@ -52,7 +52,7 @@ to copy, distribute and modify it.
 @chapter Introduction
 @cindex introduction
 
-Lzip is a lossless file compressor based on the LZMA (Lempel-Ziv-Markov
+Lzip is a lossless data compressor based on the LZMA (Lempel-Ziv-Markov
 chain-Algorithm) algorithm designed by Igor Pavlov. The high compression
 of LZMA comes from combining two basic, well-proven compression ideas:
 sliding dictionaries (i.e. LZ77/78), and markov models (i.e. the thing
@@ -68,10 +68,13 @@ and compresses better than bzip2, but requires more memory and time
 during compression. These features make lzip well suited for software
 distribution and data archival.
 
-The amount of memory required for compression is about 6 times the
-dictionary size, for decompression is a little more than dictionary
-size. It is also important to appreciate that the decompression memory
-requirement is set at compression time by the choice of dictionary size.
+The maximum amount of memory required for compression is about 6 times
+the dictionary size limit. For decompression is a little more than the
+dictionary size really used. Lzip will automatically use the smallest
+possible dictionary size for each file without exceeding the given
+limit. It is important to appreciate that the decompression memory
+requirement is affected at compression time by the choice of dictionary
+size limit.
 
 Lzip has a user interface similar to the one of gzip or bzip2. It
 replaces every file given in the command line with a compressed version
@@ -158,7 +161,7 @@ Keep (don't delete) input files during compression or decompression.
 
 @item --match-length=@var{length}
 @itemx -m @var{length}
-Set match length limit in bytes. Valid values range from 5 to 273.
+Set the match length limit in bytes. Valid values range from 5 to 273.
 Larger values usually give better compression ratios but longer
 compression times.
 
@@ -168,10 +171,11 @@ Quiet operation. Suppress all messages.
 
 @item --dictionary-size=@var{size}
 @itemx -s @var{size}
-Set the dictionary size in bytes. Dictionary size is always a power of
-two. You may specify it as the number of bits to use or as a size
-between 4KiB and 512MiB. If the specified size is not a power of two,
-it is rounded upwards.
+Set the dictionary size limit in bytes. Dictionary size is always a
+power of two. You may specify it as the number of bits to use or as a
+size between 4KiB and 512MiB. If the specified size is not a power of
+two, it is rounded upwards. Lzip will use the smallest possible
+dictionary size for each file without exceeding this limit.
 
 @item --test
 @itemx -t
@@ -229,24 +233,28 @@ Table of SI and binary prefixes (unit multipliers):
 @item Y @tab yottabyte (10^24)        @tab | @tab Yi @tab yobibyte (2^80)
 @end multitable
 
-@sp 1
-NOTE: This manual follows the international standard for prefixes and
-not the Usamerican anomaly. 10^9 is a thousand millions, a billion is a
-million millions (million^2), a trillion is a million million millions
-(million^3), and so on. Please, don't "embrace and extend" the meaning
-of prefixes, making communication among all people difficult. Thanks.
-
 
 @node File Format
 @chapter File Format
 @cindex File Format
 
-The compressed file format produced by lzip is this:
+A lzip file consists of a series of "members" (compressed data sets).
+The members simply appear one after another in the file, with no
+additional information before, between, or after them.
+
+Each member has the following structure:
 
 @verbatim
 +---+---+---+---+----+----+=============+-+-+-+-+-+-+-+-+-+-+-+-+
-|  Magic bytes  | VN | DB | Lzma stream | CRC32 |   file size   |
+|  Magic bytes  | VN | DB | Lzma stream | CRC32 |   Data size   |  -->
 +---+---+---+---+----+----+=============+-+-+-+-+-+-+-+-+-+-+-+-+
+@end verbatim
+
+(if VN >= 1)
+@verbatim
++-+-+-+-+-+-+-+-+
+|  Member size  |
++-+-+-+-+-+-+-+-+
 @end verbatim
 
 All multibyte values are stored in little endian order.
@@ -256,7 +264,8 @@ All multibyte values are stored in little endian order.
 A four byte string, identifying the file type, with the value "LZIP".
 
 @item VN (version number, 1 byte)
-Just in case something needs to be modified in the future. 0x00 for now.
+Just in case something needs to be modified in the future. Valid values
+are 0 and 1.
 
 @item DB (dictionary bits, 1 byte)
 Base 2 logarithm of the dictionary size. Valid values range from 12 to
@@ -267,10 +276,14 @@ The lzma stream, finished by an end of stream marker. Uses default values
 for encoder properties.
 
 @item CRC32 (4 bytes)
-CRC of the uncompressed original file.
+CRC of the uncompressed original data.
 
-@item file size (8 bytes)
-Size of the uncompressed original file.
+@item Data size (8 bytes)
+Size of the uncompressed original data.
+
+@item Member size (8 bytes)
+Total size of the member, including header and trailer. This facilitates
+safe recovery of undamaged members from multimember files.
 
 @end table
 

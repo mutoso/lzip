@@ -12,7 +12,7 @@ Procedure
 
 	lzip -cd lzip[version].tar.lz | tar -xf -
 or
-	bzip2 -cd lzip[version].tar.bz2 | tar -xf -
+	gzip -cd lzip[version].tar.gz | tar -xf -
 
 This creates the directory ./lzip[version] containing the source from
 the main archive.

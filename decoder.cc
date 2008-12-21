@@ -68,7 +68,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp )
     if( verbosity >= 0 )
       {
       pp();
-      std::fprintf( stderr, "bad crc for uncompressed file; expected %08X, obtained %08X.\n",
+      std::fprintf( stderr, "bad crc for uncompressed data; expected %08X, obtained %08X.\n",
                     trailer.file_crc(), file_crc );
       }
     error = true;
@@ -81,9 +81,27 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp )
         { pp();
           std::fprintf( stderr, "bad uncompressed size; expected %lld, obtained %lld.\n",
                         trailer.file_size(), file_size ); }
-      else pp( "bad file trailer" );
+      else pp( "bad member trailer" );
       }
     error = true;
+    }
+  if( format_version >= 1 )
+    {
+    long long tmp = 0;
+    for( int i = 0; i < 64; i+=8 )
+      { tmp += (long long)range_decoder.read_byte() << i; }
+    if( tmp != input_file_position() )
+      {
+      if( verbosity >= 0 )
+        {
+        if( tmp >= 0 )
+          { pp();
+            std::fprintf( stderr, "bad member size; expected %lld, obtained %lld.\n",
+                          tmp, input_file_position() ); }
+        else pp( "bad member trailer" );
+        }
+      error = true;
+      }
     }
   return !error;
   }

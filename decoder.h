@@ -193,6 +193,7 @@ public:
 class LZ_decoder
   {
   long long partial_file_pos;
+  const int format_version;
   const int buffer_size;
   uint8_t * const buffer;
   int pos;
@@ -252,6 +253,7 @@ public:
   LZ_decoder( const File_header & header, Input_buffer & ibuf, const int odes )
     :
     partial_file_pos( 0 ),
+    format_version( header.version ),
     buffer_size( 1 << header.dictionary_bits ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),

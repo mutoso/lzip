@@ -5,13 +5,13 @@
 # This configure script is free software: you have unlimited permission
 # to copy, distribute and modify it.
 #
-# Date of this version: 2008-12-10
+# Date of this version: 2008-12-21
 
 invocation_name=$0
 args=
 no_create=
 progname=lzip
-progversion=1.2
+progversion=1.3
 srctrigger=lzip.h
 
 # clear some things potentially inherited from environment.

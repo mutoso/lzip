@@ -94,7 +94,7 @@ void show_help() throw()
   std::printf( "  -k, --keep                 keep (don't delete) input files\n" );
   std::printf( "  -m, --match-length=<n>     set match length limit in bytes [64]\n" );
   std::printf( "  -q, --quiet                suppress all messages\n" );
-  std::printf( "  -s, --dictionary-size=<n>  set dictionary size in bytes [8MiB]\n" );
+  std::printf( "  -s, --dictionary-size=<n>  set dictionary size limit in bytes [8MiB]\n" );
   std::printf( "  -t, --test                 test compressed file integrity\n" );
   std::printf( "  -v, --verbose              be verbose (a 2nd -v gives more)\n" );
   std::printf( "  -z, --compress             force compression\n" );
@@ -215,7 +215,7 @@ int get_dict_bits( const char * arg ) throw()
     return bits;
   const int min_size = 1 << min_dictionary_bits;
   const int max_size = 1 << max_dictionary_bits;
-  int size = getnum( arg, 0, ( min_size / 2 ) + 1, max_size );
+  const int size = getnum( arg, 0, ( min_size / 2 ) + 1, max_size );
   bits = real_bits( size - 1 );
   if( size > ( 1 << bits ) ) ++bits;
   return bits;
@@ -225,15 +225,18 @@ int get_dict_bits( const char * arg ) throw()
 int compress( const int ides, const int odes, lzma_options encoder_options,
               const Pretty_print & pp ) throw()
   {
+  if( verbosity >= 1 ) pp();
+  if( encoder_options.dictionary_bits < min_dictionary_bits ||
+      encoder_options.dictionary_bits > max_dictionary_bits ||
+      encoder_options.match_len_limit < 5 ||
+      encoder_options.match_len_limit > max_match_len )
+    internal_error( "invalid argument to encoder" );
+
   File_header header;
   header.set_magic();
   header.dictionary_bits = encoder_options.dictionary_bits;
-  const int rd = writeblock( odes, (char *)&header, sizeof header );
-  if( rd != sizeof header )
-    { pp(); show_error( "error writing file header", errno ); return 1; }
 
   try {
-    if( verbosity >= 1 ) pp();
     LZ_encoder encoder( header, ides, odes, encoder_options.match_len_limit );
 
     if( !encoder.encode() ) { pp( "encoder error" ); return 2; }
@@ -291,8 +294,8 @@ int decompress( const int ides, const int odes, const Pretty_print & pp,
       {
       if( verbosity >= 0 )
         { pp();
-          std::fprintf( stderr, "file format not supported, newer %s needed.\n",
-                        program_name ); }
+          std::fprintf( stderr, "version %d, file format not supported, newer %s needed.\n",
+                        header.version, program_name ); }
       return 2;
       }
     if( header.dictionary_bits < min_dictionary_bits ||
@@ -571,7 +574,7 @@ int writeblock( const int fd, const char * buf, const int size ) throw()
   }
 
 
-int main( const int argc, const char * argv[] ) throw()
+int main( const int argc, const char * argv[] )
   {
   // Mapping from gzip/bzip2 style 1..9 compression modes
   // to the corresponding LZMA compression modes.

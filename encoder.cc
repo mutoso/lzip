@@ -63,7 +63,7 @@ bool Matchfinder::move_pos() throw()
       pos_limit -= offset;
       for( int i = 0; i < num_prev_positions; ++i )
         if( prev_positions[i] >= 0 ) prev_positions[i] -= offset;
-      for( int i = 0; i < dictionary_size; ++i )
+      for( int i = 0; i <= pos_tree_mask; ++i )
         if( prev_pos_tree[i] >= 0 ) prev_pos_tree[i] -= offset;
       return read_block();
       }
@@ -90,7 +90,7 @@ int Matchfinder::longest_match_len( int * const distances ) throw()
 
   const int min_pos = (pos > dictionary_size) ? (pos - dictionary_size) : 0;
   int maxlen = min_match_len - 1;
-  int * ptr0 = prev_pos_tree + ( ( cyclic_pos << 1 ) & dictionary_mask );
+  int * ptr0 = prev_pos_tree + ( ( cyclic_pos << 1 ) & pos_tree_mask );
   int * ptr1 = ptr0 + 1;
 
   for( int count = 256;; )
@@ -104,7 +104,7 @@ int Matchfinder::longest_match_len( int * const distances ) throw()
     const int delta = pos - newpos;
     if( distances ) while( maxlen < len ) distances[++maxlen] = delta - 1;
 
-    int * const newptr = prev_pos_tree + ( ( ( cyclic_pos - delta ) << 1 ) & dictionary_mask );
+    int * const newptr = prev_pos_tree + ( ( ( cyclic_pos - delta ) << 1 ) & pos_tree_mask );
 
     if( len < len_limit )
       {
@@ -408,23 +408,18 @@ void LZ_encoder::flush( const State & state )
   }
 
 
-LZ_encoder::LZ_encoder( const File_header & header, const int ides,
+LZ_encoder::LZ_encoder( File_header & header, const int ides,
                         const int odes, const int len_limit )
   :
   match_len_limit( len_limit ),
-  num_dis_slots( 2 * header.dictionary_bits ),
   longest_match_found( 0 ),
   matchfinder( header.dictionary_bits, match_len_limit, ides ),
-  range_encoder( sizeof header, odes ),
+  range_encoder( odes ),
   len_encoder( match_len_limit ),
   rep_match_len_encoder( match_len_limit ),
   literal_encoder()
   {
-  if( header.dictionary_bits < min_dictionary_bits ||
-      header.dictionary_bits > max_dictionary_bits ||
-      match_len_limit < 5 || match_len_limit > max_match_len )
-    internal_error( "invalid argument to encoder" );
-
+  num_dis_slots = 2 * matchfinder.dictionary_bits();
   for( int slot = 0; slot < 4; ++slot ) dis_slots[slot] = slot;
   for( int c = 4, slot = 4; slot < 20; ++slot )
     {
@@ -432,6 +427,10 @@ LZ_encoder::LZ_encoder( const File_header & header, const int ides,
     for( int i = 0; i < k; ++i, ++c ) dis_slots[c] = slot;
     }
   fill_align_prices();
+
+  header.dictionary_bits = matchfinder.dictionary_bits();
+  for( unsigned int i = 0; i < sizeof header; ++i )
+    range_encoder.put_byte( (( uint8_t *)&header)[i] );
   }
 
 
