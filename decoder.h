@@ -1,5 +1,5 @@
 /*  Lzip - A data compressor based on the LZMA algorithm
-    Copyright (C) 2008 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -50,7 +50,7 @@ public:
 
 class Range_decoder
   {
-  long long file_pos;
+  mutable long long member_pos;
   uint32_t code;
   uint32_t range;
   Input_buffer & ibuf;
@@ -58,18 +58,18 @@ class Range_decoder
 public:
   Range_decoder( const int header_size, Input_buffer & buf )
     :
-    file_pos( header_size ),
+    member_pos( header_size ),
     code( 0 ), range( 0xFFFFFFFF ),
     ibuf( buf )
     { for( int i = 0; i < 5; ++i ) code = (code << 8) | read_byte(); }
 
-  uint8_t read_byte()
+  uint8_t read_byte() const
     {
-    ++file_pos;
+    ++member_pos;
     return ibuf.read_byte();
     }
 
-  long long file_position() const throw() { return file_pos; }
+  long long member_position() const throw() { return member_pos; }
   bool finished() const throw() { return ibuf.finished(); }
 
   int decode( const int num_bits = 1 )
@@ -89,12 +89,13 @@ public:
 
   int decode_bit( Bit_model & bm )
     {
-    int symbol = 0;
+    int symbol;
     const uint32_t bound = ( range >> bit_model_total_bits ) * bm.probability;
     if( code < bound )
       {
       range = bound;
       bm.probability += (bit_model_total - bm.probability) >> bit_model_move_bits;
+      symbol = 0;
       }
     else
       {
@@ -192,14 +193,14 @@ public:
 
 class LZ_decoder
   {
-  long long partial_file_pos;
+  long long partial_data_pos;
   const int format_version;
   const int buffer_size;
   uint8_t * const buffer;
   int pos;
   int stream_pos;
-  const int _odes;
   uint32_t _crc;
+  const int _odes;
 
   Bit_model bm_match[State::states][pos_states];
   Bit_model bm_rep[State::states];
@@ -247,29 +248,29 @@ class LZ_decoder
     }
 
   void flush();
-  bool verify_trailer( const Pretty_print & pp );
+  bool verify_trailer( const Pretty_print & pp ) const;
 
 public:
   LZ_decoder( const File_header & header, Input_buffer & ibuf, const int odes )
     :
-    partial_file_pos( 0 ),
+    partial_data_pos( 0 ),
     format_version( header.version ),
-    buffer_size( 1 << header.dictionary_bits ),
+    buffer_size( 1 << ( header.dictionary_bits & 0x1F ) ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),
     stream_pos( 0 ),
-    _odes( odes ),
     _crc( 0xFFFFFFFF ),
+    _odes( odes ),
     range_decoder( sizeof header, ibuf ),
     literal_decoder() {}
 
   ~LZ_decoder() { delete[] buffer; }
 
   uint32_t crc() const throw() { return _crc ^ 0xFFFFFFFF; }
-  int decode( const Pretty_print & pp );
+  int decode_member( const Pretty_print & pp );
 
-  long long input_file_position() const throw()
-    { return range_decoder.file_position(); }
-  long long output_file_position() const throw()
-    { return partial_file_pos + pos; }
+  long long member_position() const throw()
+    { return range_decoder.member_position(); }
+  long long data_position() const throw()
+    { return partial_data_pos + pos; }
   };

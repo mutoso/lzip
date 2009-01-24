@@ -1,5 +1,5 @@
 /*  Lzip - A data compressor based on the LZMA algorithm
-    Copyright (C) 2008 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -160,7 +160,7 @@ struct File_header
   uint8_t dictionary_bits;
 
   void set_magic() throw()
-    { std::memcpy( magic, magic_string, sizeof magic ); version = 0; }
+    { std::memcpy( magic, magic_string, sizeof magic ); version = 1; }
 
   bool verify_magic() const throw()
     {
@@ -176,33 +176,50 @@ struct File_header
 
 struct File_trailer
   {
-  uint8_t _file_crc[4];		// uncompressed file CRC32
-  uint8_t _file_size[8];	// uncompressed file size
+  uint8_t _data_crc[4];		// CRC32 of the uncompressed data
+  uint8_t _data_size[8];	// size of the uncompressed data
+  uint8_t _member_size[8];	// member size including header and trailer
 
-  uint32_t file_crc() const throw()
+  static int size( const int version )
+    { return sizeof( File_trailer ) - ( ( version >= 1 ) ? 0 : 8 ); }
+
+  uint32_t data_crc() const throw()
     {
     uint32_t tmp = 0;
-    for( int i = 3; i >= 0; --i ) { tmp <<= 8; tmp += _file_crc[i]; }
+    for( int i = 3; i >= 0; --i ) { tmp <<= 8; tmp += _data_crc[i]; }
     return tmp;
     }
 
-  void file_crc( uint32_t crc ) throw()
+  void data_crc( uint32_t crc ) throw()
     {
     for( int i = 0; i < 4; ++i )
-      { _file_crc[i] = (uint8_t)crc; crc >>= 8; }
+      { _data_crc[i] = (uint8_t)crc; crc >>= 8; }
     }
 
-  long long file_size() const throw()
+  long long data_size() const throw()
     {
     long long tmp = 0;
-    for( int i = 7; i >= 0; --i ) { tmp <<= 8; tmp += _file_size[i]; }
+    for( int i = 7; i >= 0; --i ) { tmp <<= 8; tmp += _data_size[i]; }
     return tmp;
     }
 
-  void file_size( long long size ) throw()
+  void data_size( long long size ) throw()
     {
     for( int i = 0; i < 8; ++i )
-      { _file_size[i] = (uint8_t)size; size >>= 8; }
+      { _data_size[i] = (uint8_t)size; size >>= 8; }
+    }
+
+  long long member_size() const throw()
+    {
+    long long tmp = 0;
+    for( int i = 7; i >= 0; --i ) { tmp <<= 8; tmp += _member_size[i]; }
+    return tmp;
+    }
+
+  void member_size( long long size ) throw()
+    {
+    for( int i = 0; i < 8; ++i )
+      { _member_size[i] = (uint8_t)size; size >>= 8; }
     }
   };
 

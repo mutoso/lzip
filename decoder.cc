@@ -1,5 +1,5 @@
 /*  Lzip - A data compressor based on the LZMA algorithm
-    Copyright (C) 2008 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -48,68 +48,76 @@ void LZ_decoder::flush()
     {
     const int wr = writeblock( _odes, (char *)buffer, pos );
     if( wr != pos ) throw Error( "write error" );
-    if( pos >= buffer_size ) { partial_file_pos += pos; pos = 0; }
+    if( pos >= buffer_size ) { partial_data_pos += pos; pos = 0; }
     stream_pos = pos;
     }
   }
 
 
-bool LZ_decoder::verify_trailer( const Pretty_print & pp )
+bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   {
-  flush();
-  const long long file_size = output_file_position();
-  const uint32_t file_crc = crc();
   bool error = false;
   File_trailer trailer;
-  for( unsigned int i = 0; i < sizeof trailer; ++i )
-    ((uint8_t *)&trailer)[i] = range_decoder.read_byte();
-  if( trailer.file_crc() != file_crc )
+  const int trailer_size = trailer.size( format_version );
+  for( int i = 0; i < trailer_size; ++i )
     {
+    ((uint8_t *)&trailer)[i] = range_decoder.read_byte();
+    if( !error && range_decoder.finished() )
+      {
+      error = true;
+      if( verbosity >= 0 )
+        {
+        pp();
+        std::fprintf( stderr, "trailer truncated at trailer position %d;"
+                              " some checks may fail.\n", i );
+        }
+      }
+    }
+  if( format_version == 0 ) trailer.member_size( member_position() );
+  if( trailer.data_crc() != crc() )
+    {
+    error = true;
     if( verbosity >= 0 )
       {
       pp();
       std::fprintf( stderr, "bad crc for uncompressed data; expected %08X, obtained %08X.\n",
-                    trailer.file_crc(), file_crc );
+                    trailer.data_crc(), crc() );
       }
-    error = true;
     }
-  if( trailer.file_size() != file_size )
+  if( trailer.data_size() != data_position() )
     {
+    error = true;
     if( verbosity >= 0 )
       {
-      if( trailer.file_size() >= 0 )
+      if( trailer.data_size() >= 0 )
         { pp();
           std::fprintf( stderr, "bad uncompressed size; expected %lld, obtained %lld.\n",
-                        trailer.file_size(), file_size ); }
+                        trailer.data_size(), data_position() ); }
       else pp( "bad member trailer" );
       }
-    error = true;
     }
-  if( format_version >= 1 )
+  if( trailer.member_size() != member_position() )
     {
-    long long tmp = 0;
-    for( int i = 0; i < 64; i+=8 )
-      { tmp += (long long)range_decoder.read_byte() << i; }
-    if( tmp != input_file_position() )
+    error = true;
+    if( verbosity >= 0 )
       {
-      if( verbosity >= 0 )
-        {
-        if( tmp >= 0 )
-          { pp();
-            std::fprintf( stderr, "bad member size; expected %lld, obtained %lld.\n",
-                          tmp, input_file_position() ); }
-        else pp( "bad member trailer" );
-        }
-      error = true;
+      if( trailer.member_size() >= 0 )
+        { pp();
+          std::fprintf( stderr, "bad member size; expected %lld, obtained %lld.\n",
+                        trailer.member_size(), member_position() ); }
+      else pp( "bad member trailer" );
       }
     }
+  if( !error && verbosity >= 3 )
+    std::fprintf( stderr, "data crc %08X, data size %8lld, member size %8lld.  ",
+                  trailer.data_crc(), trailer.data_size(), trailer.member_size() );
   return !error;
   }
 
 
     // Return value: 0 = OK, 1 = decoder error, 2 = unexpected EOF,
     //               3 = trailer error, 4 = unknown marker found.
-int LZ_decoder::decode( const Pretty_print & pp )
+int LZ_decoder::decode_member( const Pretty_print & pp )
   {
   unsigned int rep0 = 0;
   unsigned int rep1 = 0;
@@ -121,7 +129,7 @@ int LZ_decoder::decode( const Pretty_print & pp )
   while( true )
     {
     if( range_decoder.finished() ) return 2;
-    const int pos_state = output_file_position() & pos_state_mask;
+    const int pos_state = data_position() & pos_state_mask;
     if( range_decoder.decode_bit( bm_match[state()][pos_state] ) == 0 )
       {
       if( state.is_char() )
@@ -184,7 +192,10 @@ int LZ_decoder::decode( const Pretty_print & pp )
             if( rep0 == 0xFFFFFFFF )		// Marker found
               {
               if( len == min_match_len )	// End Of Stream marker
-                { if( verify_trailer( pp ) ) return 0; else return 3; }
+                {
+                flush();
+                if( verify_trailer( pp ) ) return 0; else return 3;
+                }
               if( verbosity >= 0 )
                 {
                 pp();

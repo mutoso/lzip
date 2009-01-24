@@ -1,6 +1,6 @@
 #!/bin/sh
 # check script for Lzip - A data compressor based on the LZMA algorithm
-# Copyright (C) 2008 Antonio Diaz Diaz.
+# Copyright (C) 2008, 2009 Antonio Diaz Diaz.
 #
 # This script is free software: you have unlimited permission
 # to copy, distribute and modify it.
@@ -17,7 +17,7 @@ fi
 
 if [ -d tmp ] ; then rm -r tmp ; fi
 mkdir tmp
-echo testing lzip...
+echo -n "testing lzip..."
 cd ${objdir}/tmp
 
 cat ${testdir}/../COPYING > in || framework_failure
@@ -25,22 +25,36 @@ fail=0
 
 ${LZIP} -t ${testdir}/COPYING.lz || fail=1
 
-${LZIP} -k1 in || fail=1
-${LZIP} -cd in.lz > copy || fail=1
-cmp in copy || fail=1
+for i in 1 2 3 4 5 6 7 8 9; do
+	${LZIP} -k -$i in || fail=1
+	mv -f in.lz copy.lz || fail=1
+	${LZIP} -df copy.lz || fail=1
+	cmp in copy || fail=1
+	echo -n .
+done
 
 for i in 1 2 3 4 5 6 7 8 9; do
 	${LZIP} -c -$i in > out || fail=1
 	${LZIP} -cd out > copy || fail=1
 	cmp in copy || fail=1
+	echo -n .
 done
 
 for i in 1 2 3 4 5 6 7 8 9; do
 	${LZIP} -c -$i < in > out || fail=1
 	${LZIP} -d < out > copy || fail=1
 	cmp in copy || fail=1
+	echo -n .
 done
 
+for i in 1 2 3 4 5 6 7 8 9; do
+	${LZIP} -f -$i -o out < in || fail=1
+	${LZIP} -df -o copy < out.lz || fail=1
+	cmp in copy || fail=1
+	echo -n .
+done
+
+echo
 if test ${fail} = 0; then
 	echo "tests completed successfully."
 	if cd ${objdir} ; then rm -r tmp ; fi

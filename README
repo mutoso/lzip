@@ -16,20 +16,24 @@ and compresses better than bzip2, but requires more memory and time
 during compression. These features make lzip well suited for software
 distribution and data archival.
 
-The maximum amount of memory required for compression is about 6 times
-the dictionary size limit. For decompression is a little more than the
-dictionary size really used. Lzip will automatically use the smallest
-possible dictionary size for each file without exceeding the given
-limit. It is important to appreciate that the decompression memory
-requirement is affected at compression time by the choice of dictionary
-size limit.
+Lzip can produce multimember files and safely recover, with lziprecover,
+the undamaged members in case of file damage. Lzip can also split the
+compressed output in volumes of a given size, even when reading from
+standard input. This allows the direct creation of multivolume
+compressed tar archives.
+
+Lzip will automatically use the smallest possible dictionary size for
+each member without exceeding the given limit. It is important to
+appreciate that the decompression memory requirement is affected at
+compression time by the choice of dictionary size limit.
 
 Lzip has a user interface similar to the one of gzip or bzip2. It
 replaces every file given in the command line with a compressed version
 of itself, with the name "original_name.lz". Each compressed file has
 the same modification date, permissions, and, when possible, ownership
 as the corresponding original, so that these properties can be correctly
-restored at decompression time.
+restored at decompression time. Lzip is able to read from some types of
+non regular files if the "--stdout" option is specified.
 
 If no file names are specified, lzip compresses (or decompresses) from
 standard input to standard output. In this case, lzip will decline to
@@ -41,19 +45,19 @@ or more compressed files. The result is the concatenation of the
 corresponding uncompressed files. Integrity testing of concatenated
 compressed files is also supported.
 
-As a self-check for your protection, lzip stores in the file trailer the
-32-bit CRC of the original file and the size of the original file, to
-make sure that the decompressed version of the file is identical to the
-original. This guards against corruption of the compressed data, and
+As a self-check for your protection, lzip stores in the member trailer
+the 32-bit CRC of the original data and the size of the original data,
+to make sure that the decompressed version of the data is identical to
+the original. This guards against corruption of the compressed data, and
 against undetected bugs in lzip (hopefully very unlikely). The chances
 of data corruption going undetected are microscopic, less than one
-chance in 4000 million for each file processed. Be aware, though, that
+chance in 4000 million for each member processed. Be aware, though, that
 the check occurs upon decompression, so it can only tell you that
 something is wrong. It can't help you recover the original uncompressed
 data.
 
 
-Copyright (C) 2008 Antonio Diaz Diaz.
+Copyright (C) 2009 Antonio Diaz Diaz.
 
 This file is free documentation: you have unlimited permission to copy,
 distribute and modify it.

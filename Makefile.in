@@ -12,7 +12,7 @@ objs = arg_parser.o decoder.o encoder.o main.o
          uninstall uninstall-info uninstall-man uninstall-extra \
          install-strip dist clean distclean
 
-all : $(progname)
+all : $(progname) lziprecover
 
 $(progname) : $(objs)
 	$(CXX) $(LDFLAGS) -o $(progname) $(objs)
@@ -20,25 +20,31 @@ $(progname) : $(objs)
 p$(progname) : $(objs)
 	$(CXX) $(LDFLAGS) -pg -o p$(progname) $(objs)
 
+lziprecover : arg_parser.o lziprecover.o
+	$(CXX) $(LDFLAGS) -o lziprecover arg_parser.o lziprecover.o
+
 main.o : main.cc
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -DPROGVERSION=\"$(progversion)\" -c -o $@ $<
+
+lziprecover.o : lziprecover.cc
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -DPROGVERSION=\"$(progversion)\" -c -o $@ $<
 
 %.o : %.cc
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<
 
-$(objs)      : Makefile
-arg_parser.o : arg_parser.h
-decoder.o    : lzip.h decoder.h
-encoder.o    : lzip.h encoder.h
-main.o       : arg_parser.h lzip.h decoder.h encoder.h
-
+$(objs)       : Makefile
+arg_parser.o  : arg_parser.h
+decoder.o     : lzip.h decoder.h
+encoder.o     : lzip.h encoder.h
+main.o        : arg_parser.h lzip.h decoder.h encoder.h
+lziprecover.o : arg_parser.h lzip.h Makefile
 
 doc : info $(VPATH)/doc/$(progname).1
 
 info : $(VPATH)/doc/$(progname).info
 
 $(VPATH)/doc/$(progname).info : $(VPATH)/doc/$(progname).texinfo
-	cd $(VPATH)/doc ; makeinfo $(progname).texinfo
+	cd $(VPATH)/doc && makeinfo $(progname).texinfo
 
 $(VPATH)/doc/$(progname).1 : $(progname)
 	help2man -o $(VPATH)/doc/$(progname).1 ./$(progname)
@@ -46,7 +52,7 @@ $(VPATH)/doc/$(progname).1 : $(progname)
 Makefile : $(VPATH)/configure $(VPATH)/Makefile.in
 	./config.status
 
-check : $(progname) $(VPATH)/testsuite/check.sh
+check : all $(VPATH)/testsuite/check.sh
 	@$(VPATH)/testsuite/check.sh $(VPATH)/testsuite
 
 install : all install-info
@@ -62,10 +68,11 @@ install-man :
 	if test ! -d $(DESTDIR)$(mandir)/man1 ; then $(INSTALL) -d $(DESTDIR)$(mandir)/man1 ; fi
 	$(INSTALL_DATA) $(VPATH)/doc/$(progname).1 $(DESTDIR)$(mandir)/man1/$(progname).1
 
-install-extra :
+install-extra : lziprecover
 	if test ! -d $(DESTDIR)$(bindir) ; then $(INSTALL) -d $(DESTDIR)$(bindir) ; fi
 	$(INSTALL_PROGRAM) $(VPATH)/lzdiff $(DESTDIR)$(bindir)/lzdiff
 	$(INSTALL_PROGRAM) $(VPATH)/lzgrep $(DESTDIR)$(bindir)/lzgrep
+	$(INSTALL_PROGRAM) ./lziprecover $(DESTDIR)$(bindir)/lziprecover
 
 install-strip : all
 	$(MAKE) INSTALL_PROGRAM='$(INSTALL_PROGRAM) -s' install
@@ -83,6 +90,7 @@ uninstall-man :
 uninstall-extra :
 	-rm -f $(DESTDIR)$(bindir)/lzdiff
 	-rm -f $(DESTDIR)$(bindir)/lzgrep
+	-rm -f $(DESTDIR)$(bindir)/lziprecover
 
 dist :
 	ln -sf $(VPATH) $(DISTNAME)
@@ -94,23 +102,22 @@ dist :
 	  $(DISTNAME)/Makefile.in \
 	  $(DISTNAME)/NEWS \
 	  $(DISTNAME)/README \
-	  $(DISTNAME)/TODO \
 	  $(DISTNAME)/configure \
 	  $(DISTNAME)/doc/$(progname).1 \
 	  $(DISTNAME)/doc/$(progname).info \
 	  $(DISTNAME)/doc/$(progname).texinfo \
 	  $(DISTNAME)/lzdiff \
 	  $(DISTNAME)/lzgrep \
-	  $(DISTNAME)/testsuite/*.cc \
-	  $(DISTNAME)/testsuite/*.lz \
-	  $(DISTNAME)/testsuite/*.sh \
-	  $(DISTNAME)/*.cc \
-	  $(DISTNAME)/*.h
+	  $(DISTNAME)/testsuite/COPYING.lz \
+	  $(DISTNAME)/testsuite/check.sh \
+	  $(DISTNAME)/testsuite/unzcrash.cc \
+	  $(DISTNAME)/*.h \
+	  $(DISTNAME)/*.cc
 	rm -f $(DISTNAME)
 	lzip -v -s1MiB -m273 $(DISTNAME).tar
 
 clean :
-	-rm -f $(progname) p$(progname) $(objs)
+	-rm -f $(progname) p$(progname) lziprecover lziprecover.o $(objs)
 
 distclean : clean
 	-rm -f Makefile config.status *.tar *.tar.lz

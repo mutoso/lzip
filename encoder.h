@@ -1,5 +1,5 @@
 /*  Lzip - A data compressor based on the LZMA algorithm
-    Copyright (C) 2008 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,20 +21,19 @@ class Matchfinder
   {
   enum { num_prev_positions = 1 << (8 * min_match_len) };
 
-  long long partial_file_pos;
+  long long partial_data_pos;
   int _dictionary_bits;
   int dictionary_size;		// bytes to keep in buffer before pos
   const int after_size;		// bytes to keep in buffer after pos
   const int buffer_size;
   uint8_t * const buffer;
   int pos;
+  int cyclic_pos;
   int stream_pos;		// first byte not yet read from file
   int pos_limit;		// when reached, a new block must be read
-  const int _ides;
   uint32_t _crc;
-  int cyclic_pos;
+  const int _ides;
   const int match_len_limit;
-  int pos_tree_mask;
   int * const prev_positions;	// last seen position of key
   int32_t * prev_pos_tree;
   bool at_stream_end;		// stream_pos shows real end of file
@@ -44,17 +43,17 @@ class Matchfinder
 public:
   Matchfinder( const int dict_bits, const int len_limit, const int ides )
     :
-    partial_file_pos( 0 ),
+    partial_data_pos( 0 ),
     _dictionary_bits( dict_bits ),
     after_size( max_match_len ),
     buffer_size( ( 2 << _dictionary_bits ) + max_num_trials + after_size ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),
+    cyclic_pos( 0 ),
     stream_pos( 0 ),
     pos_limit( 0 ),
-    _ides( ides ),
     _crc( 0xFFFFFFFF ),
-    cyclic_pos( 0 ),
+    _ides( ides ),
     match_len_limit( len_limit ),
     prev_positions( new int[num_prev_positions] ),
     at_stream_end( false )
@@ -65,10 +64,8 @@ public:
              ( 1 << ( _dictionary_bits - 1 ) ) >= stream_pos )
         --_dictionary_bits;
     dictionary_size = ( 1 << _dictionary_bits );
-    pos_tree_mask = dictionary_size - 1;
-    prev_pos_tree = new int[pos_tree_mask+1];
+    prev_pos_tree = new int[2*dictionary_size];
     for( int i = 0; i < num_prev_positions; ++i ) prev_positions[i] = -1;
-    for( int i = 0; i <= pos_tree_mask; ++i ) prev_pos_tree[i] = -1;
     }
 
   ~Matchfinder()
@@ -78,10 +75,11 @@ public:
   int available_bytes() const throw() { return stream_pos - pos; }
   uint32_t crc() const throw() { return _crc ^ 0xFFFFFFFF; }
   int dictionary_bits() const throw() { return _dictionary_bits; }
-  long long file_position() const throw() { return partial_file_pos + pos; }
+  long long data_position() const throw() { return partial_data_pos + pos; }
   bool finished() const throw() { return pos >= stream_pos; }
   bool move_pos() throw();
   const uint8_t * ptr_to_current_pos() const throw() { return buffer + pos; }
+  bool reset() throw();
 
   int longest_match_len( int * const distances = 0 ) throw();
 
@@ -186,7 +184,7 @@ inline int price_matched( const Bit_model bm[], const int symbol,
 class Range_encoder
   {
   uint64_t low;
-  long long partial_file_pos;
+  long long partial_member_pos;
   const int buffer_size;
   uint8_t * const buffer;
   int pos;
@@ -212,7 +210,7 @@ public:
   Range_encoder( const int odes )
     :
     low( 0 ),
-    partial_file_pos( 0 ),
+    partial_member_pos( 0 ),
     buffer_size( 65536 ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),
@@ -222,6 +220,22 @@ public:
     cache( 0 ) {}
 
   ~Range_encoder() { delete[] buffer; }
+
+  void flush()
+    {
+    if( pos > 0 )
+      {
+      const int wr = writeblock( _odes, (char *)buffer, pos );
+      if( wr != pos ) throw Error( "write error" );
+      partial_member_pos += pos;
+      pos = 0;
+      }
+    }
+
+  void flush_data() { for( int i = 0; i < 5; ++i ) shift_low(); }
+
+  long long member_position() const throw()
+    { return partial_member_pos + pos + ff_count; }
 
   void put_byte( const uint8_t b )
     {
@@ -300,22 +314,6 @@ public:
           }
       }
     }
-
-  void flush()
-    {
-    if( pos > 0 )
-      {
-      const int wr = writeblock( _odes, (char *)buffer, pos );
-      if( wr != pos ) throw Error( "write error" );
-      partial_file_pos += pos;
-      pos = 0;
-      }
-    }
-
-  void flush_data() { for( int i = 0; i < 5; ++i ) shift_low(); }
-
-  long long file_position() const throw()
-    { return partial_file_pos + pos + ff_count; }
   };
 
 
@@ -413,7 +411,7 @@ class LZ_encoder
   Bit_model bm_dis[modeled_distances-end_dis_model];
   Bit_model bm_align[dis_align_size];
 
-  Matchfinder matchfinder;
+  Matchfinder & matchfinder;
   Range_encoder range_encoder;
   Len_encoder len_encoder;
   Len_encoder rep_match_len_encoder;
@@ -533,13 +531,13 @@ class LZ_encoder
   void flush( const State & state );
 
 public:
-  LZ_encoder( File_header & header, const int ides,
+  LZ_encoder( Matchfinder & mf, const File_header & header,
               const int odes, const int len_limit );
 
-  bool encode();
+  bool encode_member( const long long member_size );
 
-  long long input_file_position() const throw()
-    { return matchfinder.file_position(); }
-  long long output_file_position() const throw()
-    { return range_encoder.file_position(); }
+  long long data_position() const throw()
+    { return matchfinder.data_position(); }
+  long long member_position() const throw()
+    { return range_encoder.member_position(); }
   };

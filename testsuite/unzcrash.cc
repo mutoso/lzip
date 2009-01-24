@@ -1,7 +1,7 @@
 /*  Unzcrash - A test program written to test robustness to
                decompression of corrupted data.
     Inspired by unzcrash.c from Julian Seward's bzip2.
-    Copyright (C) 2008 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
 
     This program is free software: you have unlimited permission
     to copy, distribute and modify it.
@@ -10,10 +10,10 @@
       unzcrash "lzip -tv" filename.lz
 
     This program reads the specified file and then repeatedly
-    decompresses it, each time with a different bit of the compressed
-    data inverted, so as to test all possible one-bit errors. This
-    should not cause any invalid memory accesses. If it does, please,
-    report it as a bug.
+    decompresses it, increasing 256 times each byte of the compressed
+    data, so as to test all possible one-byte errors. This should not
+    cause any invalid memory accesses. If it does, please, report it as
+    a bug.
 
     Compile this file with the command:
       g++ -O2 -Wall -W -o unzcrash testsuite/unzcrash.cc
@@ -24,16 +24,6 @@
 #include <stdint.h>
 #include <signal.h>
 #include <unistd.h>
-
-
-void flip_bit( uint8_t buffer[], const int bit )
-  {
-  const int byteno = bit / 8;
-  const int bitno  = bit % 8;
-  const uint8_t mask = 1 << bitno;
-//  std::fprintf( stderr, "(byte %d  bit %d  mask %d)", byteno, bitno, mask );
-  buffer[byteno] ^= mask;
-  }
 
 
 int main( const int argc, const char * argv[] )
@@ -76,16 +66,19 @@ int main( const int argc, const char * argv[] )
 
   signal( SIGPIPE, SIG_IGN );
 
-  for( int bit = 0; bit < size * 8; ++bit )
+  for( int byte = 0; byte < size; ++byte )
     {
-    std::fprintf( stderr, "bit %d  ", bit );
-    flip_bit( buffer, bit );
-    f = popen( argv[1], "w" );
-    if( !f )
-      { std::fprintf( stderr, "Can't open pipe.\n" ); return 1; }
-    std::fwrite( buffer, 1, size, f );
-    pclose( f );
-    flip_bit( buffer, bit );
+    std::fprintf( stderr, "byte %d\n", byte );
+    for( int i = 0; i < 255; ++i )
+      {
+      ++buffer[byte];
+      f = popen( argv[1], "w" );
+      if( !f )
+        { std::fprintf( stderr, "Can't open pipe.\n" ); return 1; }
+      std::fwrite( buffer, 1, size, f );
+      pclose( f );
+      }
+    ++buffer[byte];
     }
 
   return 0;

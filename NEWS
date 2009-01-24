@@ -1,9 +1,22 @@
-Changes in version 1.3:
+Changes in version 1.4:
 
-This version automatically chooses the smallest possible dictionary size
-for each file during compression, saving memory during decompression.
+This version produces version 1 files with support for safe recovery of
+undamaged members from multimember files.
 
-This version is able to decompress version 1 files that will be produced
-by lzip 1.4. Version 1 files include the size of the compressed data.
-This will facilitate safe recovery of undamaged members from multimember
-files.
+The new option "--member-size", that produces multimember files, has
+been added.
+
+The new option "--volume-size", that splits the compressed output into
+several volume files, has been added.
+
+The new option "--output", that sends output to a file when reading from
+standard input, has been added.
+
+This version is able to read from some types of non regular files if
+"--stdout" is specified.
+
+Lziprecover, a member recoverer program for lzip compressed files, has
+been added to the distribution.
+
+"testsuite/unzcrash.cc" now tests all 1-byte errors instead of only
+1-bit errors.
