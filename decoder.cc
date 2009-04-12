@@ -18,6 +18,7 @@
 #define _FILE_OFFSET_BITS 64
 
 #include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -28,28 +29,28 @@
 #include "decoder.h"
 
 
-const Update_crc update_crc;
+const CRC32 crc32;
 
 
 bool Input_buffer::read_block()
   {
-  if( _finished ) return false;
-  size = readblock( _ides, (char *)buffer, buffer_size );
-  if( size != buffer_size && errno ) throw Error( "read error" );
+  if( at_stream_end ) return false;
+  stream_pos = readblock( ides_, (char *)buffer, buffer_size );
+  if( stream_pos != buffer_size && errno ) throw Error( "read error" );
   pos = 0;
-  _finished = ( size == 0 );
-  return !_finished;
+  at_stream_end = ( stream_pos < buffer_size );
+  return !finished();
   }
 
 
-void LZ_decoder::flush()
+void LZ_decoder::flush_data()
   {
-  if( stream_pos == 0 )
+  if( !member_finished )
     {
-    const int wr = writeblock( _odes, (char *)buffer, pos );
+    const int wr = writeblock( odes_, (char *)buffer, pos );
     if( wr != pos ) throw Error( "write error" );
     if( pos >= buffer_size ) { partial_data_pos += pos; pos = 0; }
-    stream_pos = pos;
+    else member_finished = true;
     }
   }
 
@@ -59,10 +60,9 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   bool error = false;
   File_trailer trailer;
   const int trailer_size = trailer.size( format_version );
-  for( int i = 0; i < trailer_size; ++i )
+  for( int i = 0; i < trailer_size && !error; ++i )
     {
-    ((uint8_t *)&trailer)[i] = range_decoder.read_byte();
-    if( !error && range_decoder.finished() )
+    if( range_decoder.finished() )
       {
       error = true;
       if( verbosity >= 0 )
@@ -72,6 +72,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
                               " some checks may fail.\n", i );
         }
       }
+    ((uint8_t *)&trailer)[i] = range_decoder.read_byte();
     }
   if( format_version == 0 ) trailer.member_size( member_position() );
   if( trailer.data_crc() != crc() )
@@ -80,7 +81,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     if( verbosity >= 0 )
       {
       pp();
-      std::fprintf( stderr, "bad crc for uncompressed data; expected %08X, obtained %08X.\n",
+      std::fprintf( stderr, "crc mismatch; trailer says %08X, data crc is %08X.\n",
                     trailer.data_crc(), crc() );
       }
     }
@@ -91,9 +92,9 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
       {
       if( trailer.data_size() >= 0 )
         { pp();
-          std::fprintf( stderr, "bad uncompressed size; expected %lld, obtained %lld.\n",
+          std::fprintf( stderr, "data size mismatch; trailer says %lld, data size is %lld.\n",
                         trailer.data_size(), data_position() ); }
-      else pp( "bad member trailer" );
+      else pp( "member trailer is corrupt" );
       }
     }
   if( trailer.member_size() != member_position() )
@@ -103,9 +104,9 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
       {
       if( trailer.member_size() >= 0 )
         { pp();
-          std::fprintf( stderr, "bad member size; expected %lld, obtained %lld.\n",
+          std::fprintf( stderr, "member size mismatch; trailer says %lld, member size is %lld.\n",
                         trailer.member_size(), member_position() ); }
-      else pp( "bad member trailer" );
+      else pp( "member trailer is corrupt" );
       }
     }
   if( !error && verbosity >= 3 )
@@ -193,7 +194,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
               {
               if( len == min_match_len )	// End Of Stream marker
                 {
-                flush();
+                flush_data();
                 if( verify_trailer( pp ) ) return 0; else return 3;
                 }
               if( verbosity >= 0 )

@@ -29,44 +29,17 @@
 #include "encoder.h"
 
 
-const Prob_prices prob_prices;
+Dis_slots dis_slots;
+Prob_prices prob_prices;
 
 
 bool Matchfinder::read_block() throw()
   {
   const int size = buffer_size - stream_pos;
-  const int rd = readblock( _ides, (char *)buffer + stream_pos, size );
+  const int rd = readblock( ides_, (char *)buffer + stream_pos, size );
   stream_pos += rd;
-  if( rd == size ) pos_limit = stream_pos - after_size;	// last safe position
-  else { pos_limit = stream_pos; at_stream_end = true; }
+  if( rd < size ) at_stream_end = true;
   return ( rd == size || !errno );
-  }
-
-
-bool Matchfinder::move_pos() throw()
-  {
-  update_crc( _crc, buffer[pos] );
-  if( ++cyclic_pos >= dictionary_size ) cyclic_pos = 0;
-  if( ++pos >= pos_limit )
-    {
-    if( !at_stream_end )
-      {
-      const int offset = pos - dictionary_size - max_num_trials;
-      const int size = stream_pos - offset;
-      std::memmove( buffer, buffer + offset, size );
-      partial_data_pos += offset;
-      pos -= offset;
-      stream_pos -= offset;
-      pos_limit -= offset;
-      for( int i = 0; i < num_prev_positions; ++i )
-        if( prev_positions[i] >= 0 ) prev_positions[i] -= offset;
-      for( int i = 0; i < 2 * dictionary_size; ++i )
-        if( prev_pos_tree[i] >= 0 ) prev_pos_tree[i] -= offset;
-      return read_block();
-      }
-    else if( pos > pos_limit ) { pos = pos_limit; return false; }
-    }
-  return true;
   }
 
 
@@ -76,84 +49,131 @@ bool Matchfinder::reset() throw()
   std::memmove( buffer, buffer + pos, size );
   partial_data_pos = 0;
   stream_pos -= pos;
-  pos_limit -= pos;
   pos = 0;
   cyclic_pos = 0;
-  _crc = 0xFFFFFFFF;
   for( int i = 0; i < num_prev_positions; ++i ) prev_positions[i] = -1;
   return ( at_stream_end || read_block() );
   }
 
 
+bool Matchfinder::move_pos() throw()
+  {
+  if( ++cyclic_pos >= dictionary_size_ ) cyclic_pos = 0;
+  if( ++pos >= pos_limit )
+    {
+    if( !at_stream_end )
+      {
+      const int offset = pos - dictionary_size_ - max_num_trials;
+      const int size = stream_pos - offset;
+      std::memmove( buffer, buffer + offset, size );
+      partial_data_pos += offset;
+      pos -= offset;
+      stream_pos -= offset;
+      for( int i = 0; i < num_prev_positions; ++i )
+        if( prev_positions[i] >= 0 ) prev_positions[i] -= offset;
+      for( int i = 0; i < 2 * dictionary_size_; ++i )
+        if( prev_pos_tree[i] >= 0 ) prev_pos_tree[i] -= offset;
+      return read_block();
+      }
+    else if( pos > stream_pos ) { pos = stream_pos; return false; }
+    }
+  return true;
+  }
+
+
 int Matchfinder::longest_match_len( int * const distances ) throw()
   {
-  int len_limit = match_len_limit;
+  int len_limit = match_len_limit_;
   if( len_limit > available_bytes() )
     {
     len_limit = available_bytes();
-    if( len_limit < min_match_len ) return 0;
+    if( len_limit < 4 ) return 0;
     }
 
-  const uint8_t * const data = ptr_to_current_pos();
-  const int key = ( (int)data[0] << 8 ) + data[1];
-
-  int newpos = prev_positions[key];
-  prev_positions[key] = pos;
-
-  const int min_pos = (pos > dictionary_size) ? (pos - dictionary_size) : 0;
   int maxlen = min_match_len - 1;
-  int * ptr0 = prev_pos_tree + ( cyclic_pos << 1 );
-  int * ptr1 = ptr0 + 1;
+  const int min_pos = (pos >= dictionary_size_) ?
+                      (pos - dictionary_size_ + 1) : 0;
+  const uint8_t * const data = buffer + pos;
+  const int key2 = num_prev_positions4 + num_prev_positions3 +
+                   ( ( (int)data[0] << 8 ) | data[1] );
+  const int tmp = crc32[data[0]] ^ data[1] ^ ( (int)data[2] << 8 );
+  const int key3 = num_prev_positions4 + ( tmp & ( num_prev_positions3 - 1 ) );
+  const int key4 = ( tmp ^ ( crc32[data[3]] << 5 ) ) &
+                   ( num_prev_positions4 - 1 );
 
-  for( int count = std::min( 4 * match_len_limit, 256 ); ; )
+  if( distances )
     {
-    if( newpos < min_pos || --count <= 0 ) { *ptr0 = *ptr1 = newpos; break; }
+    int np = prev_positions[key2];
+    if( np >= min_pos )
+      { distances[2] = pos - np - 1; maxlen = 2; }
+    else distances[2] = 0x7FFFFFFF;
+    np = prev_positions[key3];
+    if( np >= min_pos && buffer[np] == data[0] )
+      { distances[3] = pos - np - 1; maxlen = 3; }
+    else distances[3] = 0x7FFFFFFF;
+    distances[4] = 0x7FFFFFFF;
+    }
+
+  prev_positions[key2] = pos;
+  prev_positions[key3] = pos;
+  int newpos = prev_positions[key4];
+  prev_positions[key4] = pos;
+
+  int idx0 = cyclic_pos << 1;
+  int idx1 = idx0 + 1;
+  int len0 = 0, len1 = 0;
+
+  for( int count = 16 + ( match_len_limit_ / 2 ); ; )
+    {
+    if( newpos < min_pos || --count < 0 )
+      { prev_pos_tree[idx0] = prev_pos_tree[idx1] = -1; break; }
     const uint8_t * const newdata = buffer + newpos;
-    int len = 2;		// key size
+    int len = std::min( len0, len1 );
     while( len < len_limit && newdata[len] == data[len] ) ++len;
 
     const int delta = pos - newpos;
     if( distances ) while( maxlen < len ) distances[++maxlen] = delta - 1;
 
-    int * const newptr = prev_pos_tree +
-      ( ( cyclic_pos - delta + ( ( cyclic_pos >= delta ) ? 0 : dictionary_size ) ) << 1 );
+    const int newidx = ( cyclic_pos - delta +
+      ( ( cyclic_pos >= delta ) ? 0 : dictionary_size_ ) ) << 1;
 
     if( len < len_limit )
       {
       if( newdata[len] < data[len] )
-        { *ptr0 = newpos; ptr0 = newptr + 1; newpos = *ptr0; }
+        {
+        prev_pos_tree[idx0] = newpos;
+        idx0 = newidx + 1;
+        newpos = prev_pos_tree[idx0];
+        len0 = len;
+        }
       else
-        { *ptr1 = newpos; ptr1 = newptr;     newpos = *ptr1; }
+        {
+        prev_pos_tree[idx1] = newpos;
+        idx1 = newidx;
+        newpos = prev_pos_tree[idx1];
+        len1 = len;
+        }
       }
     else
-      { *ptr0 = newptr[0]; *ptr1 = newptr[1]; break; }
+      {
+      prev_pos_tree[idx0] = prev_pos_tree[newidx];
+      prev_pos_tree[idx1] = prev_pos_tree[newidx+1];
+      break;
+      }
+    }
+  if( distances )
+    {
+    if( distances[3] > distances[4] ) distances[3] = distances[4];
+    if( distances[2] > distances[3] ) distances[2] = distances[3];
     }
   return maxlen;
   }
 
 
-int Len_encoder::calculate_price( const int symbol, const int pos_state ) const throw()
-  {
-  if( symbol < len_low_symbols )
-    return price0( choice1 ) + price_symbol( bm_low[pos_state], symbol, len_low_bits );
-  int price = price1( choice1 );
-  if( symbol < len_low_symbols + len_mid_symbols )
-    {
-    price += price0( choice2 );
-    price += price_symbol( bm_mid[pos_state], symbol - len_low_symbols, len_mid_bits );
-    }
-  else
-    {
-    price += price1( choice2 );
-    price += price_symbol( bm_high, symbol - len_low_symbols - len_mid_symbols, len_high_bits );
-    }
-  return price;
-  }
-
-
-void Len_encoder::encode( Range_encoder & range_encoder, const int symbol,
+void Len_encoder::encode( Range_encoder & range_encoder, int symbol,
                           const int pos_state )
   {
+  symbol -= min_match_len;
   if( symbol < len_low_symbols )
     {
     range_encoder.encode_bit( choice1, 0 );
@@ -189,24 +209,25 @@ void LZ_encoder::fill_distance_prices() throw()
   {
   for( int dis_state = 0; dis_state < max_dis_states; ++dis_state )
     {
+    int * dsp = dis_slot_prices[dis_state];
+    const Bit_model * bmds = bm_dis_slot[dis_state];
     int slot = 0;
     for( ; slot < end_dis_model && slot < num_dis_slots; ++slot )
-      dis_slot_prices[dis_state][slot] =
-        price_symbol( bm_dis_slot[dis_state], slot, dis_slot_bits );
+      dsp[slot] = price_symbol( bmds, slot, dis_slot_bits );
     for( ; slot < num_dis_slots; ++slot )
-      dis_slot_prices[dis_state][slot] =
-        price_symbol( bm_dis_slot[dis_state], slot, dis_slot_bits ) +
-        (((( slot >> 1 ) - 1 ) - dis_align_bits ) << price_shift );
+      dsp[slot] = price_symbol( bmds, slot, dis_slot_bits ) +
+                  (((( slot >> 1 ) - 1 ) - dis_align_bits ) << price_shift );
 
+    int * dp = dis_prices[dis_state];
     int dis = 0;
     for( ; dis < start_dis_model; ++dis )
-      dis_prices[dis_state][dis] = dis_slot_prices[dis_state][dis];
+      dp[dis] = dsp[dis];
     for( ; dis < modeled_distances; ++dis )
       {
-      const int dis_slot = get_dis_slot( dis );
+      const int dis_slot = dis_slots[dis];
       const int direct_bits = ( dis_slot >> 1 ) - 1;
       const int base = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
-      dis_prices[dis_state][dis] = dis_slot_prices[dis_state][dis_slot] +
+      dp[dis] = dsp[dis_slot] +
           price_symbol_reversed( bm_dis + base - dis_slot, dis - base, direct_bits );
       }
     }
@@ -232,7 +253,7 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
     replens[i] = matchfinder.true_match_len( 0, reps[i] + 1, max_match_len );
     if( replens[i] > replens[rep_index] ) rep_index = i;
     }
-  if( replens[rep_index] >= match_len_limit )
+  if( replens[rep_index] >= matchfinder.match_len_limit() )
     {
     trials[0].dis = rep_index;
     trials[0].price = replens[rep_index];
@@ -240,9 +261,10 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
     return replens[rep_index];
     }
 
-  if( main_len >= match_len_limit )
+  if( main_len >= matchfinder.match_len_limit() )
     {
-    trials[0].dis = match_distances[match_len_limit] + num_rep_distances;
+    trials[0].dis = match_distances[matchfinder.match_len_limit()] +
+                    num_rep_distances;
     trials[0].price = main_len;
     if( !move_pos( main_len, true ) ) return 0;
     return main_len;
@@ -312,7 +334,7 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
       return cur;
       }
     const int newlen = read_match_distances();
-    if( newlen >= match_len_limit )
+    if( newlen >= matchfinder.match_len_limit() )
       {
       longest_match_found = newlen;
       backward( cur );
@@ -360,7 +382,7 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
                                  price_rep_len1( cur_trial.state, pos_state ) );
 
     const int len_limit = std::min( std::min( max_num_trials - 1 - cur,
-                          matchfinder.available_bytes() ), match_len_limit );
+                          matchfinder.available_bytes() ), matchfinder.match_len_limit() );
     if( len_limit < min_match_len ) continue;
 
     for( int rep = 0; rep < num_rep_distances; ++rep )
@@ -371,7 +393,8 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
       while( len < len_limit && data[len] == data[len-dis] ) ++len;
       if( len >= min_match_len )
         {
-        while( num_trials < cur + len ) trials[++num_trials].price = infinite_price;
+        while( num_trials < cur + len )
+          trials[++num_trials].price = infinite_price;
         for( ; len >= min_match_len; --len )
           trials[cur+len].update( rep, cur, rep_match_price +
                                   price_rep( rep, len, cur_trial.state, pos_state ) );
@@ -380,10 +403,13 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
 
     if( newlen <= len_limit &&
         ( newlen > min_match_len ||
-          ( newlen == min_match_len && match_distances[newlen] < 256 ) ) )
+          ( newlen == min_match_len &&
+            match_distances[newlen] < modeled_distances ) ) )
       {
-      const int normal_match_price = match_price + price0( bm_rep[cur_trial.state()] );
-      while( num_trials < cur + newlen ) trials[++num_trials].price = infinite_price;
+      const int normal_match_price = match_price +
+                                     price0( bm_rep[cur_trial.state()] );
+      while( num_trials < cur + newlen )
+        trials[++num_trials].price = infinite_price;
 
       for( int len = newlen; len >= min_match_len; --len )
         trials[cur+len].update( match_distances[len] + num_rep_distances, cur,
@@ -400,44 +426,30 @@ void LZ_encoder::flush( const State & state )
   const int pos_state = ( matchfinder.data_position() ) & pos_state_mask;
   range_encoder.encode_bit( bm_match[state()][pos_state], 1 );
   range_encoder.encode_bit( bm_rep[state()], 0 );
-  const int len = min_match_len;
-  len_encoder.encode( range_encoder, len - min_match_len, pos_state );
-  const unsigned int dis = 0xFFFFFFFF;
-  const int dis_slot = get_dis_slot( dis );
-  range_encoder.encode_tree( bm_dis_slot[get_dis_state(len)], dis_slot, dis_slot_bits );
-  const int direct_bits = ( dis_slot >> 1 ) - 1;
-  const int direct_dis = dis & ( ( 1 << direct_bits ) - 1 );
-  range_encoder.encode( direct_dis >> dis_align_bits, direct_bits - dis_align_bits );
-  range_encoder.encode_tree_reversed( bm_align, direct_dis, dis_align_bits );
-  range_encoder.flush_data();
+  encode_pair( 0xFFFFFFFF, min_match_len, pos_state );
+  range_encoder.flush();
   File_trailer trailer;
-  trailer.data_crc( matchfinder.crc() );
+  trailer.data_crc( crc() );
   trailer.data_size( matchfinder.data_position() );
   trailer.member_size( range_encoder.member_position() + sizeof trailer );
   for( unsigned int i = 0; i < sizeof trailer; ++i )
     range_encoder.put_byte( (( uint8_t *)&trailer)[i] );
-  range_encoder.flush();
+  range_encoder.flush_data();
   }
 
 
 LZ_encoder::LZ_encoder( Matchfinder & mf, const File_header & header,
-                        const int odes, const int len_limit )
+                        const int odes )
   :
-  match_len_limit( len_limit ),
   longest_match_found( 0 ),
+  crc_( 0xFFFFFFFF ),
   matchfinder( mf ),
   range_encoder( odes ),
-  len_encoder( match_len_limit ),
-  rep_match_len_encoder( match_len_limit ),
-  literal_encoder()
+  len_encoder( matchfinder.match_len_limit() ),
+  rep_match_len_encoder( matchfinder.match_len_limit() ),
+  literal_encoder(),
+  num_dis_slots( 2 * File_header::real_bits( matchfinder.dictionary_size() - 1 ) )
   {
-  num_dis_slots = 2 * matchfinder.dictionary_bits();
-  for( int slot = 0; slot < 4; ++slot ) dis_slots[slot] = slot;
-  for( int c = 4, slot = 4; slot < 20; ++slot )
-    {
-    const int k = 1 << ( ( slot / 2 ) - 1 );
-    for( int i = 0; i < k; ++i, ++c ) dis_slots[c] = slot;
-    }
   fill_align_prices();
 
   for( unsigned int i = 0; i < sizeof header; ++i )
@@ -447,6 +459,9 @@ LZ_encoder::LZ_encoder( Matchfinder & mf, const File_header & header,
 
 bool LZ_encoder::encode_member( const long long member_size )
   {
+  if( range_encoder.member_position() != sizeof( File_header ) )
+    return false;		// can be called only once
+  const long long member_size_limit = member_size - sizeof( File_trailer ) - 15;
   int fill_counter = 0;
   int rep_distances[num_rep_distances];
   State state;
@@ -459,22 +474,20 @@ bool LZ_encoder::encode_member( const long long member_size )
     const uint8_t cur_byte = matchfinder[0];
     literal_encoder.encode( range_encoder, prev_byte, cur_byte );
     prev_byte = cur_byte;
+    crc32.update( crc_, cur_byte );
     if( !move_pos( 1 ) ) return false;
     }
 
   while( true )
     {
-    if( matchfinder.finished() ||
-        ( longest_match_found == 0 &&
-          range_encoder.member_position() >= member_size ) )
-      { flush( state ); return true; }
+    if( matchfinder.finished() ) { flush( state ); return true; }
     if( fill_counter <= 0 ) { fill_distance_prices(); fill_counter = 512; }
 
     int ahead = best_pair_sequence( rep_distances, state );
     if( ahead <= 0 ) return false;
     fill_counter -= ahead;
 
-    for( int i = 0; ahead > 0; )
+    for( int i = 0; ; )
       {
       const int pos_state = ( matchfinder.data_position() - ahead ) & pos_state_mask;
       int dis = trials[i].dis;
@@ -515,38 +528,27 @@ bool LZ_encoder::encode_member( const long long member_size )
           if( len == 1 ) state.set_short_rep();
           else
             {
-            rep_match_len_encoder.encode( range_encoder, len - min_match_len, pos_state );
+            rep_match_len_encoder.encode( range_encoder, len, pos_state );
             state.set_rep();
             }
           }
         else
           {
-          dis -= num_rep_distances;
-          len_encoder.encode( range_encoder, len - min_match_len, pos_state );
+          encode_pair( dis - num_rep_distances, len, pos_state );
           state.set_match();
-          const int dis_slot = get_dis_slot( dis );
-          range_encoder.encode_tree( bm_dis_slot[get_dis_state(len)], dis_slot, dis_slot_bits );
-
-          if( dis_slot >= start_dis_model )
-            {
-            const int direct_bits = ( dis_slot >> 1 ) - 1;
-            const int base = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
-            const int direct_dis = dis - base;
-
-            if( dis_slot < end_dis_model )
-              range_encoder.encode_tree_reversed( bm_dis + base - dis_slot,
-                  direct_dis, direct_bits );
-            else
-              {
-              range_encoder.encode( direct_dis >> dis_align_bits, direct_bits - dis_align_bits );
-              range_encoder.encode_tree_reversed( bm_align, direct_dis, dis_align_bits );
-              if( --align_price_count <= 0 ) fill_align_prices();
-              }
-            }
           }
         prev_byte = matchfinder[len-1-ahead];
         }
+      for( int j = 0; j < len; ++j )
+        crc32.update( crc_, matchfinder[j-ahead] );
       ahead -= len; i += len;
+      if( range_encoder.member_position() >= member_size_limit )
+        {
+        if( !matchfinder.dec_pos( ahead ) ) return false;
+        flush( state );
+        return true;
+        }
+      if( ahead <= 0 ) break;
       }
     }
   }

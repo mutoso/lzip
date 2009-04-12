@@ -17,8 +17,8 @@ all : $(progname) lziprecover
 $(progname) : $(objs)
 	$(CXX) $(LDFLAGS) -o $(progname) $(objs)
 
-p$(progname) : $(objs)
-	$(CXX) $(LDFLAGS) -pg -o p$(progname) $(objs)
+profiled_$(progname) : $(objs)
+	$(CXX) $(LDFLAGS) -pg -o profiled_$(progname) $(objs)
 
 lziprecover : arg_parser.o lziprecover.o
 	$(CXX) $(LDFLAGS) -o lziprecover arg_parser.o lziprecover.o
@@ -55,7 +55,7 @@ Makefile : $(VPATH)/configure $(VPATH)/Makefile.in
 check : all $(VPATH)/testsuite/check.sh
 	@$(VPATH)/testsuite/check.sh $(VPATH)/testsuite
 
-install : all install-info
+install : all install-info install-man
 	if test ! -d $(DESTDIR)$(bindir) ; then $(INSTALL) -d $(DESTDIR)$(bindir) ; fi
 	$(INSTALL_PROGRAM) ./$(progname) $(DESTDIR)$(bindir)/$(progname)
 
@@ -77,7 +77,7 @@ install-extra : lziprecover
 install-strip : all
 	$(MAKE) INSTALL_PROGRAM='$(INSTALL_PROGRAM) -s' install
 
-uninstall : uninstall-info
+uninstall : uninstall-info uninstall-man
 	-rm -f $(DESTDIR)$(bindir)/$(progname)
 
 uninstall-info :
@@ -114,10 +114,11 @@ dist :
 	  $(DISTNAME)/*.h \
 	  $(DISTNAME)/*.cc
 	rm -f $(DISTNAME)
-	lzip -v -s1MiB -m273 $(DISTNAME).tar
+	lzip -v -9 $(DISTNAME).tar
 
 clean :
-	-rm -f $(progname) p$(progname) lziprecover lziprecover.o $(objs)
+	-rm -f $(progname) profiled_$(progname) $(objs)
+	-rm -f lziprecover lziprecover.o
 
 distclean : clean
 	-rm -f Makefile config.status *.tar *.tar.lz

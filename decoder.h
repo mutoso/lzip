@@ -17,32 +17,32 @@
 
 class Input_buffer
   {
-  const int buffer_size;
+  enum { buffer_size = 65536 };
+
   uint8_t * const buffer;
   int pos;
-  int size;		// when reached, a new block must be read
-  const int _ides;
-  bool _finished;
+  int stream_pos;		// when reached, a new block must be read
+  const int ides_;
+  bool at_stream_end;
 
   bool read_block();
 
 public:
   Input_buffer( const int ides )
     :
-    buffer_size( 65536 ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),
-    size( 0 ),
-    _ides( ides ),
-    _finished( false ) {}
+    stream_pos( 0 ),
+    ides_( ides ),
+    at_stream_end( false ) {}
 
   ~Input_buffer() { delete[] buffer; }
 
-  bool finished() const throw() { return _finished; }
+  bool finished() const throw() { return at_stream_end && pos >= stream_pos; }
 
   uint8_t read_byte()
     {
-    if( pos >= size && !read_block() ) return 0;
+    if( pos >= stream_pos && !read_block() ) return 0;
     return buffer[pos++];
     }
   };
@@ -59,7 +59,8 @@ public:
   Range_decoder( const int header_size, Input_buffer & buf )
     :
     member_pos( header_size ),
-    code( 0 ), range( 0xFFFFFFFF ),
+    code( 0 ),
+    range( 0xFFFFFFFF ),
     ibuf( buf )
     { for( int i = 0; i < 5; ++i ) code = (code << 8) | read_byte(); }
 
@@ -72,16 +73,16 @@ public:
   long long member_position() const throw() { return member_pos; }
   bool finished() const throw() { return ibuf.finished(); }
 
-  int decode( const int num_bits = 1 )
+  int decode( const int num_bits )
     {
     int symbol = 0;
     for( int i = num_bits - 1; i >= 0; --i )
       {
       range >>= 1;
       symbol <<= 1;
-      if( ( ( code - range ) & 0x80000000 ) == 0 )
+      if( code >= range )
         { code -= range; symbol |= 1; }
-      if( range <= 0xFFFFFF )
+      if( range <= 0x00FFFFFF )
         { range <<= 8; code = (code << 8) | read_byte(); }
       }
     return symbol;
@@ -104,7 +105,7 @@ public:
       bm.probability -= bm.probability >> bit_model_move_bits;
       symbol = 1;
       }
-    if( range <= 0xFFFFFF )
+    if( range <= 0x00FFFFFF )
       { range <<= 8; code = (code << 8) | read_byte(); }
     return symbol;
     }
@@ -121,10 +122,11 @@ public:
     {
     int model = 1;
     int symbol = 0;
-    for( int i = 0; i < num_bits; ++i )
+    for( int i = 1; i < (1 << num_bits); i <<= 1 )
       {
-      model = ( model << 1 ) | decode_bit( bm[model-1] );
-      if( model & 1 ) symbol |= ( 1 << i );
+      const int bit = decode_bit( bm[model-1] );
+      model = ( model << 1 ) | bit;
+      if( bit ) symbol |= i;
       }
     return symbol;
     }
@@ -134,8 +136,8 @@ public:
     int symbol = 1;
     for( int i = 7; i >= 0; --i )
       {
-      int match_bit = ( match_byte >> i ) & 1;
-      int bit = decode_bit( bm[(match_bit<<8)+symbol+0xFF] );
+      const int match_bit = ( match_byte >> i ) & 1;
+      const int bit = decode_bit( bm[(match_bit<<8)+symbol+0xFF] );
       symbol = ( symbol << 1 ) | bit;
       if( match_bit != bit ) break;
       }
@@ -170,18 +172,12 @@ public:
 
 class Literal_decoder
   {
-  typedef Bit_model Bm_array[0x300];
-  Bm_array * const bm_literal;
+  Bit_model bm_literal[1<<literal_context_bits][0x300];
 
   int state( const int prev_byte ) const throw()
     { return ( prev_byte >> ( 8 - literal_context_bits ) ); }
 
 public:
-  Literal_decoder()
-    : bm_literal( new Bm_array[1<<literal_context_bits] ) {}
-
-  ~Literal_decoder() { delete[] bm_literal; }
-
   uint8_t decode( Range_decoder & range_decoder, const int prev_byte )
     { return range_decoder.decode_tree( bm_literal[state(prev_byte)], 8 ); }
 
@@ -198,9 +194,9 @@ class LZ_decoder
   const int buffer_size;
   uint8_t * const buffer;
   int pos;
-  int stream_pos;
-  uint32_t _crc;
-  const int _odes;
+  uint32_t crc_;
+  const int odes_;
+  bool member_finished;
 
   Bit_model bm_match[State::states][pos_states];
   Bit_model bm_rep[State::states];
@@ -226,9 +222,9 @@ class LZ_decoder
 
   void put_byte( const uint8_t b )
     {
-    update_crc( _crc, b );
+    crc32.update( crc_, b );
     buffer[pos] = b;
-    if( ++pos >= buffer_size ) flush();
+    if( ++pos >= buffer_size ) flush_data();
     }
 
   bool copy_block( const int distance, int len )
@@ -239,15 +235,15 @@ class LZ_decoder
     if( newpos < 0 ) newpos += buffer_size;
     for( ; len > 0 ; --len )
       {
-      update_crc( _crc, buffer[newpos] );
+      crc32.update( crc_, buffer[newpos] );
       buffer[pos] = buffer[newpos];
-      if( ++pos >= buffer_size ) flush();
+      if( ++pos >= buffer_size ) flush_data();
       if( ++newpos >= buffer_size ) newpos = 0;
       }
     return true;
     }
 
-  void flush();
+  void flush_data();
   bool verify_trailer( const Pretty_print & pp ) const;
 
 public:
@@ -255,18 +251,18 @@ public:
     :
     partial_data_pos( 0 ),
     format_version( header.version ),
-    buffer_size( 1 << ( header.dictionary_bits & 0x1F ) ),
+    buffer_size( header.dictionary_size() ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),
-    stream_pos( 0 ),
-    _crc( 0xFFFFFFFF ),
-    _odes( odes ),
+    crc_( 0xFFFFFFFF ),
+    odes_( odes ),
+    member_finished( false ),
     range_decoder( sizeof header, ibuf ),
     literal_decoder() {}
 
   ~LZ_decoder() { delete[] buffer; }
 
-  uint32_t crc() const throw() { return _crc ^ 0xFFFFFFFF; }
+  uint32_t crc() const throw() { return crc_ ^ 0xFFFFFFFF; }
   int decode_member( const Pretty_print & pp );
 
   long long member_position() const throw()

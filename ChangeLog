@@ -1,3 +1,16 @@
+2009-04-12  Antonio Diaz  <ant_diaz@teleline.es>
+
+	* Version 1.5 released.
+	* lzip.h: Coded dictionary size implemented in File_header.
+	* Fixed some includes that prevented compilation with GCC 4.4.
+	* "member_size" and "volume_size" are now accurate limits.
+	* Compression speed has been improved.
+	* Implemented bt4 type matchfinder.
+	* Added chapter "Algorithm" to the manual.
+	* Lzdiff and lzgrep now accept "-h" for "--help" and
+	  "-V" for "--version".
+	* Makefile.in: Man page is now installed by default.
+
 2009-01-24  Antonio Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.4 released.

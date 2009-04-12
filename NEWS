@@ -1,22 +1,19 @@
-Changes in version 1.4:
+Changes in version 1.5:
 
-This version produces version 1 files with support for safe recovery of
-undamaged members from multimember files.
+Codification of dictionary size in file header has been changed. At
+least lzip 1.4 is needed to decompress files produced by lzip 1.5.
 
-The new option "--member-size", that produces multimember files, has
-been added.
+A problem that prevented compilation with GCC 4.4 has been fixed.
 
-The new option "--volume-size", that splits the compressed output into
-several volume files, has been added.
+"--member-size" and "--volume-size" have been made more accurate.
 
-The new option "--output", that sends output to a file when reading from
-standard input, has been added.
+Compression ratio and speed have been improved at the cost of 4MiB more
+of RAM.
 
-This version is able to read from some types of non regular files if
-"--stdout" is specified.
+Compression speed has been doubled for dictionary sizes < 64KiB.
 
-Lziprecover, a member recoverer program for lzip compressed files, has
-been added to the distribution.
+The chapter "Algorithm" has been added to the manual.
 
-"testsuite/unzcrash.cc" now tests all 1-byte errors instead of only
-1-bit errors.
+Lzdiff and lzgrep now accept "-h" for "--help" and "-V" for "--version".
+
+Man page is now installed by default.

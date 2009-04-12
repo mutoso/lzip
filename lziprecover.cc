@@ -24,6 +24,7 @@
 #define _FILE_OFFSET_BITS 64
 
 #include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -259,7 +260,7 @@ void show_error( const char * msg, const int errcode, const bool help ) throw()
   }
 
 
-void internal_error( const char * msg ) throw()
+void internal_error( const char * msg )
   {
   std::string s( "internal error: " ); s += msg;
   show_error( s.c_str() );

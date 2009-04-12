@@ -1,4 +1,4 @@
-#!/bin/sh
+#! /bin/sh
 # check script for Lzip - A data compressor based on the LZMA algorithm
 # Copyright (C) 2008, 2009 Antonio Diaz Diaz.
 #
@@ -23,7 +23,7 @@ cd ${objdir}/tmp
 cat ${testdir}/../COPYING > in || framework_failure
 fail=0
 
-${LZIP} -t ${testdir}/COPYING.lz || fail=1
+${LZIP} -cd ${testdir}/COPYING.lz | cmp ${testdir}/../COPYING - || fail=1
 
 for i in 1 2 3 4 5 6 7 8 9; do
 	${LZIP} -k -$i in || fail=1
