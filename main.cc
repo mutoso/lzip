@@ -84,7 +84,7 @@ void show_help() throw()
   {
   std::printf( "%s - A data compressor based on the LZMA algorithm.\n", Program_name );
   std::printf( "\nUsage: %s [options] [files]\n", invocation_name );
-  std::printf( "Options:\n" );
+  std::printf( "\nOptions:\n" );
   std::printf( "  -h, --help                 display this help and exit\n" );
   std::printf( "  -V, --version              output version information and exit\n" );
   std::printf( "  -b, --member-size=<n>      set member size limit in bytes\n" );
@@ -102,7 +102,7 @@ void show_help() throw()
   std::printf( "  -1 .. -9                   set compression level [default 6]\n" );
   std::printf( "      --fast                 alias for -1\n" );
   std::printf( "      --best                 alias for -9\n" );
-  std::printf( "If no file names are given, lzip compresses or decompresses\n" );
+  std::printf( "If no file names are given, %s compresses or decompresses\n", program_name );
   std::printf( "from standard input to standard output.\n" );
   std::printf( "Numbers may be followed by a multiplier: k = kB = 10^3 = 1000,\n" );
   std::printf( "Ki = KiB = 2^10 = 1024, M = 10^6, Mi = 2^20, G = 10^9, Gi = 2^30, etc...\n" );
@@ -473,7 +473,7 @@ int decompress( const int inhandle, const Pretty_print & pp,
       {
       File_header header;
       for( unsigned int i = 0; i < sizeof header; ++i )
-        ((uint8_t *)&header)[i] = ibuf.read_byte();
+        ((uint8_t *)&header)[i] = ibuf.get_byte();
       if( ibuf.finished() )
         {
         if( first_pass ) { pp( "error reading member header" ); return 1; }
@@ -541,7 +541,7 @@ int decompress( const int inhandle, const Pretty_print & pp,
   }
 
 
-void signal_handler( const int ) throw()
+extern "C" void signal_handler( int ) throw()
   {
   show_error( "Control-C or similar caught, quitting." );
   cleanup_and_fail( 0 );
@@ -645,10 +645,10 @@ int main( const int argc, const char * argv[] )
   // to the corresponding LZMA compression modes.
   const lzma_options option_mapping[] =
     {
-    { 1 << 22,  10 },		// -1
-    { 1 << 22,  12 },		// -2
-    { 1 << 22,  17 },		// -3
-    { 1 << 22,  26 },		// -4
+    { 1 << 20,  10 },		// -1
+    { 1 << 20,  12 },		// -2
+    { 1 << 20,  17 },		// -3
+    { 1 << 21,  26 },		// -4
     { 1 << 22,  44 },		// -5
     { 1 << 23,  80 },		// -6
     { 1 << 24, 108 },		// -7
@@ -741,15 +741,12 @@ int main( const int argc, const char * argv[] )
   if( filenames_given ) set_signals();
 
   Pretty_print pp( filenames );
-  if( program_mode == m_compress )
+  if( program_mode == m_test )
+    outhandle = -1;
+  else if( program_mode == m_compress )
     {
     dis_slots.init();
     prob_prices.init();
-    }
-  else if( program_mode == m_test )
-    {
-    output_filename = "/dev/null";
-    if( !open_outstream( true ) ) return 1;
     }
 
   int retval = 0;

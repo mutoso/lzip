@@ -5,8 +5,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 12 April 2009
-@set VERSION 1.5
+@set UPDATED 25 June 2009
+@set VERSION 1.7
 
 @dircategory Data Compression
 @direntry
@@ -84,11 +84,12 @@ compressed output in volumes of a given size, even when reading from
 standard input. This allows the direct creation of multivolume
 compressed tar archives.
 
-The amount of memory required for compression is about 2 times the
-dictionary size limit plus 8 times the dictionary size really used. For
-decompression is a little more than the dictionary size really used.
-Lzip will automatically use the smallest possible dictionary size for
-each member without exceeding the given limit. It is important to
+The amount of memory required for compression is about 5 MiB plus 1 or 2
+times the dictionary size limit (1 if input file size is less than
+dictionary size limit, else 2) plus 8 times the dictionary size really
+used. For decompression is a little more than the dictionary size really
+used. Lzip will automatically use the smallest possible dictionary size
+for each member without exceeding the given limit. It is important to
 appreciate that the decompression memory requirement is affected at
 compression time by the choice of dictionary size limit.
 
@@ -207,7 +208,8 @@ single member files.
 @item --stdout
 @itemx -c
 Compress or decompress to standard output. Needed when reading from a
-named pipe (fifo) or from a device.
+named pipe (fifo) or from a device. Use it to recover as much of the
+uncompressed data as possible when decompressing a corrupt file.
 
 @item --decompress
 @itemx -d
@@ -274,10 +276,10 @@ as shown in the table below. Note that @samp{-9} can be much slower than
 
 @multitable {Level} {Dictionary size} {Match length limit}
 @item Level @tab Dictionary size @tab Match length limit
-@item -1 @tab  4MiB @tab  10 bytes
-@item -2 @tab  4MiB @tab  12 bytes
-@item -3 @tab  4MiB @tab  17 bytes
-@item -4 @tab  4MiB @tab  26 bytes
+@item -1 @tab  1MiB @tab  10 bytes
+@item -2 @tab  1MiB @tab  12 bytes
+@item -3 @tab  1MiB @tab  17 bytes
+@item -4 @tab  2MiB @tab  26 bytes
 @item -5 @tab  4MiB @tab  44 bytes
 @item -6 @tab  8MiB @tab  80 bytes
 @item -7 @tab 16MiB @tab 108 bytes
@@ -312,7 +314,7 @@ Table of SI and binary prefixes (unit multipliers):
 
 @node File Format
 @chapter File Format
-@cindex File Format
+@cindex file format
 
 In the diagram below, a box like this:
 @verbatim
@@ -461,7 +463,7 @@ cat rec*big_database1_00001.lz > big_database3_00001.lz
 
 @node Lzdiff
 @chapter Lzdiff
-@cindex Lzdiff
+@cindex lzdiff
 
 Lzdiff is a wrapper script around the diff and cmp commands that allows
 transparent comparison of any combination of compressed and
@@ -515,7 +517,7 @@ refer to temporary filenames instead of those specified.
 
 @node Lzgrep
 @chapter Lzgrep
-@cindex Lzgrep
+@cindex lzgrep
 
 Lzgrep is a wrapper script around the grep command that allows
 transparent search on any combination of compressed and non-compressed
@@ -559,7 +561,7 @@ Use lzip as default decompressor (default).
 
 @node Lziprecover
 @chapter Lziprecover
-@cindex Lziprecover
+@cindex lziprecover
 
 Lziprecover is a program that searches for members in .lz files, and
 writes each member in its own .lz file. You can then use

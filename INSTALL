@@ -32,9 +32,6 @@ the main archive.
 5. Type `make install' to install the program and any data files and
    documentation.
 
-6. Optionally, type `make install-extra' to install the lziprecover
-   program and the included wrapper scripts (lzdiff, lzgrep).
-
 
 Another way
 -----------

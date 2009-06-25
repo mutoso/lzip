@@ -5,6 +5,8 @@
 # This script is free software: you have unlimited permission
 # to copy, distribute and modify it.
 
+LC_ALL=C
+export LC_ALL
 invocation_name=$0
 args=
 default_ext=.lz
@@ -39,9 +41,12 @@ while [ x"$1" != x ] ; do
 		echo "      --lzip          use lzip as default decompressor (default)"
 		echo "      --diff          use diff to compare files (default)"
 		echo "      --cmp           use cmp to compare files"
+		echo
+		echo "Report bugs to lzip-bug@nongnu.org"
+		echo "Lzip home page: http://www.nongnu.org/lzip/lzip.html"
 		exit 0 ;;
 	--version | --ve* | -V)
-		echo "Lzdiff 0.3"
+		echo "Lzdiff 0.5"
 		echo "Copyright (C) 2009 Antonio Diaz Diaz."
 		echo "This script is free software: you have unlimited permission"
 		echo "to copy, distribute and modify it."
@@ -57,7 +62,7 @@ while [ x"$1" != x ] ; do
 	--cmp)
 		diff_prog=cmp ;;
 	-)
-		echo "${invocation_name}: reading from stdin not supported\n"
+		echo "${invocation_name}: reading from stdin not supported"
 		exit 1 ;;
 	--)
 		;;
@@ -88,33 +93,35 @@ fi
 if test -z "${file2}"; then
 	case "${file1}" in
 	*.gz)
-		file2=`echo "${file1}" | sed 's/.gz$//'` ;;
+		file2=`printf "%s" "${file1}" | sed 's/.gz$//'` ;;
 	*.tgz)
-		file2=`echo "${file1}" | sed 's/tgz$/tar/'` ;;
+		file2=`printf "%s" "${file1}" | sed 's/tgz$/tar/'` ;;
 	*.bz2)
-		file2=`echo "${file1}" | sed 's/.bz2$//'` ;;
+		file2=`printf "%s" "${file1}" | sed 's/.bz2$//'` ;;
+	*.tbz)
+		file2=`printf "%s" "${file1}" | sed 's/tbz$/tar/'` ;;
 	*.tbz2)
-		file2=`echo "${file1}" | sed 's/tbz2$/tar/'` ;;
+		file2=`printf "%s" "${file1}" | sed 's/tbz2$/tar/'` ;;
 	*.lz)
-		file2=`echo "${file1}" | sed 's/.lz$//'` ;;
+		file2=`printf "%s" "${file1}" | sed 's/.lz$//'` ;;
 	*.tlz)
-		file2=`echo "${file1}" | sed 's/.tlz$/tar/'` ;;
+		file2=`printf "%s" "${file1}" | sed 's/tlz$/tar/'` ;;
 	*)
-		file2="${file1}"; file1="${file1}${default_ext}" ;;
+		file2="${file1}${default_ext}" ;;
 	esac
 fi
 
 prog1=
 prog2=
 case "${file1}" in
-*.gz | *.tgz)	prog1=gzip ;;
-*.bz2 | *.tbz2)	prog1=bzip2 ;;
-*.lz | *.tlz)	prog1=lzip ;;
+*.gz | *.tgz)		prog1=gzip ;;
+*.bz2 | *.tbz | *.tbz2)	prog1=bzip2 ;;
+*.lz | *.tlz)		prog1=lzip ;;
 esac
 case "${file2}" in
-*.gz | *.tgz)	prog2=gzip ;;
-*.bz2 | *.tbz2)	prog2=bzip2 ;;
-*.lz | *.tlz)	prog2=lzip ;;
+*.gz | *.tgz)		prog2=gzip ;;
+*.bz2 | *.tbz | *.tbz2)	prog2=bzip2 ;;
+*.lz | *.tlz)		prog2=lzip ;;
 esac
 
 retval=0

@@ -5,6 +5,8 @@
 # This script is free software: you have unlimited permission
 # to copy, distribute and modify it.
 
+LC_ALL=C
+export LC_ALL
 invocation_name=$0
 args=
 default_prog=lzip
@@ -37,9 +39,12 @@ while [ x"$1" != x ] ; do
 		echo "      --gzip          use gzip as default decompressor"
 		echo "      --bzip2         use bzip2 as default decompressor"
 		echo "      --lzip          use lzip as default decompressor (default)"
+		echo
+		echo "Report bugs to lzip-bug@nongnu.org"
+		echo "Lzip home page: http://www.nongnu.org/lzip/lzip.html"
 		exit 0 ;;
 	--version | --ve* | -V)
-		echo "Lzgrep 0.3"
+		echo "Lzgrep 0.5"
 		echo "Copyright (C) 2009 Antonio Diaz Diaz."
 		echo "This script is free software: you have unlimited permission"
 		echo "to copy, distribute and modify it."
@@ -51,7 +56,7 @@ while [ x"$1" != x ] ; do
 	--lz*)
 		default_prog=lzip ;;
 	-[drRzZ] | --di* | --exc* | --inc* | --nu* | --rec*)
-		echo "${invocation_name}: option $1 not supported\n"
+		echo "${invocation_name}: option $1 not supported"
 		exit 1 ;;
 	-e?* | -f?* | --file=* | --reg*=*)
 		args="${args} $1"; have_pat=1 ;;
@@ -93,7 +98,7 @@ for i in "$@" ; do
 	case "$i" in
 	*.gz | *.tgz)
 		prog="gzip -cdfq" ;;
-	*.bz2 | *.tbz2)
+	*.bz2 | *.tbz | *.tbz2)
 		prog="bzip2 -cdfq" ;;
 	*.lz | *.tlz)
 		prog="lzip -cdfq" ;;
@@ -111,15 +116,15 @@ for i in "$@" ; do
 		fi ;;
 	esac
 	if test ${list} -eq 1; then
-		${prog} -- "$i" | grep ${args} 2>&1 > /dev/null && echo $i
+		${prog} -- "$i" | grep ${args} 2>&1 > /dev/null && echo "$i"
 		r=$?
 	elif test $# -eq 1 -o ${no_name} -eq 1; then
 		${prog} -- "$i" | grep ${args}
 		r=$?
 	else
-		j=${i//\\/\\\\}
-		j=${j//|/\\|}
-		j=${j//&/\\&}
+		j=`printf "%s" "$i" | sed 's/\\\\/\\\\\\\\/g'`
+		j=`printf "%s" "$j" | sed 's/|/\\\\|/g'`
+		j=`printf "%s" "$j" | sed 's/&/\\\\&/g'`
 		j=`printf "%s" "$j" | tr '\n' ' '`
 		${prog} -- "$i" | grep ${args} | sed "s|^|${j}:|"
 		r=$?

@@ -11,7 +11,7 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip
 ****
 
-This manual is for Lzip (version 1.5, 12 April 2009).
+This manual is for Lzip (version 1.7, 25 June 2009).
 
 * Menu:
 
@@ -67,11 +67,12 @@ also split the compressed output in volumes of a given size, even when
 reading from standard input. This allows the direct creation of
 multivolume compressed tar archives.
 
-   The amount of memory required for compression is about 2 times the
-dictionary size limit plus 8 times the dictionary size really used. For
-decompression is a little more than the dictionary size really used.
-Lzip will automatically use the smallest possible dictionary size for
-each member without exceeding the given limit. It is important to
+   The amount of memory required for compression is about 5 MiB plus 1
+or 2 times the dictionary size limit (1 if input file size is less than
+dictionary size limit, else 2) plus 8 times the dictionary size really
+used. For decompression is a little more than the dictionary size really
+used. Lzip will automatically use the smallest possible dictionary size
+for each member without exceeding the given limit. It is important to
 appreciate that the decompression memory requirement is affected at
 compression time by the choice of dictionary size limit.
 
@@ -184,7 +185,9 @@ The format for running lzip is:
 `--stdout'
 `-c'
      Compress or decompress to standard output. Needed when reading
-     from a named pipe (fifo) or from a device.
+     from a named pipe (fifo) or from a device. Use it to recover as
+     much of the uncompressed data as possible when decompressing a
+     corrupt file.
 
 `--decompress'
 `-d'
@@ -253,10 +256,10 @@ The format for running lzip is:
      slower than `-1'. These options have no effect when decompressing.
 
      Level   Dictionary size   Match length limit
-     -1      4MiB              10 bytes
-     -2      4MiB              12 bytes
-     -3      4MiB              17 bytes
-     -4      4MiB              26 bytes
+     -1      1MiB              10 bytes
+     -2      1MiB              12 bytes
+     -3      1MiB              17 bytes
+     -4      2MiB              26 bytes
      -5      4MiB              44 bytes
      -6      8MiB              80 bytes
      -7      16MiB             108 bytes
@@ -541,13 +544,13 @@ Concept Index
 * algorithm:                             Algorithm.             (line 6)
 * bugs:                                  Problems.              (line 6)
 * examples:                              Examples.              (line 6)
-* File Format:                           File Format.           (line 6)
+* file format:                           File Format.           (line 6)
 * getting help:                          Problems.              (line 6)
 * introduction:                          Introduction.          (line 6)
 * invoking:                              Invoking Lzip.         (line 6)
-* Lzdiff:                                Lzdiff.                (line 6)
-* Lzgrep:                                Lzgrep.                (line 6)
-* Lziprecover:                           Lziprecover.           (line 6)
+* lzdiff:                                Lzdiff.                (line 6)
+* lzgrep:                                Lzgrep.                (line 6)
+* lziprecover:                           Lziprecover.           (line 6)
 * options:                               Invoking Lzip.         (line 6)
 * usage:                                 Invoking Lzip.         (line 6)
 * version:                               Invoking Lzip.         (line 6)
@@ -556,15 +559,15 @@ Concept Index
 
 Tag Table:
 Node: Top224
-Node: Introduction962
-Node: Algorithm4203
-Node: Invoking Lzip6429
-Node: File Format10668
-Node: Examples12622
-Node: Lzdiff14455
-Node: Lzgrep15774
-Node: Lziprecover16809
-Node: Problems17506
-Node: Concept Index18031
+Node: Introduction961
+Node: Algorithm4284
+Node: Invoking Lzip6510
+Node: File Format10857
+Node: Examples12811
+Node: Lzdiff14644
+Node: Lzgrep15963
+Node: Lziprecover16998
+Node: Problems17695
+Node: Concept Index18220
 
 End Tag Table

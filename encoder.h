@@ -86,7 +86,7 @@ inline int price_symbol( const Bit_model bm[], int symbol, const int num_bits ) 
     {
     const int bit = symbol & 1;
     symbol >>= 1;
-    price += price_bit( bm[symbol-1], bit );
+    price += price_bit( bm[symbol], bit );
     }
   return price;
   }
@@ -100,7 +100,7 @@ inline int price_symbol_reversed( const Bit_model bm[], int symbol,
     {
     const int bit = symbol & 1;
     symbol >>= 1;
-    price += price_bit( bm[model-1], bit );
+    price += price_bit( bm[model], bit );
     model = ( model << 1 ) | bit;
     }
   return price;
@@ -116,14 +116,14 @@ inline int price_matched( const Bit_model bm[], const int symbol,
     {
     const int match_bit = ( match_byte >> i ) & 1;
     const int bit = ( symbol >> i ) & 1;
-    price += price_bit( bm[(match_bit<<8)+model+0xFF], bit );
+    price += price_bit( bm[(match_bit<<8)+model+0x100], bit );
     model = ( model << 1 ) | bit;
     if( match_bit != bit )
       {
       while( --i >= 0 )
         {
         const int bit = ( symbol >> i ) & 1;
-        price += price_bit( bm[model-1], bit );
+        price += price_bit( bm[model], bit );
         model = ( model << 1 ) | bit;
         }
       break;
@@ -144,13 +144,13 @@ class Matchfinder
   long long partial_data_pos;
   int dictionary_size_;		// bytes to keep in buffer before pos
   const int after_size;		// bytes to keep in buffer after pos
-  const int buffer_size;
-  uint8_t * const buffer;
+  int buffer_size;
+  uint8_t * buffer;
   int pos;
   int cyclic_pos;
   int stream_pos;		// first byte not yet read from file
-  const int pos_limit;		// when reached, a new block must be read
-  const int ides_;
+  int pos_limit;		// when reached, a new block must be read
+  const int ides_;		// input file descriptor
   const int match_len_limit_;
   int32_t * const prev_positions;	// last seen position of key
   int32_t * prev_pos_tree;
@@ -159,32 +159,10 @@ class Matchfinder
   bool read_block() throw();
 
 public:
-  Matchfinder( const int dict_size, const int len_limit, const int ides )
-    :
-    partial_data_pos( 0 ),
-    dictionary_size_( dict_size ),
-    after_size( max_match_len ),
-    buffer_size( ( 2 * std::max( 65536, dictionary_size_ ) ) +
-                 max_num_trials + after_size ),
-    buffer( new uint8_t[buffer_size] ),
-    pos( 0 ),
-    cyclic_pos( 0 ),
-    stream_pos( 0 ),
-    pos_limit( buffer_size - after_size ),
-    ides_( ides ),
-    match_len_limit_( len_limit ),
-    prev_positions( new int32_t[num_prev_positions] ),
-    at_stream_end( false )
-    {
-    if( !read_block() ) throw Error( "read error" );
-    if( at_stream_end && stream_pos < dictionary_size_ )
-      dictionary_size_ = std::max( min_dictionary_size, stream_pos );
-    prev_pos_tree = new int32_t[2*dictionary_size_];
-    for( int i = 0; i < num_prev_positions; ++i ) prev_positions[i] = -1;
-    }
+  Matchfinder( const int dict_size, const int len_limit, const int ides );
 
   ~Matchfinder()
-    { delete[] prev_pos_tree; delete[] prev_positions; delete[] buffer; }
+    { delete[] prev_pos_tree; delete[] prev_positions; std::free( buffer ); }
 
   uint8_t operator[]( const int i ) const throw() { return buffer[pos+i]; }
   int available_bytes() const throw() { return stream_pos - pos; }
@@ -222,14 +200,13 @@ public:
 class Range_encoder
   {
   enum { buffer_size = 65536 };
-
   uint64_t low;
   long long partial_member_pos;
   uint8_t * const buffer;
   int pos;
   uint32_t range;
   int ff_count;
-  const int odes_;
+  const int odes_;		// output file descriptor
   uint8_t cache;
 
   void shift_low()
@@ -263,8 +240,11 @@ public:
     {
     if( pos > 0 )
       {
-      const int wr = writeblock( odes_, (char *)buffer, pos );
-      if( wr != pos ) throw Error( "write error" );
+      if( odes_ >= 0 )
+        {
+        const int wr = writeblock( odes_, (char *)buffer, pos );
+        if( wr != pos ) throw Error( "write error" );
+        }
       partial_member_pos += pos;
       pos = 0;
       }
@@ -315,7 +295,7 @@ public:
     for( int i = num_bits; i > 0; --i, mask >>= 1 )
       {
       const int bit = ( symbol & mask );
-      encode_bit( bm[model-1], bit );
+      encode_bit( bm[model], bit );
       model <<= 1;
       if( bit ) model |= 1;
       }
@@ -327,7 +307,7 @@ public:
     for( int i = num_bits; i > 0; --i )
       {
       const int bit = symbol & 1;
-      encode_bit( bm[model-1], bit );
+      encode_bit( bm[model], bit );
       model = ( model << 1 ) | bit;
       symbol >>= 1;
       }
@@ -340,14 +320,14 @@ public:
       {
       const int bit = ( symbol >> i ) & 1;
       const int match_bit = ( match_byte >> i ) & 1;
-      encode_bit( bm[(match_bit<<8)+model+0xFF], bit );
+      encode_bit( bm[(match_bit<<8)+model+0x100], bit );
       model = ( model << 1 ) | bit;
       if( match_bit != bit )
         {
         while( --i >= 0 )
           {
           const int bit = ( symbol >> i ) & 1;
-          encode_bit( bm[model-1], bit );
+          encode_bit( bm[model], bit );
           model = ( model << 1 ) | bit;
           }
         break;
@@ -544,7 +524,7 @@ class LZ_encoder
 
       if( dis_slot < end_dis_model )
         range_encoder.encode_tree_reversed( bm_dis + base - dis_slot,
-            direct_dis, direct_bits );
+                                            direct_dis, direct_bits );
       else
         {
         range_encoder.encode( direct_dis >> dis_align_bits, direct_bits - dis_align_bits );
@@ -589,7 +569,7 @@ class LZ_encoder
   int best_pair_sequence( const int reps[num_rep_distances],
                           const State & state );
 
-  void flush( const State & state );
+  void full_flush( const State & state );
 
 public:
   LZ_encoder( Matchfinder & mf, const File_header & header, const int odes );

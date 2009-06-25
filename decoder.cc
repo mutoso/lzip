@@ -17,6 +17,7 @@
 
 #define _FILE_OFFSET_BITS 64
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
@@ -45,12 +46,15 @@ bool Input_buffer::read_block()
 
 void LZ_decoder::flush_data()
   {
-  if( !member_finished )
+  const int size = pos - stream_pos;
+  if( size > 0 )
     {
-    const int wr = writeblock( odes_, (char *)buffer, pos );
-    if( wr != pos ) throw Error( "write error" );
+    crc32.update( crc_, buffer + stream_pos, size );
+    if( odes_ >= 0 &&
+        writeblock( odes_, (char *)buffer + stream_pos, size ) != size )
+      throw Error( "write error" );
     if( pos >= buffer_size ) { partial_data_pos += pos; pos = 0; }
-    else member_finished = true;
+    stream_pos = pos;
     }
   }
 
@@ -62,7 +66,9 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   const int trailer_size = trailer.size( format_version );
   for( int i = 0; i < trailer_size && !error; ++i )
     {
-    if( range_decoder.finished() )
+    if( !range_decoder.finished() )
+      ((uint8_t *)&trailer)[i] = range_decoder.get_byte();
+    else
       {
       error = true;
       if( verbosity >= 0 )
@@ -72,7 +78,6 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
                               " some checks may fail.\n", i );
         }
       }
-    ((uint8_t *)&trailer)[i] = range_decoder.read_byte();
     }
   if( format_version == 0 ) trailer.member_size( member_position() );
   if( trailer.data_crc() != crc() )
@@ -120,25 +125,23 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     //               3 = trailer error, 4 = unknown marker found.
 int LZ_decoder::decode_member( const Pretty_print & pp )
   {
-  unsigned int rep0 = 0;
-  unsigned int rep1 = 0;
-  unsigned int rep2 = 0;
+  unsigned int rep0 = 0;	// rep[0-3] latest four distances
+  unsigned int rep1 = 0;	// used for efficient coding of
+  unsigned int rep2 = 0;	// repeated distances
   unsigned int rep3 = 0;
   State state;
-  uint8_t prev_byte = 0;
 
   while( true )
     {
-    if( range_decoder.finished() ) return 2;
+    if( range_decoder.finished() ) { flush_data(); return 2; }
     const int pos_state = data_position() & pos_state_mask;
     if( range_decoder.decode_bit( bm_match[state()][pos_state] ) == 0 )
       {
       if( state.is_char() )
-        prev_byte = literal_decoder.decode( range_decoder, prev_byte );
+        put_byte( literal_decoder.decode( range_decoder, get_byte( 0 ) ) );
       else
-        prev_byte = literal_decoder.decode_matched( range_decoder, prev_byte,
-                                                    get_byte( rep0 ) );
-      put_byte( prev_byte );
+        put_byte( literal_decoder.decode_matched( range_decoder, get_byte( 0 ),
+                                                  get_byte( rep0 ) ) );
       state.set_char();
       }
     else
@@ -175,9 +178,8 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
         }
       else
         {
-        rep3 = rep2; rep2 = rep1; rep1 = rep0;
+        unsigned int rep0_saved = rep0;
         len = min_match_len + len_decoder.decode( range_decoder, pos_state );
-        state.set_match();
         const int dis_slot = range_decoder.decode_tree( bm_dis_slot[get_dis_state(len)], dis_slot_bits );
         if( dis_slot < start_dis_model ) rep0 = dis_slot;
         else
@@ -192,10 +194,16 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
             rep0 += range_decoder.decode_tree_reversed( bm_align, dis_align_bits );
             if( rep0 == 0xFFFFFFFF )		// Marker found
               {
+              rep0 = rep0_saved;
+              range_decoder.normalize();
+              flush_data();
               if( len == min_match_len )	// End Of Stream marker
                 {
-                flush_data();
                 if( verify_trailer( pp ) ) return 0; else return 3;
+                }
+              if( len == min_match_len + 1 )	// Sync Flush marker
+                {
+                range_decoder.reload(); continue;
                 }
               if( verbosity >= 0 )
                 {
@@ -204,11 +212,14 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
                 }
               return 4;
               }
+            if( rep0 >= (unsigned int)dictionary_size )
+              { flush_data(); return 1; }
             }
           }
+        rep3 = rep2; rep2 = rep1; rep1 = rep0_saved;
+        state.set_match();
         }
-      if( !copy_block( rep0, len ) ) return 1;
-      prev_byte = get_byte( 0 );
+      copy_block( rep0, len );
       }
     }
   }

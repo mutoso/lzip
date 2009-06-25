@@ -150,14 +150,21 @@ public:
   uint32_t operator[]( const uint8_t byte ) const throw() { return data[byte]; }
   void update( uint32_t & crc, const uint8_t byte ) const throw()
     { crc = data[(crc^byte)&0xFF] ^ ( crc >> 8 ); }
+  void update( uint32_t & crc, const uint8_t * const buffer, const int size ) const throw()
+    {
+    for( int i = 0; i < size; ++i )
+      crc = data[(crc^buffer[i])&0xFF] ^ ( crc >> 8 );
+    }
   };
 
+extern const CRC32 crc32;
 
-const char * const magic_string = "LZIP";
+
+const uint8_t magic_string[4] = { 'L', 'Z', 'I', 'P' };
 
 struct File_header
   {
-  char magic[4];
+  uint8_t magic[4];
   uint8_t version;
   uint8_t coded_dict_size;
 
@@ -267,7 +274,6 @@ struct Error
   };
 
 extern int verbosity;
-extern const CRC32 crc32;
 
 void show_error( const char * msg, const int errcode = 0, const bool help = false ) throw();
 void internal_error( const char * msg );

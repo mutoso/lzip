@@ -49,6 +49,9 @@ const char * const program_year    = "2009";
 void show_help() throw()
   {
   std::printf( "%s - Member recoverer program for lzip compressed files.\n", Program_name );
+  std::printf( "\nSearches for members in .lz files, and writes each member in its own .lz\n" );
+  std::printf( "file. You can then use `lzip -t' to test the integrity of the resulting\n" );
+  std::printf( "files, and decompress those which are undamaged.\n" );
   std::printf( "\nUsage: %s [options] file\n", invocation_name );
   std::printf( "Options:\n" );
   std::printf( "  -h, --help                 display this help and exit\n" );
@@ -56,6 +59,7 @@ void show_help() throw()
   std::printf( "  -q, --quiet                suppress all messages\n" );
   std::printf( "  -v, --verbose              be verbose (a 2nd -v gives more)\n" );
   std::printf( "\nReport bugs to lzip-bug@nongnu.org\n");
+  std::printf( "Lzip home page: http://www.nongnu.org/lzip/lzip.html\n" );
   }
 
 
@@ -119,7 +123,7 @@ bool next_filename( std::string & output_filename )
   }
 
 
-int search_header( const char * buffer, const int size, const int pos,
+int search_header( const uint8_t * buffer, const int size, const int pos,
                    const long long last_header_pos,
                    const long long partial_file_pos )
   {
@@ -129,7 +133,7 @@ int search_header( const char * buffer, const int size, const int pos,
       {
       File_trailer trailer;
       for( unsigned int j = 0; j < sizeof trailer; ++j )
-        ((char *)&trailer)[j] = buffer[i-(sizeof trailer)+j];
+        ((uint8_t *)&trailer)[j] = buffer[i-(sizeof trailer)+j];
       if( partial_file_pos + i - trailer.member_size() == last_header_pos )
         return i;
       }
@@ -137,11 +141,11 @@ int search_header( const char * buffer, const int size, const int pos,
   }
 
 
-bool verify_header( const char * buffer, const int pos )
+bool verify_header( const uint8_t * buffer, const int pos )
   {
   File_header header;
   for( unsigned int i = 0; i < sizeof header; ++i )
-    ((char *)&header)[i] = buffer[pos+i];
+    ((uint8_t *)&header)[i] = buffer[pos+i];
   if( !header.verify_magic() )
     {
     show_error( "bad magic number (file not created by lzip).\n" );
@@ -163,18 +167,18 @@ bool verify_header( const char * buffer, const int pos )
   }
 
 
-int process_file( const std::string & input_filename, char * & base_buffer )
+int process_file( const std::string & input_filename, uint8_t * & base_buffer )
   {
   const int hsize = sizeof( File_header );
   const int tsize = sizeof( File_trailer );
   const int buffer_size = 65536;
   const int base_buffer_size = tsize + buffer_size + hsize;
-  base_buffer = new char[base_buffer_size];
-  char * const buffer = base_buffer + tsize;
+  base_buffer = new uint8_t[base_buffer_size];
+  uint8_t * const buffer = base_buffer + tsize;
 
   const int inhandle = open_instream( input_filename );
   if( inhandle < 0 ) return 1;
-  int size = readblock( inhandle, buffer, buffer_size + hsize ) - hsize;
+  int size = readblock( inhandle, (char *)buffer, buffer_size + hsize ) - hsize;
   bool at_stream_end = ( size < buffer_size );
   if( size != buffer_size && errno )
     { show_error( "read error", errno ); return 1; }
@@ -195,7 +199,7 @@ int process_file( const std::string & input_filename, char * & base_buffer )
                                       last_header_pos, partial_file_pos );
     if( newpos > pos )
       {
-      const int wr = writeblock( outhandle, buffer + pos, newpos - pos );
+      const int wr = writeblock( outhandle, (char *)buffer + pos, newpos - pos );
       if( wr != newpos - pos )
         { show_error( "write error", errno ); return 1; }
       if( close( outhandle ) != 0 )
@@ -213,7 +217,7 @@ int process_file( const std::string & input_filename, char * & base_buffer )
       if( !at_stream_end )
         {
         partial_file_pos += buffer_size;
-        const int wr = writeblock( outhandle, buffer + pos, buffer_size - pos );
+        const int wr = writeblock( outhandle, (char *)buffer + pos, buffer_size - pos );
         if( wr != buffer_size - pos )
           { show_error( "write error", errno ); return 1; }
         std::memcpy( base_buffer, base_buffer + buffer_size, tsize + hsize );
@@ -221,13 +225,13 @@ int process_file( const std::string & input_filename, char * & base_buffer )
         }
       else
         {
-        const int wr = writeblock( outhandle, buffer + pos, size + hsize - pos );
+        const int wr = writeblock( outhandle, (char *)buffer + pos, size + hsize - pos );
         if( wr != size + hsize - pos )
           { show_error( "write error", errno ); return 1; }
         break;
         }
       }
-    size = readblock( inhandle, buffer + hsize, buffer_size );
+    size = readblock( inhandle, (char *)buffer + hsize, buffer_size );
     at_stream_end = ( size < buffer_size );
     if( size != buffer_size && errno )
       { show_error( "read error", errno ); return 1; }
@@ -339,7 +343,7 @@ int main( const int argc, const char * argv[] )
   if( argind + 1 != parser.arguments() )
     { show_error( "you must specify exactly 1 file", 0, true ); return 1; }
 
-  char * base_buffer;
+  uint8_t * base_buffer;
   const int retval = process_file( parser.argument( argind ), base_buffer );
 
   delete[] base_buffer;
