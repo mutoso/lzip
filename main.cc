@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <climits>
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -33,7 +34,6 @@
 #include <vector>
 #include <fcntl.h>
 #include <stdint.h>
-#include <signal.h>
 #include <unistd.h>
 #include <utime.h>
 #include <sys/stat.h>
@@ -413,7 +413,7 @@ int compress( const long long member_size, const long long volume_size,
     header.dictionary_size( matchfinder.dictionary_size() );
 
     long long in_size = 0, out_size = 0, partial_volume_size = 0;
-    while( true )
+    while( true )		// encode one member per iteration
       {
       LZ_encoder encoder( matchfinder, header, outhandle );
       const long long size =
@@ -469,19 +469,19 @@ int decompress( const int inhandle, const Pretty_print & pp,
   try {
     Input_buffer ibuf( inhandle );
     long long partial_file_pos = 0;
-    for( bool first_pass = true; ; first_pass = false, pp.reset() )
+    for( bool first_member = true; ; first_member = false, pp.reset() )
       {
       File_header header;
       for( unsigned int i = 0; i < sizeof header; ++i )
         ((uint8_t *)&header)[i] = ibuf.get_byte();
-      if( ibuf.finished() )
+      if( ibuf.finished() )			// End Of File
         {
-        if( first_pass ) { pp( "error reading member header" ); return 1; }
-        else break;
+        if( !first_member ) break;
+        pp( "error reading member header" ); return 1;
         }
       if( !header.verify_magic() )
         {
-        if( !first_pass ) break;
+        if( !first_member ) break;		// trailing garbage
         if( verbosity >= 0 )
           { pp();
             std::fprintf( stderr, "bad magic number (file not created by %s).\n",

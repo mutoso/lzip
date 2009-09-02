@@ -19,10 +19,10 @@
       g++ -O2 -Wall -W -o unzcrash testsuite/unzcrash.cc
 */
 
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <stdint.h>
-#include <signal.h>
 #include <unistd.h>
 
 

@@ -1,3 +1,10 @@
+2009-09-02  Antonio Diaz Diaz  <ant_diaz@teleline.es>
+
+	* Version 1.8 released.
+	* Compression time has been reduced by 4%.
+	* Lzdiff and lzgrep have been moved to the new package zutils.
+	* Fixed warnings on sistems where uint32_t != unsigned int.
+
 2009-06-25  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.7 released.

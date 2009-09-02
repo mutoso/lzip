@@ -135,7 +135,11 @@ inline int price_matched( const Bit_model bm[], const int symbol,
 
 class Matchfinder
   {
-  enum { num_prev_positions4 = 1 << 20,
+  enum { // bytes to keep in buffer before dictionary
+         before_size = max_num_trials + 1,
+         // bytes to keep in buffer after pos
+         after_size = max_match_len,
+         num_prev_positions4 = 1 << 20,
          num_prev_positions3 = 1 << 18,
          num_prev_positions2 = 1 << 16,
          num_prev_positions = num_prev_positions4 + num_prev_positions3 +
@@ -143,7 +147,6 @@ class Matchfinder
 
   long long partial_data_pos;
   int dictionary_size_;		// bytes to keep in buffer before pos
-  const int after_size;		// bytes to keep in buffer after pos
   int buffer_size;
   uint8_t * buffer;
   int pos;
@@ -413,7 +416,7 @@ class LZ_encoder
     {
     State state;
     int dis;
-    int prev_index;
+    int prev_index;	// index of prev trial in trials[]
     int price;		// dual use var; cumulative price, match length
     int reps[num_rep_distances];
     void update( const int d, const int p_i, const int pr ) throw()
@@ -473,25 +476,18 @@ class LZ_encoder
     return price0( bm_rep0[state()] ) + price0( bm_len[state()][pos_state] );
     }
 
-  int price_rep( const int rep, const int len, const State & state,
+  int price_rep( const int rep, const State & state,
                  const int pos_state ) const throw()
     {
-    int price = rep_match_len_encoder.price( len, pos_state );
-    if( rep == 0 )
-      {
-      price += price0( bm_rep0[state()] );
-      price += price1( bm_len[state()][pos_state] );
-      }
+    if( rep == 0 ) return price0( bm_rep0[state()] ) +
+                          price1( bm_len[state()][pos_state] );
+    int price = price1( bm_rep0[state()] );
+    if( rep == 1 )
+      price += price0( bm_rep1[state()] );
     else
       {
-      price += price1( bm_rep0[state()] );
-      if( rep == 1 )
-        price += price0( bm_rep1[state()] );
-      else
-        {
-        price += price1( bm_rep1[state()] );
-        price += price_bit( bm_rep2[state()], rep - 2 );
-        }
+      price += price1( bm_rep1[state()] );
+      price += price_bit( bm_rep2[state()], rep - 2 );
       }
     return price;
     }

@@ -1,5 +1,8 @@
-Changes in version 1.7:
+Changes in version 1.8:
 
-A bug, introduced in version 1.6, which prevents lzip from decompressing
-some rare files has been fixed. The integrity checking code catches it,
-so there is no risk of data loss.
+Compression time has been reduced by 4%.
+
+Lzdiff and lzgrep have been moved to the new package zutils.
+
+Compilation warnings on sistems where uint32_t != unsigned int have been
+fixed.

@@ -80,6 +80,15 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
       }
     }
   if( format_version == 0 ) trailer.member_size( member_position() );
+  if( !range_decoder.code_is_zero() )
+    {
+    error = true;
+    if( verbosity >= 0 )
+      {
+      pp();
+      std::fprintf( stderr, "range_decoder final code is not zero.\n" );
+      }
+    }
   if( trailer.data_crc() != crc() )
     {
     error = true;
@@ -87,7 +96,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
       {
       pp();
       std::fprintf( stderr, "crc mismatch; trailer says %08X, data crc is %08X.\n",
-                    trailer.data_crc(), crc() );
+                    (unsigned int)trailer.data_crc(), (unsigned int)crc() );
       }
     }
   if( trailer.data_size() != data_position() )
@@ -116,7 +125,8 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     }
   if( !error && verbosity >= 3 )
     std::fprintf( stderr, "data crc %08X, data size %8lld, member size %8lld.  ",
-                  trailer.data_crc(), trailer.data_size(), trailer.member_size() );
+                  (unsigned int)trailer.data_crc(), trailer.data_size(),
+                  trailer.member_size() );
   return !error;
   }
 
@@ -137,10 +147,11 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
     const int pos_state = data_position() & pos_state_mask;
     if( range_decoder.decode_bit( bm_match[state()][pos_state] ) == 0 )
       {
+      const uint8_t prev_byte = get_byte( 0 );
       if( state.is_char() )
-        put_byte( literal_decoder.decode( range_decoder, get_byte( 0 ) ) );
+        put_byte( literal_decoder.decode( range_decoder, prev_byte ) );
       else
-        put_byte( literal_decoder.decode_matched( range_decoder, get_byte( 0 ),
+        put_byte( literal_decoder.decode_matched( range_decoder, prev_byte,
                                                   get_byte( rep0 ) ) );
       state.set_char();
       }

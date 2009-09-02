@@ -63,6 +63,7 @@ public:
     ibuf( buf )
     { for( int i = 0; i < 5; ++i ) code = (code << 8) | get_byte(); }
 
+  bool code_is_zero() const throw() { return ( code == 0 ); }
   bool finished() const throw() { return ibuf.finished(); }
   long long member_position() const throw() { return member_pos; }
 

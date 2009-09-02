@@ -47,7 +47,6 @@ Matchfinder::Matchfinder( const int dict_size, const int len_limit,
                           const int ides )
   :
   partial_data_pos( 0 ),
-  after_size( max_match_len ),
   pos( 0 ),
   cyclic_pos( 0 ),
   stream_pos( 0 ),
@@ -56,7 +55,7 @@ Matchfinder::Matchfinder( const int dict_size, const int len_limit,
   prev_positions( new int32_t[num_prev_positions] ),
   at_stream_end( false )
   {
-  const int buffer_size_limit = ( 2 * dict_size ) + max_num_trials + after_size;
+  const int buffer_size_limit = ( 2 * dict_size ) + before_size + after_size;
   buffer_size = std::max( 65536, dict_size );
   buffer = (uint8_t *)std::malloc( buffer_size );
   if( !buffer ) throw std::bad_alloc();
@@ -99,7 +98,7 @@ bool Matchfinder::move_pos() throw()
     if( pos > stream_pos ) { pos = stream_pos; return false; }
     if( !at_stream_end )
       {
-      const int offset = pos - dictionary_size_ - max_num_trials;
+      const int offset = pos - dictionary_size_ - before_size;
       const int size = stream_pos - offset;
       std::memmove( buffer, buffer + offset, size );
       partial_data_pos += offset;
@@ -156,14 +155,13 @@ int Matchfinder::longest_match_len( int * const distances ) throw()
 
   int idx0 = cyclic_pos << 1;
   int idx1 = idx0 + 1;
-  int len0 = 0, len1 = 0;
+  int len = 0, len0 = 0, len1 = 0;
 
   for( int count = 16 + ( match_len_limit_ / 2 ); ; )
     {
     if( newpos < min_pos || --count < 0 )
       { prev_pos_tree[idx0] = prev_pos_tree[idx1] = -1; break; }
     const uint8_t * const newdata = buffer + newpos;
-    int len = std::min( len0, len1 );
     while( len < len_limit && newdata[len] == data[len] ) ++len;
 
     const int delta = pos - newpos;
@@ -179,14 +177,14 @@ int Matchfinder::longest_match_len( int * const distances ) throw()
         prev_pos_tree[idx0] = newpos;
         idx0 = newidx + 1;
         newpos = prev_pos_tree[idx0];
-        len0 = len;
+        len0 = len; if( len1 < len ) len = len1;
         }
       else
         {
         prev_pos_tree[idx1] = newpos;
         idx1 = newidx;
         newpos = prev_pos_tree[idx1];
-        len1 = len;
+        len1 = len; if( len0 < len ) len = len0;
         }
       }
     else
@@ -308,6 +306,7 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
   trials[0].state = state;
   for( int i = 0; i < num_rep_distances; ++i ) trials[0].reps[i] = reps[i];
 
+  const uint8_t prev_byte = matchfinder[-1];
   const uint8_t cur_byte = matchfinder[0];
   const uint8_t match_byte = matchfinder[-reps[0]-1];
   unsigned int position = matchfinder.data_position();
@@ -317,9 +316,9 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
   trials[1].prev_index = 0;
   trials[1].price = price0( bm_match[state()][pos_state] );
   if( state.is_char() )
-    trials[1].price += literal_encoder.price_symbol( matchfinder[-1], cur_byte );
+    trials[1].price += literal_encoder.price_symbol( prev_byte, cur_byte );
   else
-    trials[1].price += literal_encoder.price_matched( matchfinder[-1], cur_byte, match_byte );
+    trials[1].price += literal_encoder.price_matched( prev_byte, cur_byte, match_byte );
 
   const int match_price = price1( bm_match[state()][pos_state] );
   const int rep_match_price = match_price + price1( bm_rep[state()] );
@@ -353,9 +352,13 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
   }
 
   for( int rep = 0; rep < num_rep_distances; ++rep )
+    {
+    const int price = rep_match_price +
+                      price_rep( rep, state, pos_state );
     for( int len = min_match_len; len <= replens[rep]; ++len )
-      trials[len].update( rep, 0, rep_match_price +
-                                  price_rep( rep, len, state, pos_state ) );
+      trials[len].update( rep, 0, price +
+                                  rep_match_len_encoder.price( len, pos_state ) );
+    }
 
   int cur = 0;
   int num_trials = main_len;
@@ -395,14 +398,15 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
       mtf_reps( cur_trial.dis, cur_trial.reps );
       }
 
+    const uint8_t prev_byte = matchfinder[-1];
     const uint8_t cur_byte = matchfinder[0];
     const uint8_t match_byte = matchfinder[-cur_trial.reps[0]-1];
     const int pos_state = ++position & pos_state_mask;
     int next_price = cur_trial.price + price0( bm_match[cur_trial.state()][pos_state] );
     if( cur_trial.state.is_char() )
-      next_price += literal_encoder.price_symbol( matchfinder[-1], cur_byte );
+      next_price += literal_encoder.price_symbol( prev_byte, cur_byte );
     else
-      next_price += literal_encoder.price_matched( matchfinder[-1], cur_byte, match_byte );
+      next_price += literal_encoder.price_matched( prev_byte, cur_byte, match_byte );
     if( !matchfinder.move_pos() ) return 0;
 
     Trial & next_trial = trials[cur+1];
@@ -428,11 +432,13 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
       while( len < len_limit && data[len] == data[len-dis] ) ++len;
       if( len >= min_match_len )
         {
+        const int price = rep_match_price +
+                          price_rep( rep, cur_trial.state, pos_state );
         while( num_trials < cur + len )
           trials[++num_trials].price = infinite_price;
         for( ; len >= min_match_len; --len )
-          trials[cur+len].update( rep, cur, rep_match_price +
-                                  price_rep( rep, len, cur_trial.state, pos_state ) );
+          trials[cur+len].update( rep, cur, price +
+                                  rep_match_len_encoder.price( len, pos_state ) );
         }
       }
 
@@ -446,7 +452,7 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
       while( num_trials < cur + newlen )
         trials[++num_trials].price = infinite_price;
 
-      for( int len = newlen; len >= min_match_len; --len )
+      for( int len = min_match_len; len <= newlen; ++len )
         trials[cur+len].update( match_distances[len] + num_rep_distances, cur,
                                 normal_match_price +
                                 price_pair( match_distances[len], len, pos_state ) );
@@ -496,19 +502,18 @@ bool LZ_encoder::encode_member( const long long member_size )
   {
   if( range_encoder.member_position() != sizeof( File_header ) )
     return false;		// can be called only once
-  const long long member_size_limit = member_size - sizeof( File_trailer ) - 15;
+  const long long member_size_limit = member_size - sizeof( File_trailer ) - 16;
   int fill_counter = 0;
   int rep_distances[num_rep_distances];
   State state;
-  uint8_t prev_byte = 0;
   for( int i = 0; i < num_rep_distances; ++i ) rep_distances[i] = 0;
 
-  if( !matchfinder.finished() )			// copy first byte
+  if( !matchfinder.finished() )			// encode first byte
     {
     range_encoder.encode_bit( bm_match[state()][0], 0 );
+    const uint8_t prev_byte = 0;
     const uint8_t cur_byte = matchfinder[0];
     literal_encoder.encode( range_encoder, prev_byte, cur_byte );
-    prev_byte = cur_byte;
     crc32.update( crc_, cur_byte );
     if( !move_pos( 1 ) ) return false;
     }
@@ -532,16 +537,16 @@ bool LZ_encoder::encode_member( const long long member_size )
       range_encoder.encode_bit( bm_match[state()][pos_state], !bit );
       if( bit )
         {
+        const uint8_t prev_byte = matchfinder[-ahead-1];
         const uint8_t cur_byte = matchfinder[-ahead];
         if( state.is_char() )
           literal_encoder.encode( range_encoder, prev_byte, cur_byte );
         else
           {
-          const uint8_t match_byte = matchfinder[-rep_distances[0]-1-ahead];
+          const uint8_t match_byte = matchfinder[-ahead-rep_distances[0]-1];
           literal_encoder.encode_matched( range_encoder, prev_byte, match_byte, cur_byte );
           }
         state.set_char();
-        prev_byte = cur_byte;
         }
       else
         {
@@ -572,7 +577,6 @@ bool LZ_encoder::encode_member( const long long member_size )
           encode_pair( dis - num_rep_distances, len, pos_state );
           state.set_match();
           }
-        prev_byte = matchfinder[len-1-ahead];
         }
       for( int j = 0; j < len; ++j )
         crc32.update( crc_, matchfinder[j-ahead] );

@@ -5,8 +5,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 25 June 2009
-@set VERSION 1.7
+@set UPDATED 2 September 2009
+@set VERSION 1.8
 
 @dircategory Data Compression
 @direntry
@@ -37,8 +37,6 @@ This manual is for Lzip (version @value{VERSION}, @value{UPDATED}).
 * Invoking Lzip::	Command line interface
 * File Format::		Detailed format of the compressed file
 * Examples::		A small tutorial with examples
-* Lzdiff::		Comparing compressed files
-* Lzgrep::		Searching inside compressed files
 * Lziprecover::		Recovering data from damaged compressed files
 * Problems::		Reporting bugs
 * Concept Index::	Index of concepts
@@ -89,9 +87,9 @@ times the dictionary size limit (1 if input file size is less than
 dictionary size limit, else 2) plus 8 times the dictionary size really
 used. For decompression is a little more than the dictionary size really
 used. Lzip will automatically use the smallest possible dictionary size
-for each member without exceeding the given limit. It is important to
-appreciate that the decompression memory requirement is affected at
-compression time by the choice of dictionary size limit.
+without exceeding the given limit. It is important to appreciate that
+the decompression memory requirement is affected at compression time by
+the choice of dictionary size limit.
 
 When decompressing, lzip attempts to guess the name for the decompressed
 file from that of the compressed file as follows:
@@ -459,104 +457,6 @@ lzip -t rec*big_database2_00001.lz
 cp rec00007big_database2_00001.lz rec00007big_database1_00001.lz
 cat rec*big_database1_00001.lz > big_database3_00001.lz
 @end example
-
-
-@node Lzdiff
-@chapter Lzdiff
-@cindex lzdiff
-
-Lzdiff is a wrapper script around the diff and cmp commands that allows
-transparent comparison of any combination of compressed and
-non-compressed files. If any given file is compressed, its uncompressed
-content is used. The supported compressors are gzip, bzip2 and lzip.
-
-The format for running lzdiff is:
-
-@example
-lzdiff [@var{options}] [@var{diff_options}] @var{file1} [@var{file2}]
-@end example
-
-@noindent
-Compares @var{file1} to @var{file2}. If @var{file2} is omitted, compares
-@var{file1} to the uncompressed contents of @var{file1}.[gz|bz2|lz]
-(depending on the default compressor selected). @var{diff_options} are
-passed directly to diff or cmp. The exit status from diff or cmp is
-preserved.
-
-Lzdiff supports the following options:
-
-@table @samp
-@item --help
-@itemx -h
-Print an informative help message describing the options and exit.
-
-@item --version
-@itemx -V
-Print the version number of lzdiff on the standard output and exit.
-
-@item --gzip
-Use gzip as default decompressor.
-
-@item --bzip2
-Use bzip2 as default decompressor.
-
-@item --lzip
-Use lzip as default decompressor (default).
-
-@item --diff
-Use diff to compare files (default).
-
-@item --cmp
-Use cmp to compare files.
-
-@end table
-
-Lzdiff has the limitation that messages from the diff or cmp programs
-refer to temporary filenames instead of those specified.
-
-
-@node Lzgrep
-@chapter Lzgrep
-@cindex lzgrep
-
-Lzgrep is a wrapper script around the grep command that allows
-transparent search on any combination of compressed and non-compressed
-files. If any given file is compressed, its uncompressed content is
-used. If a given file does not exist, lzgrep tries the compressed file
-name corresponding to the default compressor selected. The supported
-compressors are gzip, bzip2 and lzip.
-
-The format for running lzgrep is:
-
-@example
-lzgrep [@var{options}] [@var{grep_options}] @var{pattern} [@var{files}]
-@end example
-
-@noindent
-@var{grep_options} are passed directly to grep. The exit status from
-grep is preserved.
-
-Lzgrep supports the following options:
-
-@table @samp
-@item --help
-@itemx -h
-Print an informative help message describing the options and exit.
-
-@item --version
-@itemx -V
-Print the version number of lzgrep on the standard output and exit.
-
-@item --gzip
-Use gzip as default decompressor.
-
-@item --bzip2
-Use bzip2 as default decompressor.
-
-@item --lzip
-Use lzip as default decompressor (default).
-
-@end table
 
 
 @node Lziprecover
