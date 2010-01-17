@@ -1,5 +1,5 @@
 /*  Lzip - A data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -45,6 +45,7 @@ public:
 
 extern Dis_slots dis_slots;
 
+
 class Prob_prices
   {
   int data[bit_model_total >> 2];
@@ -69,6 +70,7 @@ public:
 
 extern Prob_prices prob_prices;
 
+
 inline int price0( const Bit_model & bm ) throw()
   { return prob_prices[bm.probability]; }
 
@@ -77,6 +79,7 @@ inline int price1( const Bit_model & bm ) throw()
 
 inline int price_bit( const Bit_model & bm, const int bit ) throw()
   { if( bit ) return price1( bm ); else return price0( bm ); }
+
 
 inline int price_symbol( const Bit_model bm[], int symbol, const int num_bits ) throw()
   {
@@ -90,6 +93,7 @@ inline int price_symbol( const Bit_model bm[], int symbol, const int num_bits ) 
     }
   return price;
   }
+
 
 inline int price_symbol_reversed( const Bit_model bm[], int symbol,
                                   const int num_bits ) throw()
@@ -105,6 +109,7 @@ inline int price_symbol_reversed( const Bit_model bm[], int symbol,
     }
   return price;
   }
+
 
 inline int price_matched( const Bit_model bm[], const int symbol,
                           const int match_byte ) throw()
@@ -215,14 +220,14 @@ class Range_encoder
   void shift_low()
     {
     const uint32_t carry = low >> 32;
-    if( low < 0xFF000000 || carry == 1 )
+    if( low < 0xFF000000LL || carry == 1 )
       {
       put_byte( cache + carry );
       for( ; ff_count > 0; --ff_count ) put_byte( 0xFF + carry );
       cache = low >> 24;
       }
     else ++ff_count;
-    low = ( low & 0x00FFFFFF ) << 8;
+    low = ( low & 0x00FFFFFFLL ) << 8;
     }
 
 public:
@@ -556,8 +561,8 @@ class LZ_encoder
       {
       const int prev_index = trials[cur].prev_index;
       Trial & prev_trial = trials[prev_index];
-      std::swap( dis, prev_trial.dis );
-      prev_trial.price = cur - prev_index;		// len
+      prev_trial.price = cur - prev_index;			// len
+      cur = dis; dis = prev_trial.dis; prev_trial.dis = cur;
       cur = prev_index;
       }
     }

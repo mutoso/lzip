@@ -1,5 +1,5 @@
 /*  Lzip - A data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -60,7 +60,7 @@ namespace {
 const char * invocation_name = 0;
 const char * const Program_name    = "Lzip";
 const char * const program_name    = "lzip";
-const char * const program_year    = "2009";
+const char * const program_year    = "2010";
 
 struct { const char * from; const char * to; } const known_extensions[] = {
   { ".lz",  ""     },
@@ -145,7 +145,7 @@ const char * format_num( long long num, long long limit = 9999,
   }
 
 
-long long getnum( const char * ptr, const int bs,
+long long getnum( const char * ptr, const int bs = 0,
                   const long long llimit = LLONG_MIN + 1,
                   const long long ulimit = LLONG_MAX ) throw()
   {
@@ -180,7 +180,7 @@ long long getnum( const char * ptr, const int bs,
                 break;
       case 'k': if( factor == 1000 ) exponent = 1; else bad_multiplier = true;
                 break;
-      default: bad_multiplier = true;
+      default : bad_multiplier = true;
       }
     if( bad_multiplier )
       {
@@ -352,31 +352,30 @@ void cleanup_and_fail( const int retval ) throw()
 
 
      // Set permissions, owner and times.
-void close_and_set_permissions( const struct stat * in_statsp, int * retvalp )
+void close_and_set_permissions( const struct stat * const in_statsp )
   {
-  int tmp = 0;
+  bool error = false;
   if( in_statsp )
     {
-    if( fchmod( outhandle, in_statsp->st_mode ) != 0 ) tmp = 1;
-    if( !tmp ) (void)fchown( outhandle, in_statsp->st_uid, in_statsp->st_gid );
+    if( fchmod( outhandle, in_statsp->st_mode ) != 0 ) error = true;
+    else (void)fchown( outhandle, in_statsp->st_uid, in_statsp->st_gid );
     // fchown will in many cases return with EPERM, which can be safely ignored.
     }
   if( close( outhandle ) == 0 ) outhandle = -1;
   else cleanup_and_fail( 1 );
   delete_output_on_interrupt = false;
   if( !in_statsp ) return;
-  if( !tmp )
+  if( !error )
     {
     struct utimbuf t;
     t.actime = in_statsp->st_atime;
     t.modtime = in_statsp->st_mtime;
-    tmp = utime( output_filename.c_str(), &t );
+    if( utime( output_filename.c_str(), &t ) != 0 ) error = true;
     }
-  if( tmp )
+  if( error )
     {
-    if( tmp > *retvalp ) *retvalp = tmp;
     show_error( "I can't change output file attributes." );
-    cleanup_and_fail( *retvalp );
+    cleanup_and_fail( 1 );
     }
   }
 
@@ -395,15 +394,14 @@ bool next_filename()
 
 
 int compress( const long long member_size, const long long volume_size,
-              lzma_options encoder_options, const int inhandle,
-              const Pretty_print & pp, const struct stat * in_statsp,
-              int * retvalp )
+              const lzma_options & encoder_options, const int inhandle,
+              const Pretty_print & pp, const struct stat * const in_statsp )
   {
   if( verbosity >= 1 ) pp();
   File_header header;
   header.set_magic();
   if( !header.dictionary_size( encoder_options.dictionary_size ) ||
-      encoder_options.match_len_limit < 5 ||
+      encoder_options.match_len_limit < min_match_len_limit ||
       encoder_options.match_len_limit > max_match_len )
     internal_error( "invalid argument to encoder" );
 
@@ -429,7 +427,7 @@ int compress( const long long member_size, const long long volume_size,
         partial_volume_size = 0;
         if( delete_output_on_interrupt )
           {
-          close_and_set_permissions( in_statsp, retvalp );
+          close_and_set_permissions( in_statsp );
           if( !next_filename() )
             { pp(); show_error( "too many volume files" ); return 1; }
           if( !open_outstream( true ) ) return 1;
@@ -544,15 +542,15 @@ int decompress( const int inhandle, const Pretty_print & pp,
 extern "C" void signal_handler( int ) throw()
   {
   show_error( "Control-C or similar caught, quitting." );
-  cleanup_and_fail( 0 );
+  cleanup_and_fail( 1 );
   }
 
 
 void set_signals() throw()
   {
-  signal( SIGTERM, signal_handler );
   signal( SIGHUP, signal_handler );
   signal( SIGINT, signal_handler );
+  signal( SIGTERM, signal_handler );
   }
 
 } // end namespace
@@ -666,6 +664,7 @@ int main( const int argc, const char * argv[] )
   std::string default_output_filename;
   std::vector< std::string > filenames;
   invocation_name = argv[0];
+//  std::setvbuf( stderr, 0, _IONBF, 0 );
 
   const Arg_parser::Option options[] =
     {
@@ -717,7 +716,7 @@ int main( const int argc, const char * argv[] )
       case 'h': show_help(); return 0;
       case 'k': keep_input_files = true; break;
       case 'm': encoder_options.match_len_limit =
-                getnum( arg, 0, 5, max_match_len ); break;
+                getnum( arg, 0, min_match_len_limit, max_match_len ); break;
       case 'o': default_output_filename = arg; break;
       case 'q': verbosity = -1; break;
       case 's': encoder_options.dictionary_size = get_dict_size( arg );
@@ -783,7 +782,7 @@ int main( const int argc, const char * argv[] )
       const int eindex = extension_index( input_filename );
       inhandle = open_instream( input_filename, &in_stats, program_mode,
                                 eindex, force, to_stdout );
-      if( inhandle < 0 ) continue;
+      if( inhandle < 0 ) { if( retval < 1 ) retval = 1; continue; }
       if( program_mode != m_test )
         {
         if( to_stdout ) outhandle = STDOUT_FILENO;
@@ -806,19 +805,19 @@ int main( const int argc, const char * argv[] )
 
     if( output_filename.size() && !to_stdout && program_mode != m_test )
       delete_output_on_interrupt = true;
-    const struct stat * in_statsp = input_filename.size() ? &in_stats : 0;
+    const struct stat * const in_statsp = input_filename.size() ? &in_stats : 0;
     pp.set_name( input_filename );
     int tmp = 0;
     if( program_mode == m_compress )
       tmp = compress( member_size, volume_size, encoder_options, inhandle,
-                      pp, in_statsp, &retval );
+                      pp, in_statsp );
     else
       tmp = decompress( inhandle, pp, program_mode == m_test );
     if( tmp > retval ) retval = tmp;
     if( tmp && program_mode != m_test ) cleanup_and_fail( retval );
 
     if( delete_output_on_interrupt )
-      close_and_set_permissions( in_statsp, &retval );
+      close_and_set_permissions( in_statsp );
     if( input_filename.size() )
       {
       close( inhandle ); inhandle = -1;
@@ -826,6 +825,12 @@ int main( const int argc, const char * argv[] )
         std::remove( input_filename.c_str() );
       }
     }
-  if( outhandle >= 0 ) close( outhandle );
+  if( outhandle >= 0 && close( outhandle ) != 0 )
+    {
+    if( verbosity >= 0 )
+      std::fprintf( stderr, "%s: Can't close stdout: %s.\n",
+                    program_name, std::strerror( errno ) );
+    if( retval < 1 ) retval = 1;
+    }
   return retval;
   }

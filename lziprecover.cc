@@ -1,5 +1,5 @@
 /*  Lziprecover - Member recoverer program for lzip compressed files
-    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -43,7 +43,7 @@ namespace {
 const char * invocation_name = 0;
 const char * const Program_name    = "Lziprecover";
 const char * const program_name    = "lziprecover";
-const char * const program_year    = "2009";
+const char * const program_year    = "2010";
 
 
 void show_help() throw()

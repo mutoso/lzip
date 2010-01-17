@@ -1,5 +1,5 @@
 /*  Lzip - A data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -74,6 +74,7 @@ const int max_len_symbols = len_low_symbols + len_mid_symbols + len_high_symbols
 
 const int min_match_len = 2;		// must be 2
 const int max_match_len = min_match_len + max_len_symbols - 1;	// 273
+const int min_match_len_limit = 5;
 
 const int max_dis_states = 4;
 

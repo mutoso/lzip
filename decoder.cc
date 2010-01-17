@@ -1,5 +1,5 @@
 /*  Lzip - A data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -124,7 +124,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
       }
     }
   if( !error && verbosity >= 3 )
-    std::fprintf( stderr, "data crc %08X, data size %8lld, member size %8lld.  ",
+    std::fprintf( stderr, "data crc %08X, data size %9lld, member size %8lld.  ",
                   (unsigned int)trailer.data_crc(), trailer.data_size(),
                   trailer.member_size() );
   return !error;

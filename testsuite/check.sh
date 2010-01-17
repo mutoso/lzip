@@ -1,6 +1,6 @@
 #! /bin/sh
 # check script for Lzip - A data compressor based on the LZMA algorithm
-# Copyright (C) 2008, 2009 Antonio Diaz Diaz.
+# Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 #
 # This script is free software: you have unlimited permission
 # to copy, distribute and modify it.
@@ -18,15 +18,15 @@ if [ ! -x "${LZIP}" ] ; then
 	exit 1
 fi
 
-if [ -d tmp ] ; then rm -r tmp ; fi
+if [ -d tmp ] ; then rm -rf tmp ; fi
 mkdir tmp
 echo -n "testing lzip..."
 cd "${objdir}"/tmp
 
-cat "${testdir}"/../COPYING > in || framework_failure
+cat "${testdir}"/test1 > in || framework_failure
 fail=0
 
-"${LZIP}" -cd "${testdir}"/COPYING.lz > copy || fail=1
+"${LZIP}" -cd "${testdir}"/test1.lz > copy || fail=1
 cmp in copy || fail=1
 
 for i in s4096 1 2 3 4 5 6 7 8 9; do
@@ -47,7 +47,7 @@ for i in s4096 1 2 3 4 5 6 7 8 9; do
 done
 
 for i in s4096 1 2 3 4 5 6 7 8 9; do
-	"${LZIP}" -c -$i < in > out || fail=1
+	"${LZIP}" -$i < in > out || fail=1
 	"${LZIP}" -d < out > copy || fail=1
 	cmp in copy || fail=1
 	echo -n .
@@ -70,7 +70,7 @@ for i in 1 2 3; do
 done
 
 echo
-if [ ${fail} = 0 ]; then
+if [ ${fail} = 0 ] ; then
 	echo "tests completed successfully."
 	cd "${objdir}" && rm -r tmp
 else

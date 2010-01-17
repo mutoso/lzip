@@ -1,7 +1,7 @@
 /*  Unzcrash - A test program written to test robustness to
                decompression of corrupted data.
     Inspired by unzcrash.c from Julian Seward's bzip2.
-    Copyright (C) 2008, 2009 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
     This program is free software: you have unlimited permission
     to copy, distribute and modify it.

@@ -1,8 +1,7 @@
-Changes in version 1.8:
+Changes in version 1.9:
 
-Compression time has been reduced by 4%.
+Lzip now returns at least 1 if closing stdout fails.
 
-Lzdiff and lzgrep have been moved to the new package zutils.
+Lintian warnings in Debian about man pages have been fixed.
 
-Compilation warnings on sistems where uint32_t != unsigned int have been
-fixed.
+The "COPYING" file is no more used as data for testing.
