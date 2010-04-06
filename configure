@@ -5,12 +5,12 @@
 # This configure script is free software: you have unlimited permission
 # to copy, distribute and modify it.
 #
-# Date of this version: 2010-01-17
+# Date of this version: 2010-04-05
 
 args=
 no_create=
 pkgname=lzip
-pkgversion=1.9
+pkgversion=1.10
 progname=lzip
 srctrigger=lzip.h
 
@@ -135,7 +135,7 @@ if [ -z "${CXX}" ] ; then		# Let the user override the test.
 fi
 
 echo
-if [ -z ${no_create} ] ; then
+if [ -z "${no_create}" ] ; then
 	echo "creating config.status"
 	rm -f config.status
 	cat > config.status << EOF

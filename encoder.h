@@ -64,8 +64,8 @@ public:
       }
     }
 
-  int operator[]( const int symbol ) const throw()
-    { return data[symbol >> 2]; }
+  int operator[]( const int probability ) const throw()
+    { return data[probability >> 2]; }
   };
 
 extern Prob_prices prob_prices;
@@ -120,14 +120,14 @@ inline int price_matched( const Bit_model bm[], const int symbol,
   for( int i = 7; i >= 0; --i )
     {
     const int match_bit = ( match_byte >> i ) & 1;
-    const int bit = ( symbol >> i ) & 1;
+    int bit = ( symbol >> i ) & 1;
     price += price_bit( bm[(match_bit<<8)+model+0x100], bit );
     model = ( model << 1 ) | bit;
     if( match_bit != bit )
       {
       while( --i >= 0 )
         {
-        const int bit = ( symbol >> i ) & 1;
+        bit = ( symbol >> i ) & 1;
         price += price_bit( bm[model], bit );
         model = ( model << 1 ) | bit;
         }
@@ -158,7 +158,7 @@ class Matchfinder
   int cyclic_pos;
   int stream_pos;		// first byte not yet read from file
   int pos_limit;		// when reached, a new block must be read
-  const int ides_;		// input file descriptor
+  const int infd_;		// input file descriptor
   const int match_len_limit_;
   int32_t * const prev_positions;	// last seen position of key
   int32_t * prev_pos_tree;
@@ -167,7 +167,7 @@ class Matchfinder
   bool read_block() throw();
 
 public:
-  Matchfinder( const int dict_size, const int len_limit, const int ides );
+  Matchfinder( const int dict_size, const int len_limit, const int infd );
 
   ~Matchfinder()
     { delete[] prev_pos_tree; delete[] prev_positions; std::free( buffer ); }
@@ -214,32 +214,32 @@ class Range_encoder
   int pos;
   uint32_t range;
   int ff_count;
-  const int odes_;		// output file descriptor
+  const int outfd_;		// output file descriptor
   uint8_t cache;
 
   void shift_low()
     {
     const uint32_t carry = low >> 32;
-    if( low < 0xFF000000LL || carry == 1 )
+    if( low < 0xFF000000U || carry == 1 )
       {
       put_byte( cache + carry );
       for( ; ff_count > 0; --ff_count ) put_byte( 0xFF + carry );
       cache = low >> 24;
       }
     else ++ff_count;
-    low = ( low & 0x00FFFFFFLL ) << 8;
+    low = ( low & 0x00FFFFFFU ) << 8;
     }
 
 public:
-  Range_encoder( const int odes )
+  Range_encoder( const int outfd )
     :
     low( 0 ),
     partial_member_pos( 0 ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),
-    range( 0xFFFFFFFF ),
+    range( 0xFFFFFFFFU ),
     ff_count( 0 ),
-    odes_( odes ),
+    outfd_( outfd ),
     cache( 0 ) {}
 
   ~Range_encoder() { delete[] buffer; }
@@ -248,9 +248,9 @@ public:
     {
     if( pos > 0 )
       {
-      if( odes_ >= 0 )
+      if( outfd_ >= 0 )
         {
-        const int wr = writeblock( odes_, (char *)buffer, pos );
+        const int wr = writeblock( outfd_, buffer, pos );
         if( wr != pos ) throw Error( "write error" );
         }
       partial_member_pos += pos;
@@ -275,7 +275,7 @@ public:
       {
       range >>= 1;
       if( (symbol >> i) & 1 ) low += range;
-      if( range <= 0x00FFFFFF ) { range <<= 8; shift_low(); }
+      if( range <= 0x00FFFFFFU ) { range <<= 8; shift_low(); }
       }
     }
 
@@ -293,7 +293,7 @@ public:
       range -= bound;
       bm.probability -= bm.probability >> bit_model_move_bits;
       }
-    if( range <= 0x00FFFFFF ) { range <<= 8; shift_low(); }
+    if( range <= 0x00FFFFFFU ) { range <<= 8; shift_low(); }
     }
 
   void encode_tree( Bit_model bm[], const int symbol, const int num_bits )
@@ -326,15 +326,15 @@ public:
     int model = 1;
     for( int i = 7; i >= 0; --i )
       {
-      const int bit = ( symbol >> i ) & 1;
       const int match_bit = ( match_byte >> i ) & 1;
+      int bit = ( symbol >> i ) & 1;
       encode_bit( bm[(match_bit<<8)+model+0x100], bit );
       model = ( model << 1 ) | bit;
       if( match_bit != bit )
         {
         while( --i >= 0 )
           {
-          const int bit = ( symbol >> i ) & 1;
+          bit = ( symbol >> i ) & 1;
           encode_bit( bm[model], bit );
           model = ( model << 1 ) | bit;
           }
@@ -359,17 +359,17 @@ class Len_encoder
   void update_prices( const int pos_state ) throw()
     {
     int * const pps = prices[pos_state];
-    int price = price0( choice1 );
+    int tmp = price0( choice1 );
     int len = 0;
     for( ; len < len_low_symbols && len < len_symbols; ++len )
-      pps[len] = price +
+      pps[len] = tmp +
                  price_symbol( bm_low[pos_state], len, len_low_bits );
-    price = price1( choice1 );
+    tmp = price1( choice1 );
     for( ; len < len_low_symbols + len_mid_symbols && len < len_symbols; ++len )
-      pps[len] = price + price0( choice2 ) +
+      pps[len] = tmp + price0( choice2 ) +
                  price_symbol( bm_mid[pos_state], len - len_low_symbols, len_mid_bits );
     for( ; len < len_symbols; ++len )
-      pps[len] = price + price1( choice2 ) +
+      pps[len] = tmp + price1( choice2 ) +
                  price_symbol( bm_high, len - len_low_symbols - len_mid_symbols, len_high_bits );
     counters[pos_state] = len_symbols;
     }
@@ -393,21 +393,21 @@ class Literal_encoder
   {
   Bit_model bm_literal[1<<literal_context_bits][0x300];
 
-  int state( const int prev_byte ) const throw()
+  int lstate( const int prev_byte ) const throw()
     { return ( prev_byte >> ( 8 - literal_context_bits ) ); }
 
 public:
   void encode( Range_encoder & range_encoder, uint8_t prev_byte, uint8_t symbol )
-    { range_encoder.encode_tree( bm_literal[state(prev_byte)], symbol, 8 ); }
+    { range_encoder.encode_tree( bm_literal[lstate(prev_byte)], symbol, 8 ); }
 
   void encode_matched( Range_encoder & range_encoder, uint8_t prev_byte, uint8_t match_byte, uint8_t symbol )
-    { range_encoder.encode_matched( bm_literal[state(prev_byte)], symbol, match_byte ); }
+    { range_encoder.encode_matched( bm_literal[lstate(prev_byte)], symbol, match_byte ); }
 
   int price_matched( uint8_t prev_byte, uint8_t symbol, uint8_t match_byte ) const throw()
-    { return ::price_matched( bm_literal[state(prev_byte)], symbol, match_byte ); }
+    { return ::price_matched( bm_literal[lstate(prev_byte)], symbol, match_byte ); }
 
   int price_symbol( uint8_t prev_byte, uint8_t symbol ) const throw()
-    { return ::price_symbol( bm_literal[state(prev_byte)], symbol, 8 ); }
+    { return ::price_symbol( bm_literal[lstate(prev_byte)], symbol, 8 ); }
   };
 
 
@@ -415,6 +415,7 @@ class LZ_encoder
   {
   enum { dis_align_mask = dis_align_size - 1,
          infinite_price = 0x0FFFFFFF,
+         max_marker_size = 16,
          num_rep_distances = 4 };	// must be 4
 
   struct Trial
@@ -459,8 +460,9 @@ class LZ_encoder
   void fill_align_prices() throw();
   void fill_distance_prices() throw();
 
-  uint32_t crc() const throw() { return crc_ ^ 0xFFFFFFFF; }
+  uint32_t crc() const throw() { return crc_ ^ 0xFFFFFFFFU; }
 
+       // move-to-front dis in/into reps
   void mtf_reps( const int dis, int reps[num_rep_distances] ) throw()
     {
     if( dis >= num_rep_distances )
@@ -567,13 +569,13 @@ class LZ_encoder
       }
     }
 
-  int best_pair_sequence( const int reps[num_rep_distances],
+  int sequence_optimizer( const int reps[num_rep_distances],
                           const State & state );
 
   void full_flush( const State & state );
 
 public:
-  LZ_encoder( Matchfinder & mf, const File_header & header, const int odes );
+  LZ_encoder( Matchfinder & mf, const File_header & header, const int outfd );
 
   bool encode_member( const long long member_size );
 

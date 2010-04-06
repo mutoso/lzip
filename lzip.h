@@ -22,7 +22,7 @@ class State
 public:
   enum { states = 12 };
   State() throw() : st( 0 ) {}
-  int operator()() const throw() { return st; }
+  unsigned char operator()() const throw() { return st; }
   bool is_char() const throw() { return st < 7; }
 
   void set_char() throw()
@@ -100,16 +100,15 @@ struct Bit_model
 class Pretty_print
   {
   const char * const stdin_name;
-  const unsigned int stdin_name_len;
   unsigned int longest_name;
   std::string name_;
   mutable bool first_post;
 
 public:
   Pretty_print( const std::vector< std::string > & filenames )
-    : stdin_name( "(stdin)" ), stdin_name_len( std::strlen( stdin_name ) ),
-      longest_name( 0 ), first_post( false )
+    : stdin_name( "(stdin)" ), longest_name( 0 ), first_post( false )
     {
+    const unsigned int stdin_name_len = std::strlen( stdin_name );
     for( unsigned int i = 0; i < filenames.size(); ++i )
       {
       const std::string & s = filenames[i];
@@ -143,7 +142,7 @@ public:
       {
       unsigned int c = n;
       for( int k = 0; k < 8; ++k )
-        { if( c & 1 ) c = 0xEDB88320 ^ ( c >> 1 ); else c >>= 1; }
+        { if( c & 1 ) c = 0xEDB88320U ^ ( c >> 1 ); else c >>= 1; }
       data[n] = c;
       }
     }
@@ -165,22 +164,19 @@ const uint8_t magic_string[4] = { 'L', 'Z', 'I', 'P' };
 
 struct File_header
   {
-  uint8_t magic[4];
-  uint8_t version;
-  uint8_t coded_dict_size;
+  uint8_t data[6];			// 0-3 magic bytes
+					//   4 version
+					//   5 coded_dict_size
+  enum { size = 6 };
 
   void set_magic() throw()
-    { std::memcpy( magic, magic_string, sizeof magic ); version = 1; }
+    { std::memcpy( data, magic_string, 4 ); data[4] = 1; }
 
   bool verify_magic() const throw()
-    {
-    return ( std::memcmp( magic, magic_string, sizeof magic ) == 0 );
-    }
+    { return ( std::memcmp( data, magic_string, 4 ) == 0 ); }
 
-  bool verify_version() const throw()
-    {
-    return ( version <= 1 );
-    }
+  uint8_t version() const throw() { return data[4]; }
+  bool verify_version() const throw() { return ( data[4] <= 1 ); }
 
   static int real_bits( const int value ) throw()
     {
@@ -192,24 +188,24 @@ struct File_header
 
   int dictionary_size() const throw()
     {
-    int size = ( 1 << ( coded_dict_size & 0x1F ) );
-    if( size > min_dictionary_size && size <= max_dictionary_size )
-      size -= ( size / 16 ) * ( ( coded_dict_size >> 5 ) & 0x07 );
-    return size;
+    int sz = ( 1 << ( data[5] & 0x1F ) );
+    if( sz > min_dictionary_size && sz <= max_dictionary_size )
+      sz -= ( sz / 16 ) * ( ( data[5] >> 5 ) & 0x07 );
+    return sz;
     }
 
-  bool dictionary_size( const int size ) throw()
+  bool dictionary_size( const int sz ) throw()
     {
-    if( size >= min_dictionary_size && size <= max_dictionary_size )
+    if( sz >= min_dictionary_size && sz <= max_dictionary_size )
       {
-      coded_dict_size = real_bits( size - 1 );
-      if( size > min_dictionary_size )
+      data[5] = real_bits( sz - 1 );
+      if( sz > min_dictionary_size )
         {
-        const int base_size = 1 << coded_dict_size;
+        const int base_size = 1 << data[5];
         const int wedge = base_size / 16;
         for( int i = 7; i >= 1; --i )
-          if( base_size - ( i * wedge ) >= size )
-            { coded_dict_size |= ( i << 5 ); break; }
+          if( base_size - ( i * wedge ) >= sz )
+            { data[5] |= ( i << 5 ); break; }
         }
       return true;
       }
@@ -220,63 +216,58 @@ struct File_header
 
 struct File_trailer
   {
-  uint8_t data_crc_[4];		// CRC32 of the uncompressed data
-  uint8_t data_size_[8];	// size of the uncompressed data
-  uint8_t member_size_[8];	// member size including header and trailer
+  uint8_t data[20];	//  0-3  CRC32 of the uncompressed data
+			//  4-11 size of the uncompressed data
+			// 12-19 member size including header and trailer
 
-  static int size( const int version )
-    { return sizeof( File_trailer ) - ( ( version >= 1 ) ? 0 : 8 ); }
+  static int size( const int version = 1 )
+    { return ( ( version >= 1 ) ? 20 : 12 ); }
 
   uint32_t data_crc() const throw()
     {
     uint32_t tmp = 0;
-    for( int i = 3; i >= 0; --i ) { tmp <<= 8; tmp += data_crc_[i]; }
+    for( int i = 3; i >= 0; --i ) { tmp <<= 8; tmp += data[i]; }
     return tmp;
     }
 
   void data_crc( uint32_t crc ) throw()
-    {
-    for( int i = 0; i < 4; ++i )
-      { data_crc_[i] = (uint8_t)crc; crc >>= 8; }
-    }
+    { for( int i = 0; i <= 3; ++i ) { data[i] = (uint8_t)crc; crc >>= 8; } }
 
   long long data_size() const throw()
     {
     long long tmp = 0;
-    for( int i = 7; i >= 0; --i ) { tmp <<= 8; tmp += data_size_[i]; }
+    for( int i = 11; i >= 4; --i ) { tmp <<= 8; tmp += data[i]; }
     return tmp;
     }
 
-  void data_size( long long size ) throw()
+  void data_size( long long sz ) throw()
     {
-    for( int i = 0; i < 8; ++i )
-      { data_size_[i] = (uint8_t)size; size >>= 8; }
+    for( int i = 4; i <= 11; ++i ) { data[i] = (uint8_t)sz; sz >>= 8; }
     }
 
   long long member_size() const throw()
     {
     long long tmp = 0;
-    for( int i = 7; i >= 0; --i ) { tmp <<= 8; tmp += member_size_[i]; }
+    for( int i = 19; i >= 12; --i ) { tmp <<= 8; tmp += data[i]; }
     return tmp;
     }
 
-  void member_size( long long size ) throw()
+  void member_size( long long sz ) throw()
     {
-    for( int i = 0; i < 8; ++i )
-      { member_size_[i] = (uint8_t)size; size >>= 8; }
+    for( int i = 12; i <= 19; ++i ) { data[i] = (uint8_t)sz; sz >>= 8; }
     }
   };
 
 
 struct Error
   {
-  const char * s;
-  Error( const char * p ) throw() : s( p ) {}
+  const char * const s;
+  Error( const char * const p ) throw() : s( p ) {}
   };
 
 extern int verbosity;
 
-void show_error( const char * msg, const int errcode = 0, const bool help = false ) throw();
-void internal_error( const char * msg );
-int readblock( const int fd, char * buf, const int size ) throw();
-int writeblock( const int fd, const char * buf, const int size ) throw();
+void show_error( const char * const msg, const int errcode = 0, const bool help = false ) throw();
+void internal_error( const char * const msg );
+int readblock( const int fd, uint8_t * const buf, const int size ) throw();
+int writeblock( const int fd, const uint8_t * const buf, const int size ) throw();

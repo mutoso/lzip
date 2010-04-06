@@ -45,6 +45,12 @@ const char * const Program_name    = "Lziprecover";
 const char * const program_name    = "lziprecover";
 const char * const program_year    = "2010";
 
+#ifdef O_BINARY
+const int o_binary = O_BINARY;
+#else
+const int o_binary = 0;
+#endif
+
 
 void show_help() throw()
   {
@@ -75,8 +81,8 @@ void show_version() throw()
 
 int open_instream( const std::string & input_filename ) throw()
   {
-  int ides = open( input_filename.c_str(), O_RDONLY );
-  if( ides < 0 )
+  int infd = open( input_filename.c_str(), O_RDONLY | o_binary );
+  if( infd < 0 )
     {
     if( verbosity >= 0 )
       std::fprintf( stderr, "%s: Can't open input file `%s': %s.\n",
@@ -85,30 +91,32 @@ int open_instream( const std::string & input_filename ) throw()
   else
     {
     struct stat in_stats;
-    const int i = fstat( ides, &in_stats );
+    const int i = fstat( infd, &in_stats );
     if( i < 0 || !S_ISREG( in_stats.st_mode ) )
       {
       if( verbosity >= 0 )
         std::fprintf( stderr, "%s: input file `%s' is not a regular file.\n",
                       program_name, input_filename.c_str() );
-      close( ides );
-      ides = -1;
+      close( infd );
+      infd = -1;
       }
     }
-  return ides;
+  return infd;
   }
 
 
 int open_outstream( const std::string & output_filename ) throw()
   {
-  int odes = open( output_filename.c_str(), O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR );
-  if( odes < 0 )
+  int outfd = open( output_filename.c_str(),
+                    O_CREAT | O_TRUNC | O_WRONLY | o_binary,
+                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH );
+  if( outfd < 0 )
     {
     if( verbosity >= 0 )
       std::fprintf( stderr, "%s: Can't create output file `%s': %s.\n",
                     program_name, output_filename.c_str(), std::strerror( errno ) );
     }
-  return odes;
+  return outfd;
   }
 
 
@@ -123,44 +131,26 @@ bool next_filename( std::string & output_filename )
   }
 
 
-int search_header( const uint8_t * buffer, const int size, const int pos,
-                   const long long last_header_pos,
-                   const long long partial_file_pos )
-  {
-  for( int i = pos; i < size; ++i )
-    if( buffer[i] == magic_string[0] && buffer[i+1] == magic_string[1] &&
-        buffer[i+2] == magic_string[2] && buffer[i+3] == magic_string[3] )
-      {
-      File_trailer trailer;
-      for( unsigned int j = 0; j < sizeof trailer; ++j )
-        ((uint8_t *)&trailer)[j] = buffer[i-(sizeof trailer)+j];
-      if( partial_file_pos + i - trailer.member_size() == last_header_pos )
-        return i;
-      }
-  return -1;
-  }
-
-
-bool verify_header( const uint8_t * buffer, const int pos )
+bool verify_header( const uint8_t * const buffer, const int pos )
   {
   File_header header;
-  for( unsigned int i = 0; i < sizeof header; ++i )
-    ((uint8_t *)&header)[i] = buffer[pos+i];
+  for( int i = 0; i < File_header::size; ++i )
+    header.data[i] = buffer[pos+i];
   if( !header.verify_magic() )
     {
-    show_error( "bad magic number (file not created by lzip).\n" );
+    show_error( "bad magic number (file not in lzip format).\n" );
     return false;
     }
-  if( header.version == 0 )
+  if( header.version() == 0 )
     {
     show_error( "version 0 member format can't be recovered.\n" );
     return false;
     }
-  if( header.version != 1 )
+  if( header.version() != 1 )
     {
     if( verbosity >= 0 )
       std::fprintf( stderr, "version %d member format not supported, newer %s needed.\n",
-                    header.version, program_name );
+                    header.version(), program_name );
     return false;
     }
   return true;
@@ -169,16 +159,16 @@ bool verify_header( const uint8_t * buffer, const int pos )
 
 int process_file( const std::string & input_filename, uint8_t * & base_buffer )
   {
-  const int hsize = sizeof( File_header );
-  const int tsize = sizeof( File_trailer );
+  const int hsize = File_header::size;
+  const int tsize = File_trailer::size();
   const int buffer_size = 65536;
   const int base_buffer_size = tsize + buffer_size + hsize;
   base_buffer = new uint8_t[base_buffer_size];
   uint8_t * const buffer = base_buffer + tsize;
 
-  const int inhandle = open_instream( input_filename );
-  if( inhandle < 0 ) return 1;
-  int size = readblock( inhandle, (char *)buffer, buffer_size + hsize ) - hsize;
+  const int infd = open_instream( input_filename );
+  if( infd < 0 ) return 1;
+  int size = readblock( infd, buffer, buffer_size + hsize ) - hsize;
   bool at_stream_end = ( size < buffer_size );
   if( size != buffer_size && errno )
     { show_error( "read error", errno ); return 1; }
@@ -187,57 +177,60 @@ int process_file( const std::string & input_filename, uint8_t * & base_buffer )
   if( !verify_header( buffer, 0 ) ) return 2;
 
   std::string output_filename( "rec00001" ); output_filename += input_filename;
-  int outhandle = open_outstream( output_filename );
-  if( outhandle < 0 ) { close( inhandle ); return 1; }
+  int outfd = open_outstream( output_filename );
+  if( outfd < 0 ) { close( infd ); return 1; }
 
-  long long last_header_pos = 0;
-  long long partial_file_pos = 0;
-  int pos = 0;
-  while( size > 0 )
+  long long partial_member_size = 0;
+  while( true )
     {
-    const int newpos = search_header( buffer, size - hsize, pos + hsize,
-                                      last_header_pos, partial_file_pos );
-    if( newpos > pos )
+    int pos = 0;
+    for( int newpos = 1; newpos <= size; ++newpos )
+      if( buffer[newpos] == magic_string[0] &&
+          buffer[newpos+1] == magic_string[1] &&
+          buffer[newpos+2] == magic_string[2] &&
+          buffer[newpos+3] == magic_string[3] )
+        {
+        long long member_size = 0;
+        for( int i = 1; i <= 8; ++i )
+          { member_size <<= 8; member_size += base_buffer[tsize+newpos-i]; }
+        if( partial_member_size + newpos - pos == member_size )
+          {						// header found
+          const int wr = writeblock( outfd, buffer + pos, newpos - pos );
+          if( wr != newpos - pos )
+            { show_error( "write error", errno ); return 1; }
+          if( close( outfd ) != 0 )
+            { show_error( "error closing output file", errno ); return 1; }
+          if( !next_filename( output_filename ) )
+            { show_error( "too many members in file" ); close( infd ); return 1; }
+          outfd = open_outstream( output_filename );
+          if( outfd < 0 ) { close( infd ); return 1; }
+          partial_member_size = 0;
+          pos = newpos;
+          }
+        }
+
+    if( at_stream_end )
       {
-      const int wr = writeblock( outhandle, (char *)buffer + pos, newpos - pos );
-      if( wr != newpos - pos )
+      const int wr = writeblock( outfd, buffer + pos, size + hsize - pos );
+      if( wr != size + hsize - pos )
         { show_error( "write error", errno ); return 1; }
-      if( close( outhandle ) != 0 )
-        { show_error( "error closing output file", errno ); return 1; }
-      if( !next_filename( output_filename ) )
-        { show_error( "too many members in file" ); close( inhandle ); return 1; }
-      outhandle = open_outstream( output_filename );
-      if( outhandle < 0 ) { close( inhandle ); return 1; }
-      last_header_pos = partial_file_pos + newpos;
-      pos = newpos;
-      continue;
+      break;
       }
-    else
+    if( pos < buffer_size )
       {
-      if( !at_stream_end )
-        {
-        partial_file_pos += buffer_size;
-        const int wr = writeblock( outhandle, (char *)buffer + pos, buffer_size - pos );
-        if( wr != buffer_size - pos )
-          { show_error( "write error", errno ); return 1; }
-        std::memcpy( base_buffer, base_buffer + buffer_size, tsize + hsize );
-        pos = 0;
-        }
-      else
-        {
-        const int wr = writeblock( outhandle, (char *)buffer + pos, size + hsize - pos );
-        if( wr != size + hsize - pos )
-          { show_error( "write error", errno ); return 1; }
-        break;
-        }
+      partial_member_size += buffer_size - pos;
+      const int wr = writeblock( outfd, buffer + pos, buffer_size - pos );
+      if( wr != buffer_size - pos )
+        { show_error( "write error", errno ); return 1; }
       }
-    size = readblock( inhandle, (char *)buffer + hsize, buffer_size );
+    std::memcpy( base_buffer, base_buffer + buffer_size, tsize + hsize );
+    size = readblock( infd, buffer + hsize, buffer_size );
     at_stream_end = ( size < buffer_size );
     if( size != buffer_size && errno )
       { show_error( "read error", errno ); return 1; }
     }
-  close( inhandle );
-  if( close( outhandle ) != 0 )
+  close( infd );
+  if( close( outfd ) != 0 )
     { show_error( "error closing output file", errno ); return 1; }
   return 0;
   }
@@ -248,7 +241,7 @@ int process_file( const std::string & input_filename, uint8_t * & base_buffer )
 int verbosity = 0;
 
 
-void show_error( const char * msg, const int errcode, const bool help ) throw()
+void show_error( const char * const msg, const int errcode, const bool help ) throw()
   {
   if( verbosity >= 0 )
     {
@@ -264,7 +257,7 @@ void show_error( const char * msg, const int errcode, const bool help ) throw()
   }
 
 
-void internal_error( const char * msg )
+void internal_error( const char * const msg )
   {
   std::string s( "internal error: " ); s += msg;
   show_error( s.c_str() );
@@ -275,7 +268,7 @@ void internal_error( const char * msg )
 // Returns the number of bytes really read.
 // If (returned value < size) and (errno == 0), means EOF was reached.
 //
-int readblock( const int fd, char * buf, const int size ) throw()
+int readblock( const int fd, uint8_t * const buf, const int size ) throw()
   {
   int rest = size;
   errno = 0;
@@ -294,7 +287,7 @@ int readblock( const int fd, char * buf, const int size ) throw()
 // Returns the number of bytes really written.
 // If (returned value < size), it is always an error.
 //
-int writeblock( const int fd, const char * buf, const int size ) throw()
+int writeblock( const int fd, const uint8_t * const buf, const int size ) throw()
   {
   int rest = size;
   errno = 0;
@@ -309,7 +302,7 @@ int writeblock( const int fd, const char * buf, const int size ) throw()
   }
 
 
-int main( const int argc, const char * argv[] )
+int main( const int argc, const char * const argv[] )
   {
   invocation_name = argv[0];
 

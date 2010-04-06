@@ -11,7 +11,7 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip Manual
 ***********
 
-This manual is for Lzip (version 1.9, 17 January 2010).
+This manual is for Lzip (version 1.10, 5 April 2010).
 
 * Menu:
 
@@ -68,11 +68,11 @@ multivolume compressed tar archives.
    The amount of memory required for compression is about 5 MiB plus 1
 or 2 times the dictionary size limit (1 if input file size is less than
 dictionary size limit, else 2) plus 8 times the dictionary size really
-used. For decompression is a little more than the dictionary size really
-used. Lzip will automatically use the smallest possible dictionary size
-without exceeding the given limit. It is important to appreciate that
-the decompression memory requirement is affected at compression time by
-the choice of dictionary size limit.
+used. For decompression it is a little more than the dictionary size
+really used. Lzip will automatically use the smallest possible
+dictionary size without exceeding the given limit. It is important to
+appreciate that the decompression memory requirement is affected at
+compression time by the choice of dictionary size limit.
 
    When decompressing, lzip attempts to guess the name for the
 decompressed file from that of the compressed file as follows:
@@ -254,15 +254,15 @@ The format for running lzip is:
      slower than `-1'. These options have no effect when decompressing.
 
      Level   Dictionary size   Match length limit
-     -1      1MiB              10 bytes
-     -2      1MiB              12 bytes
-     -3      1MiB              17 bytes
-     -4      2MiB              26 bytes
-     -5      4MiB              44 bytes
-     -6      8MiB              80 bytes
-     -7      16MiB             108 bytes
-     -8      16MiB             163 bytes
-     -9      32MiB             273 bytes
+     -1      1 MiB             10 bytes
+     -2      1.5 MiB           12 bytes
+     -3      2 MiB             17 bytes
+     -4      3 MiB             26 bytes
+     -5      4 MiB             44 bytes
+     -6      8 MiB             80 bytes
+     -7      16 MiB            108 bytes
+     -8      24 MiB            163 bytes
+     -9      32 MiB            273 bytes
 
 `--fast'
 `--best'
@@ -419,6 +419,12 @@ writes each member in its own .lz file. You can then use `lzip -t' to
 test the integrity of the resulting files, and decompress those which
 are undamaged.
 
+   Data from damaged members can be partially recovered writing it to
+stdout as shown in the following example (the resulting file may contain
+garbage data at the end):
+
+     lzip -cd rec00001file.lz > rec00001file
+
    Lziprecover takes a single argument, the name of the damaged file,
 and writes a number of files `rec00001file.lz', `rec00002file.lz', etc,
 containing the extracted members. The output filenames are designed so
@@ -466,13 +472,13 @@ Concept Index
 
 Tag Table:
 Node: Top224
-Node: Introduction899
-Node: Algorithm4206
-Node: Invoking Lzip6432
-Node: File Format10779
-Node: Examples12733
-Node: Lziprecover14571
-Node: Problems15270
-Node: Concept Index15795
+Node: Introduction897
+Node: Algorithm4207
+Node: Invoking Lzip6433
+Node: File Format10780
+Node: Examples12734
+Node: Lziprecover14572
+Node: Problems15487
+Node: Concept Index16012
 
 End Tag Table

@@ -33,13 +33,16 @@
 const CRC32 crc32;
 
 
-bool Input_buffer::read_block()
+bool Range_decoder::read_block()
   {
-  if( at_stream_end ) return false;
-  stream_pos = readblock( ides_, (char *)buffer, buffer_size );
-  if( stream_pos != buffer_size && errno ) throw Error( "read error" );
-  pos = 0;
-  at_stream_end = ( stream_pos < buffer_size );
+  if( !at_stream_end )
+    {
+    stream_pos = readblock( infd_, buffer, buffer_size );
+    if( stream_pos != buffer_size && errno ) throw Error( "read error" );
+    at_stream_end = ( stream_pos < buffer_size );
+    partial_member_pos += pos;
+    pos = 0;
+    }
   return !finished();
   }
 
@@ -50,8 +53,8 @@ void LZ_decoder::flush_data()
   if( size > 0 )
     {
     crc32.update( crc_, buffer + stream_pos, size );
-    if( odes_ >= 0 &&
-        writeblock( odes_, (char *)buffer + stream_pos, size ) != size )
+    if( outfd_ >= 0 &&
+        writeblock( outfd_, buffer + stream_pos, size ) != size )
       throw Error( "write error" );
     if( pos >= buffer_size ) { partial_data_pos += pos; pos = 0; }
     stream_pos = pos;
@@ -61,13 +64,15 @@ void LZ_decoder::flush_data()
 
 bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   {
-  bool error = false;
   File_trailer trailer;
-  const int trailer_size = trailer.size( format_version );
+  const int trailer_size = File_trailer::size( member_version );
+  const long long member_size = member_position() + trailer_size;
+  bool error = false;
+
   for( int i = 0; i < trailer_size && !error; ++i )
     {
     if( !range_decoder.finished() )
-      ((uint8_t *)&trailer)[i] = range_decoder.get_byte();
+      trailer.data[i] = range_decoder.get_byte();
     else
       {
       error = true;
@@ -77,9 +82,10 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
         std::fprintf( stderr, "trailer truncated at trailer position %d;"
                               " some checks may fail.\n", i );
         }
+      for( ; i < trailer_size; ++i ) trailer.data[i] = 0;
       }
     }
-  if( format_version == 0 ) trailer.member_size( member_position() );
+  if( member_version == 0 ) trailer.member_size( member_size );
   if( !range_decoder.code_is_zero() )
     {
     error = true;
@@ -104,23 +110,19 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     error = true;
     if( verbosity >= 0 )
       {
-      if( trailer.data_size() >= 0 )
-        { pp();
-          std::fprintf( stderr, "data size mismatch; trailer says %lld, data size is %lld.\n",
-                        trailer.data_size(), data_position() ); }
-      else pp( "member trailer is corrupt" );
+      pp();
+      std::fprintf( stderr, "data size mismatch; trailer says %lld, data size is %lld (0x%llX).\n",
+                    trailer.data_size(), data_position(), data_position() );
       }
     }
-  if( trailer.member_size() != member_position() )
+  if( trailer.member_size() != member_size )
     {
     error = true;
     if( verbosity >= 0 )
       {
-      if( trailer.member_size() >= 0 )
-        { pp();
-          std::fprintf( stderr, "member size mismatch; trailer says %lld, member size is %lld.\n",
-                        trailer.member_size(), member_position() ); }
-      else pp( "member trailer is corrupt" );
+      pp();
+      std::fprintf( stderr, "member size mismatch; trailer says %lld, member size is %lld (0x%llX).\n",
+                    trailer.member_size(), member_size, member_size );
       }
     }
   if( !error && verbosity >= 3 )
@@ -140,6 +142,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
   unsigned int rep2 = 0;	// repeated distances
   unsigned int rep3 = 0;
   State state;
+  range_decoder.load();
 
   while( true )
     {
@@ -203,7 +206,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
             {
             rep0 += range_decoder.decode( direct_bits - dis_align_bits ) << dis_align_bits;
             rep0 += range_decoder.decode_tree_reversed( bm_align, dis_align_bits );
-            if( rep0 == 0xFFFFFFFF )		// Marker found
+            if( rep0 == 0xFFFFFFFFU )		// Marker found
               {
               rep0 = rep0_saved;
               range_decoder.normalize();
@@ -214,7 +217,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
                 }
               if( len == min_match_len + 1 )	// Sync Flush marker
                 {
-                range_decoder.reload(); continue;
+                range_decoder.load(); continue;
                 }
               if( verbosity >= 0 )
                 {

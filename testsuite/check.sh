@@ -11,7 +11,7 @@ objdir=`pwd`
 testdir=`cd "$1" ; pwd`
 LZIP="${objdir}"/lzip
 LZIPRECOVER="${objdir}"/lziprecover
-framework_failure() { echo 'failure in testing framework'; exit 1; }
+framework_failure() { echo "failure in testing framework" ; exit 1 ; }
 
 if [ ! -x "${LZIP}" ] ; then
 	echo "${LZIP}: cannot execute"
@@ -20,7 +20,7 @@ fi
 
 if [ -d tmp ] ; then rm -rf tmp ; fi
 mkdir tmp
-echo -n "testing lzip..."
+printf "testing lzip..."
 cd "${objdir}"/tmp
 
 cat "${testdir}"/test1 > in || framework_failure
@@ -29,44 +29,44 @@ fail=0
 "${LZIP}" -cd "${testdir}"/test1.lz > copy || fail=1
 cmp in copy || fail=1
 
-for i in s4096 1 2 3 4 5 6 7 8 9; do
+for i in s4Ki 0 1 2 3 4 5 6 7 8 9 ; do
 	"${LZIP}" -k -$i in || fail=1
 	mv -f in.lz copy.lz || fail=1
-	echo -n "garbage" >> copy.lz || fail=1
+	printf "garbage" >> copy.lz || fail=1
 	"${LZIP}" -df copy.lz || fail=1
 	cmp in copy || fail=1
-	echo -n .
+	printf .
 done
 
-for i in s4096 1 2 3 4 5 6 7 8 9; do
+for i in s4Ki 0 1 2 3 4 5 6 7 8 9 ; do
 	"${LZIP}" -c -$i in > out || fail=1
-	echo -n "g" >> out || fail=1
+	printf "g" >> out || fail=1
 	"${LZIP}" -cd out > copy || fail=1
 	cmp in copy || fail=1
-	echo -n .
+	printf .
 done
 
-for i in s4096 1 2 3 4 5 6 7 8 9; do
+for i in s4Ki 0 1 2 3 4 5 6 7 8 9 ; do
 	"${LZIP}" -$i < in > out || fail=1
 	"${LZIP}" -d < out > copy || fail=1
 	cmp in copy || fail=1
-	echo -n .
+	printf .
 done
 
-for i in s4096 1 2 3 4 5 6 7 8 9; do
+for i in s4Ki 0 1 2 3 4 5 6 7 8 9 ; do
 	"${LZIP}" -f -$i -o out < in || fail=1
 	"${LZIP}" -df -o copy < out.lz || fail=1
 	cmp in copy || fail=1
-	echo -n .
+	printf .
 done
 
-"${LZIP}" -c in in in > out || fail=1
-echo -n "garbage" >> out || fail=1
+"${LZIP}" -ce in in in > out || fail=1
+printf "garbage" >> out || fail=1
 "${LZIPRECOVER}" out || fail=1
-for i in 1 2 3; do
+for i in 1 2 3 ; do
 	"${LZIP}" -cd rec0000${i}out > copy || fail=1
 	cmp in copy || fail=1
-	echo -n .
+	printf .
 done
 
 echo

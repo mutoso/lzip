@@ -1,7 +1,12 @@
-Changes in version 1.9:
+Changes in version 1.10:
 
-Lzip now returns at least 1 if closing stdout fails.
+File specified with option "-o" is now created with write permission for
+all if umask allows it, and deleted if lzip is interrupted by the user.
 
-Lintian warnings in Debian about man pages have been fixed.
+Regular files are now open in binary mode in non-POSIX platforms
+defining the O_BINARY macro.
 
-The "COPYING" file is no more used as data for testing.
+Dictionary size for options -2, -3, -4 and -8 has been changed to
+improve linearity of compressed sizes.
+
+Compiler warnings produced by over-optimization (-O3) have been fixed.

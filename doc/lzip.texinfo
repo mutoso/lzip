@@ -5,8 +5,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 17 January 2010
-@set VERSION 1.9
+@set UPDATED 5 April 2010
+@set VERSION 1.10
 
 @dircategory Data Compression
 @direntry
@@ -85,11 +85,11 @@ compressed tar archives.
 The amount of memory required for compression is about 5 MiB plus 1 or 2
 times the dictionary size limit (1 if input file size is less than
 dictionary size limit, else 2) plus 8 times the dictionary size really
-used. For decompression is a little more than the dictionary size really
-used. Lzip will automatically use the smallest possible dictionary size
-without exceeding the given limit. It is important to appreciate that
-the decompression memory requirement is affected at compression time by
-the choice of dictionary size limit.
+used. For decompression it is a little more than the dictionary size
+really used. Lzip will automatically use the smallest possible
+dictionary size without exceeding the given limit. It is important to
+appreciate that the decompression memory requirement is affected at
+compression time by the choice of dictionary size limit.
 
 When decompressing, lzip attempts to guess the name for the decompressed
 file from that of the compressed file as follows:
@@ -274,15 +274,15 @@ as shown in the table below. Note that @samp{-9} can be much slower than
 
 @multitable {Level} {Dictionary size} {Match length limit}
 @item Level @tab Dictionary size @tab Match length limit
-@item -1 @tab  1MiB @tab  10 bytes
-@item -2 @tab  1MiB @tab  12 bytes
-@item -3 @tab  1MiB @tab  17 bytes
-@item -4 @tab  2MiB @tab  26 bytes
-@item -5 @tab  4MiB @tab  44 bytes
-@item -6 @tab  8MiB @tab  80 bytes
-@item -7 @tab 16MiB @tab 108 bytes
-@item -8 @tab 16MiB @tab 163 bytes
-@item -9 @tab 32MiB @tab 273 bytes
+@item -1 @tab  1 MiB @tab  10 bytes
+@item -2 @tab  1.5 MiB @tab  12 bytes
+@item -3 @tab  2 MiB @tab  17 bytes
+@item -4 @tab  3 MiB @tab  26 bytes
+@item -5 @tab  4 MiB @tab  44 bytes
+@item -6 @tab  8 MiB @tab  80 bytes
+@item -7 @tab 16 MiB @tab 108 bytes
+@item -8 @tab 24 MiB @tab 163 bytes
+@item -9 @tab 32 MiB @tab 273 bytes
 @end multitable
 
 @item --fast
@@ -467,6 +467,14 @@ Lziprecover is a program that searches for members in .lz files, and
 writes each member in its own .lz file. You can then use
 @w{@samp{lzip -t}} to test the integrity of the resulting files, and
 decompress those which are undamaged.
+
+Data from damaged members can be partially recovered writing it to
+stdout as shown in the following example (the resulting file may contain
+garbage data at the end):
+
+@example
+lzip -cd rec00001file.lz > rec00001file
+@end example
 
 Lziprecover takes a single argument, the name of the damaged file, and
 writes a number of files @samp{rec00001file.lz}, @samp{rec00002file.lz},

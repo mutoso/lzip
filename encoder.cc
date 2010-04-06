@@ -36,7 +36,7 @@ Prob_prices prob_prices;
 bool Matchfinder::read_block() throw()
   {
   const int size = buffer_size - stream_pos;
-  const int rd = readblock( ides_, (char *)buffer + stream_pos, size );
+  const int rd = readblock( infd_, buffer + stream_pos, size );
   stream_pos += rd;
   if( rd < size ) at_stream_end = true;
   return ( rd == size || !errno );
@@ -44,13 +44,13 @@ bool Matchfinder::read_block() throw()
 
 
 Matchfinder::Matchfinder( const int dict_size, const int len_limit,
-                          const int ides )
+                          const int infd )
   :
   partial_data_pos( 0 ),
   pos( 0 ),
   cyclic_pos( 0 ),
   stream_pos( 0 ),
-  ides_( ides ),
+  infd_( infd ),
   match_len_limit_( len_limit ),
   prev_positions( new int32_t[num_prev_positions] ),
   at_stream_end( false )
@@ -80,7 +80,7 @@ Matchfinder::Matchfinder( const int dict_size, const int len_limit,
 bool Matchfinder::reset() throw()
   {
   const int size = stream_pos - pos;
-  std::memmove( buffer, buffer + pos, size );
+  if( size > 0 ) std::memmove( buffer, buffer + pos, size );
   partial_data_pos = 0;
   stream_pos -= pos;
   pos = 0;
@@ -130,10 +130,11 @@ int Matchfinder::longest_match_len( int * const distances ) throw()
   const uint8_t * const data = buffer + pos;
   const int key2 = num_prev_positions4 + num_prev_positions3 +
                    ( ( (int)data[0] << 8 ) | data[1] );
-  const int tmp = crc32[data[0]] ^ data[1] ^ ( (int)data[2] << 8 );
-  const int key3 = num_prev_positions4 + ( tmp & ( num_prev_positions3 - 1 ) );
-  const int key4 = ( tmp ^ ( crc32[data[3]] << 5 ) ) &
-                   ( num_prev_positions4 - 1 );
+  const uint32_t tmp = crc32[data[0]] ^ data[1] ^ ( (uint32_t)data[2] << 8 );
+  const int key3 = num_prev_positions4 +
+                   (int)( tmp & ( num_prev_positions3 - 1 ) );
+  const int key4 = (int)( ( tmp ^ ( crc32[data[3]] << 5 ) ) &
+                          ( num_prev_positions4 - 1 ) );
 
   if( distances )
     {
@@ -242,8 +243,8 @@ void LZ_encoder::fill_distance_prices() throw()
   {
   for( int dis_state = 0; dis_state < max_dis_states; ++dis_state )
     {
-    int * dsp = dis_slot_prices[dis_state];
-    const Bit_model * bmds = bm_dis_slot[dis_state];
+    int * const dsp = dis_slot_prices[dis_state];
+    const Bit_model * const bmds = bm_dis_slot[dis_state];
     int slot = 0;
     for( ; slot < end_dis_model && slot < num_dis_slots; ++slot )
       dsp[slot] = price_symbol( bmds, slot, dis_slot_bits );
@@ -251,7 +252,7 @@ void LZ_encoder::fill_distance_prices() throw()
       dsp[slot] = price_symbol( bmds, slot, dis_slot_bits ) +
                   (((( slot >> 1 ) - 1 ) - dis_align_bits ) << price_shift );
 
-    int * dp = dis_prices[dis_state];
+    int * const dp = dis_prices[dis_state];
     int dis = 0;
     for( ; dis < start_dis_model; ++dis )
       dp[dis] = dsp[dis];
@@ -267,8 +268,10 @@ void LZ_encoder::fill_distance_prices() throw()
   }
 
 
-// Return value: ( dis == -1 ) && ( len == 1 ) means literal
-int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
+// Return value == number of bytes advanced (ahead).
+// trials[0]..trials[retval-1] contain the steps to encode.
+// ( trials[0].dis == -1 && trials[0].price == 1 ) means literal.
+int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
                                     const State & state )
   {
   int main_len;
@@ -303,15 +306,14 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
     return main_len;
     }
 
-  trials[0].state = state;
-  for( int i = 0; i < num_rep_distances; ++i ) trials[0].reps[i] = reps[i];
-
+  {
+  const int pos_state = matchfinder.data_position() & pos_state_mask;
   const uint8_t prev_byte = matchfinder[-1];
   const uint8_t cur_byte = matchfinder[0];
   const uint8_t match_byte = matchfinder[-reps[0]-1];
-  unsigned int position = matchfinder.data_position();
-  const int pos_state = position & pos_state_mask;
 
+  trials[0].state = state;
+  for( int i = 0; i < num_rep_distances; ++i ) trials[0].reps[i] = reps[i];
   trials[1].dis = -1;
   trials[1].prev_index = 0;
   trials[1].price = price0( bm_match[state()][pos_state] );
@@ -359,6 +361,7 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
       trials[len].update( rep, 0, price +
                                   rep_match_len_encoder.price( len, pos_state ) );
     }
+  }
 
   int cur = 0;
   int num_trials = main_len;
@@ -366,7 +369,7 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
 
   while( true )
     {
-    if( ++cur >= num_trials )
+    if( ++cur >= num_trials )		// no more initialized trials
       {
       backward( cur );
       return cur;
@@ -398,10 +401,11 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
       mtf_reps( cur_trial.dis, cur_trial.reps );
       }
 
+    const int pos_state = matchfinder.data_position() & pos_state_mask;
     const uint8_t prev_byte = matchfinder[-1];
     const uint8_t cur_byte = matchfinder[0];
     const uint8_t match_byte = matchfinder[-cur_trial.reps[0]-1];
-    const int pos_state = ++position & pos_state_mask;
+
     int next_price = cur_trial.price + price0( bm_match[cur_trial.state()][pos_state] );
     if( cur_trial.state.is_char() )
       next_price += literal_encoder.price_symbol( prev_byte, cur_byte );
@@ -445,7 +449,7 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
     if( newlen <= len_limit &&
         ( newlen > min_match_len ||
           ( newlen == min_match_len &&
-            match_distances[newlen] < modeled_distances ) ) )
+            match_distances[min_match_len] < modeled_distances ) ) )
       {
       const int normal_match_price = match_price +
                                      price0( bm_rep[cur_trial.state()] );
@@ -461,54 +465,55 @@ int LZ_encoder::best_pair_sequence( const int reps[num_rep_distances],
   }
 
 
-     // End Of Stream mark => (dis == 0xFFFFFFFF, len == min_match_len)
+     // End Of Stream mark => (dis == 0xFFFFFFFFU, len == min_match_len)
 void LZ_encoder::full_flush( const State & state )
   {
-  const int pos_state = ( matchfinder.data_position() ) & pos_state_mask;
+  const int pos_state = matchfinder.data_position() & pos_state_mask;
   range_encoder.encode_bit( bm_match[state()][pos_state], 1 );
   range_encoder.encode_bit( bm_rep[state()], 0 );
-  encode_pair( 0xFFFFFFFF, min_match_len, pos_state );
+  encode_pair( 0xFFFFFFFFU, min_match_len, pos_state );
   range_encoder.flush();
   File_trailer trailer;
   trailer.data_crc( crc() );
   trailer.data_size( matchfinder.data_position() );
-  trailer.member_size( range_encoder.member_position() + sizeof trailer );
-  for( unsigned int i = 0; i < sizeof trailer; ++i )
-    range_encoder.put_byte( ((uint8_t *)&trailer)[i] );
+  trailer.member_size( range_encoder.member_position() + File_trailer::size() );
+  for( int i = 0; i < File_trailer::size(); ++i )
+    range_encoder.put_byte( trailer.data[i] );
   range_encoder.flush_data();
   }
 
 
 LZ_encoder::LZ_encoder( Matchfinder & mf, const File_header & header,
-                        const int odes )
+                        const int outfd )
   :
   longest_match_found( 0 ),
-  crc_( 0xFFFFFFFF ),
+  crc_( 0xFFFFFFFFU ),
   matchfinder( mf ),
-  range_encoder( odes ),
+  range_encoder( outfd ),
   len_encoder( matchfinder.match_len_limit() ),
   rep_match_len_encoder( matchfinder.match_len_limit() ),
-  literal_encoder(),
   num_dis_slots( 2 * File_header::real_bits( matchfinder.dictionary_size() - 1 ) )
   {
   fill_align_prices();
 
-  for( unsigned int i = 0; i < sizeof header; ++i )
-    range_encoder.put_byte( ((uint8_t *)&header)[i] );
+  for( int i = 0; i < File_header::size; ++i )
+    range_encoder.put_byte( header.data[i] );
   }
 
 
 bool LZ_encoder::encode_member( const long long member_size )
   {
-  if( range_encoder.member_position() != sizeof( File_header ) )
+  if( range_encoder.member_position() != File_header::size )
     return false;		// can be called only once
-  const long long member_size_limit = member_size - sizeof( File_trailer ) - 16;
+  const long long member_size_limit =
+    member_size - File_trailer::size() - max_marker_size;
   int fill_counter = 0;
   int rep_distances[num_rep_distances];
   State state;
   for( int i = 0; i < num_rep_distances; ++i ) rep_distances[i] = 0;
 
-  if( !matchfinder.finished() )			// encode first byte
+  // encode first byte
+  if( matchfinder.data_position() == 0 && !matchfinder.finished() )
     {
     range_encoder.encode_bit( bm_match[state()][0], 0 );
     const uint8_t prev_byte = 0;
@@ -523,22 +528,23 @@ bool LZ_encoder::encode_member( const long long member_size )
     if( matchfinder.finished() ) { full_flush( state ); return true; }
     if( fill_counter <= 0 ) { fill_distance_prices(); fill_counter = 512; }
 
-    int ahead = best_pair_sequence( rep_distances, state );
+    int ahead = sequence_optimizer( rep_distances, state );
     if( ahead <= 0 ) return false;
     fill_counter -= ahead;
 
     for( int i = 0; ; )
       {
       const int pos_state = ( matchfinder.data_position() - ahead ) & pos_state_mask;
-      int dis = trials[i].dis;
+      const int dis = trials[i].dis;
       const int len = trials[i].price;
 
       bool bit = ( dis < 0 && len == 1 );
       range_encoder.encode_bit( bm_match[state()][pos_state], !bit );
-      if( bit )
+      if( bit )				// literal byte
         {
         const uint8_t prev_byte = matchfinder[-ahead-1];
         const uint8_t cur_byte = matchfinder[-ahead];
+        crc32.update( crc_, cur_byte );
         if( state.is_char() )
           literal_encoder.encode( range_encoder, prev_byte, cur_byte );
         else
@@ -548,8 +554,9 @@ bool LZ_encoder::encode_member( const long long member_size )
           }
         state.set_char();
         }
-      else
+      else				// match or repeated match
         {
+        crc32.update( crc_, matchfinder.ptr_to_current_pos() - ahead, len );
         mtf_reps( dis, rep_distances );
         bit = ( dis < num_rep_distances );
         range_encoder.encode_bit( bm_rep[state()], bit );
@@ -578,8 +585,6 @@ bool LZ_encoder::encode_member( const long long member_size )
           state.set_match();
           }
         }
-      for( int j = 0; j < len; ++j )
-        crc32.update( crc_, matchfinder[j-ahead] );
       ahead -= len; i += len;
       if( range_encoder.member_position() >= member_size_limit )
         {
