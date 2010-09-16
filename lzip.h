@@ -1,4 +1,4 @@
-/*  Lzip - A data compressor based on the LZMA algorithm
+/*  Lzip - Data compressor based on the LZMA algorithm
     Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -27,56 +27,63 @@ public:
 
   void set_char() throw()
     {
-    static const unsigned char next[states] = {0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 4, 5};
+    static const unsigned char next[states] =
+      { 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 4, 5 };
     st = next[st];
     }
+
   void set_match() throw()
     {
-    static const unsigned char next[states] = {7, 7, 7, 7, 7, 7, 7, 10, 10, 10, 10, 10};
+    static const unsigned char next[states] =
+      { 7, 7, 7, 7, 7, 7, 7, 10, 10, 10, 10, 10 };
     st = next[st];
     }
+
   void set_rep() throw()
     {
-    static const unsigned char next[states] = {8, 8, 8, 8, 8, 8, 8, 11, 11, 11, 11, 11};
+    static const unsigned char next[states] =
+      { 8, 8, 8, 8, 8, 8, 8, 11, 11, 11, 11, 11 };
     st = next[st];
     }
+
   void set_short_rep() throw()
     {
-    static const unsigned char next[states] = {9, 9, 9, 9, 9, 9, 9, 11, 11, 11, 11, 11};
+    static const unsigned char next[states] =
+      { 9, 9, 9, 9, 9, 9, 9, 11, 11, 11, 11, 11 };
     st = next[st];
     }
   };
 
+enum {
+  min_dictionary_bits = 12,
+  min_dictionary_size = 1 << min_dictionary_bits,
+  max_dictionary_bits = 29,
+  max_dictionary_size = 1 << max_dictionary_bits,
+  literal_context_bits = 3,
+  pos_state_bits = 2,
+  pos_states = 1 << pos_state_bits,
+  pos_state_mask = pos_states - 1,
 
-const int min_dictionary_bits = 12;
-const int min_dictionary_size = 1 << min_dictionary_bits;
-const int max_dictionary_bits = 29;
-const int max_dictionary_size = 1 << max_dictionary_bits;
-const int literal_context_bits = 3;
-const int pos_state_bits = 2;
-const int pos_states = 1 << pos_state_bits;
-const int pos_state_mask = pos_states - 1;
+  dis_slot_bits = 6,
+  start_dis_model = 4,
+  end_dis_model = 14,
+  modeled_distances = 1 << (end_dis_model / 2),
+  dis_align_bits = 4,
+  dis_align_size = 1 << dis_align_bits,
 
-const int dis_slot_bits = 6;
-const int start_dis_model = 4;
-const int end_dis_model = 14;
-const int modeled_distances = 1 << (end_dis_model / 2);
-const int dis_align_bits = 4;
-const int dis_align_size = 1 << dis_align_bits;
+  len_low_bits = 3,
+  len_mid_bits = 3,
+  len_high_bits = 8,
+  len_low_symbols = 1 << len_low_bits,
+  len_mid_symbols = 1 << len_mid_bits,
+  len_high_symbols = 1 << len_high_bits,
+  max_len_symbols = len_low_symbols + len_mid_symbols + len_high_symbols,
 
-const int len_low_bits = 3;
-const int len_mid_bits = 3;
-const int len_high_bits = 8;
-const int len_low_symbols = 1 << len_low_bits;
-const int len_mid_symbols = 1 << len_mid_bits;
-const int len_high_symbols = 1 << len_high_bits;
-const int max_len_symbols = len_low_symbols + len_mid_symbols + len_high_symbols;
+  min_match_len = 2,					// must be 2
+  max_match_len = min_match_len + max_len_symbols - 1,	// 273
+  min_match_len_limit = 5,
 
-const int min_match_len = 2;		// must be 2
-const int max_match_len = min_match_len + max_len_symbols - 1;	// 273
-const int min_match_len_limit = 5;
-
-const int max_dis_states = 4;
+  max_dis_states = 4 };
 
 inline int get_dis_state( int len ) throw()
   {
@@ -86,9 +93,9 @@ inline int get_dis_state( int len ) throw()
   }
 
 
-const int bit_model_move_bits = 5;
-const int bit_model_total_bits = 11;
-const int bit_model_total = 1 << bit_model_total_bits;
+enum { bit_model_move_bits = 5,
+       bit_model_total_bits = 11,
+       bit_model_total = 1 << bit_model_total_bits };
 
 struct Bit_model
   {
@@ -101,12 +108,14 @@ class Pretty_print
   {
   const char * const stdin_name;
   unsigned int longest_name;
+  const int verbosity_;
   std::string name_;
   mutable bool first_post;
 
 public:
-  Pretty_print( const std::vector< std::string > & filenames )
-    : stdin_name( "(stdin)" ), longest_name( 0 ), first_post( false )
+  Pretty_print( const std::vector< std::string > & filenames, const int v )
+    : stdin_name( "(stdin)" ), longest_name( 0 ), verbosity_( v ),
+      first_post( false )
     {
     const unsigned int stdin_name_len = std::strlen( stdin_name );
     for( unsigned int i = 0; i < filenames.size(); ++i )
@@ -127,6 +136,7 @@ public:
 
   void reset() const throw() { if( name_.size() ) first_post = true; }
   const char * name() const throw() { return name_.c_str(); }
+  int verbosity() const throw() { return verbosity_; }
   void operator()( const char * const msg = 0 ) const throw();
   };
 
@@ -160,6 +170,14 @@ public:
 extern const CRC32 crc32;
 
 
+inline int real_bits( const int value ) throw()
+  {
+  int bits = 0;
+  for( int i = 1, mask = 1; mask > 0; ++i, mask <<= 1 )
+    if( value & mask ) bits = i;
+  return bits;
+  }
+
 const uint8_t magic_string[4] = { 'L', 'Z', 'I', 'P' };
 
 struct File_header
@@ -177,14 +195,6 @@ struct File_header
 
   uint8_t version() const throw() { return data[4]; }
   bool verify_version() const throw() { return ( data[4] <= 1 ); }
-
-  static int real_bits( const int value ) throw()
-    {
-    int bits = 0;
-    for( int i = 1, mask = 1; mask > 0; ++i, mask <<= 1 )
-      if( value & mask ) bits = i;
-    return bits;
-    }
 
   int dictionary_size() const throw()
     {
@@ -261,13 +271,14 @@ struct File_trailer
 
 struct Error
   {
-  const char * const s;
-  Error( const char * const p ) throw() : s( p ) {}
+  const char * const msg;
+  Error( const char * const s ) throw() : msg( s ) {}
   };
 
-extern int verbosity;
 
-void show_error( const char * const msg, const int errcode = 0, const bool help = false ) throw();
+// defined in main.cc lziprecover.cc
+void show_error( const char * const msg, const int errcode = 0,
+                 const bool help = false ) throw();
 void internal_error( const char * const msg );
 int readblock( const int fd, uint8_t * const buf, const int size ) throw();
 int writeblock( const int fd, const uint8_t * const buf, const int size ) throw();

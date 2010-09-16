@@ -16,7 +16,7 @@
     a bug.
 
     Compile this file with the command:
-      g++ -O2 -Wall -W -o unzcrash testsuite/unzcrash.cc
+      g++ -Wall -W -O2 -o unzcrash testsuite/unzcrash.cc
 */
 
 #include <csignal>
@@ -26,9 +26,9 @@
 #include <unistd.h>
 
 
-int main( const int argc, const char * argv[] )
+int main( const int argc, const char * const argv[] )
   {
-  if( argc < 3 )
+  if( argc != 3 )
     {
     std::fprintf( stderr, "Usage: unzcrash \"lzip -tv\" filename.lz\n" );
     return 1;
@@ -41,8 +41,8 @@ int main( const int argc, const char * argv[] )
     return 1;
     }
 
-  const int buffer_size = 1 << 20;
-  uint8_t buffer[buffer_size];
+  const int buffer_size = 1 << 21;
+  uint8_t * const buffer = new uint8_t[buffer_size];
   const int size = std::fread( buffer, 1, buffer_size, f );
   if( size >= buffer_size )
     {
@@ -64,7 +64,7 @@ int main( const int argc, const char * argv[] )
     return 1;
     }
 
-  signal( SIGPIPE, SIG_IGN );
+  std::signal( SIGPIPE, SIG_IGN );
 
   for( int byte = 0; byte < size; ++byte )
     {
@@ -81,5 +81,6 @@ int main( const int argc, const char * argv[] )
     ++buffer[byte];
     }
 
+  delete[] buffer;
   return 0;
   }

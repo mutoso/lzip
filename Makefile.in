@@ -6,7 +6,8 @@ INSTALL_DATA = $(INSTALL) -p -m 644
 INSTALL_DIR = $(INSTALL) -d -m 755
 SHELL = /bin/sh
 
-objs = arg_parser.o decoder.o encoder.o main.o
+objs = arg_parser.o decoder.o encoder.o fast_encoder.o main.o
+recobjs = arg_parser.o decoder.o lziprecover.o
 
 
 .PHONY : all install install-info install-man install-strip \
@@ -21,8 +22,11 @@ $(progname) : $(objs)
 $(progname)_profiled : $(objs)
 	$(CXX) $(LDFLAGS) -pg -o $(progname)_profiled $(objs)
 
-lziprecover : arg_parser.o lziprecover.o
-	$(CXX) $(LDFLAGS) -o lziprecover arg_parser.o lziprecover.o
+lziprecover : $(recobjs)
+	$(CXX) $(LDFLAGS) -o lziprecover $(recobjs)
+
+unzcrash : testsuite/unzcrash.cc
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) -o $@ $<
 
 main.o : main.cc
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -DPROGVERSION=\"$(pkgversion)\" -c -o $@ $<
@@ -33,12 +37,14 @@ lziprecover.o : lziprecover.cc
 %.o : %.cc
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c -o $@ $<
 
-$(objs)       : Makefile
-arg_parser.o  : arg_parser.h
-decoder.o     : lzip.h decoder.h
-encoder.o     : lzip.h encoder.h
-main.o        : arg_parser.h lzip.h decoder.h encoder.h
-lziprecover.o : arg_parser.h lzip.h Makefile
+$(objs)        : Makefile
+arg_parser.o   : arg_parser.h
+decoder.o      : lzip.h decoder.h
+encoder.o      : lzip.h encoder.h
+fast_encoder.o : lzip.h encoder.h fast_encoder.h
+main.o         : arg_parser.h lzip.h decoder.h encoder.h fast_encoder.h
+lziprecover.o  : arg_parser.h lzip.h decoder.h Makefile
+
 
 doc : info man
 
@@ -50,18 +56,18 @@ $(VPATH)/doc/$(pkgname).info : $(VPATH)/doc/$(pkgname).texinfo
 man : $(VPATH)/doc/$(progname).1 $(VPATH)/doc/lziprecover.1
 
 $(VPATH)/doc/$(progname).1 : $(progname)
-	help2man -n 'data compressor based on the LZMA algorithm' \
+	help2man -n 'reduces the size of files' \
 	  -o $(VPATH)/doc/$(progname).1 ./$(progname)
 
 $(VPATH)/doc/lziprecover.1 : lziprecover
-	help2man -n 'recover undamaged members from lzip files' \
+	help2man -n 'recovers data from damaged lzip files' \
 	  -o $(VPATH)/doc/lziprecover.1 --no-info ./lziprecover
 
 Makefile : $(VPATH)/configure $(VPATH)/Makefile.in
 	./config.status
 
 check : all
-	@$(VPATH)/testsuite/check.sh $(VPATH)/testsuite
+	@$(VPATH)/testsuite/check.sh $(VPATH)/testsuite $(pkgversion)
 
 install : all install-info install-man
 	if [ ! -d "$(DESTDIR)$(bindir)" ] ; then $(INSTALL_DIR) "$(DESTDIR)$(bindir)" ; fi
@@ -109,8 +115,10 @@ dist : doc
 	  $(DISTNAME)/doc/$(pkgname).texinfo \
 	  $(DISTNAME)/doc/lziprecover.1 \
 	  $(DISTNAME)/testsuite/check.sh \
-	  $(DISTNAME)/testsuite/test1 \
-	  $(DISTNAME)/testsuite/test1.lz \
+	  $(DISTNAME)/testsuite/test.txt \
+	  $(DISTNAME)/testsuite/test_bad[1-5].lz \
+	  $(DISTNAME)/testsuite/test_sync.lz \
+	  $(DISTNAME)/testsuite/test_v[01].lz \
 	  $(DISTNAME)/testsuite/unzcrash.cc \
 	  $(DISTNAME)/*.h \
 	  $(DISTNAME)/*.cc

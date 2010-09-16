@@ -5,8 +5,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 5 April 2010
-@set VERSION 1.10
+@set UPDATED 16 September 2010
+@set VERSION 1.11
 
 @dircategory Data Compression
 @direntry
@@ -16,7 +16,7 @@
 
 @titlepage
 @title Lzip
-@subtitle A data compressor based on the LZMA algorithm
+@subtitle Data compressor based on the LZMA algorithm
 @subtitle for Lzip version @value{VERSION}, @value{UPDATED}
 @author by Antonio Diaz Diaz
 
@@ -24,7 +24,9 @@
 @vskip 0pt plus 1filll
 @end titlepage
 
+@ifnothtml
 @contents
+@end ifnothtml
 
 @node Top
 @top
@@ -32,14 +34,15 @@
 This manual is for Lzip (version @value{VERSION}, @value{UPDATED}).
 
 @menu
-* Introduction::	Purpose and features of lzip
-* Algorithm::		How lzip compresses the data
-* Invoking Lzip::	Command line interface
-* File Format::		Detailed format of the compressed file
-* Examples::		A small tutorial with examples
-* Lziprecover::		Recovering data from damaged compressed files
-* Problems::		Reporting bugs
-* Concept Index::	Index of concepts
+* Introduction::          Purpose and features of lzip
+* Algorithm::             How lzip compresses the data
+* Invoking Lzip::         Command line interface
+* File Format::           Detailed format of the compressed file
+* Examples::              A small tutorial with examples
+* Lziprecover::           Recovering data from damaged compressed files
+* Invoking Lziprecover::  Command line interface
+* Problems::              Reporting bugs
+* Concept Index::         Index of concepts
 @end menu
 
 @sp 1
@@ -85,11 +88,14 @@ compressed tar archives.
 The amount of memory required for compression is about 5 MiB plus 1 or 2
 times the dictionary size limit (1 if input file size is less than
 dictionary size limit, else 2) plus 8 times the dictionary size really
-used. For decompression it is a little more than the dictionary size
-really used. Lzip will automatically use the smallest possible
-dictionary size without exceeding the given limit. It is important to
-appreciate that the decompression memory requirement is affected at
-compression time by the choice of dictionary size limit.
+used. The option @samp{-0} is special and only requires about 1.5 MiB at
+most. The amount of memory required for decompression is a little more
+than the dictionary size really used.
+
+Lzip will automatically use the smallest possible dictionary size
+without exceeding the given limit. Keep in mind that the decompression
+memory requirement is affected at compression time by the choice of
+dictionary size limit.
 
 When decompressing, lzip attempts to guess the name for the decompressed
 file from that of the compressed file as follows:
@@ -122,14 +128,12 @@ caused lzip to panic.
 @cindex algorithm
 
 Lzip implements a simplified version of the LZMA (Lempel-Ziv-Markov
-chain-Algorithm) algorithm. The original LZMA algorithm was designed by
-Igor Pavlov.
-
-The high compression of LZMA comes from combining two basic, well-proven
-compression ideas: sliding dictionaries (LZ77/78) and markov models (the
-thing used by every compression algorithm that uses a range encoder or
-similar order-0 entropy coder as its last stage) with segregation of
-contexts according to what the bits are used for.
+chain-Algorithm) algorithm. The high compression of LZMA comes from
+combining two basic, well-proven compression ideas: sliding dictionaries
+(LZ77/78) and markov models (the thing used by every compression
+algorithm that uses a range encoder or similar order-0 entropy coder as
+its last stage) with segregation of contexts according to what the bits
+are used for.
 
 Lzip is a two stage compressor. The first stage is a Lempel-Ziv coder,
 which reduces redundancy by translating chunks of data to their
@@ -171,10 +175,18 @@ member or volume size limits are reached.
 
 10) If there are more data to compress, go back to step 1.
 
+@sp 1
+@noindent
+The ideas embodied in lzip are due to (at least) the following people:
+Abraham Lempel and Jacob Ziv (for the LZ algorithm), Andrey Markov (for
+the definition of Markov chains), G.N.N. Martin (for the definition of
+range encoding), Igor Pavlov (for putting all the above together in
+LZMA), and Julian Seward (for bzip2's CLI and the idea of unzcrash).
+
 
 @node Invoking Lzip
 @chapter Invoking Lzip
-@cindex invoking
+@cindex invoking lzip
 @cindex options
 @cindex usage
 @cindex version
@@ -201,7 +213,7 @@ Print the version number of lzip on the standard output and exit.
 Produce a multimember file and set the member size limit to @var{size}
 bytes. Minimum member size limit is 100kB. Small member size may degrade
 compression ratio, so use it only when needed. The default is to produce
-single member files.
+single-member files.
 
 @item --stdout
 @itemx -c
@@ -223,9 +235,9 @@ Keep (don't delete) input files during compression or decompression.
 
 @item --match-length=@var{length}
 @itemx -m @var{length}
-Set the match length limit in bytes. Valid values range from 5 to 273.
-Larger values usually give better compression ratios but longer
-compression times.
+Set the match length limit in bytes. After a match this long is found,
+the search is finished. Valid values range from 5 to 273. Larger values
+usually give better compression ratios but longer compression times.
 
 @item --output=@var{file}
 @itemx -o @var{file}
@@ -248,6 +260,10 @@ member without exceeding this limit. Note that dictionary sizes are
 quantized. If the specified size does not match one of the valid sizes,
 it will be rounded upwards.
 
+For maximum compression you should use a dictionary size limit as large
+as possible, but keep in mind that the decompression memory requirement
+is affected at compression time by the choice of dictionary size limit.
+
 @item --volume-size=@var{size}
 @itemx -S @var{size}
 Split the compressed output into several volume files with names
@@ -260,28 +276,35 @@ volume size may degrade compression ratio, so use it only when needed.
 @itemx -t
 Check integrity of the specified file(s), but don't decompress them.
 This really performs a trial decompression and throws away the result.
-Use @samp{-tvv} or @samp{-tvvv} to see information about the file.
+Use it together with @samp{-v} to see information about the file.
 
 @item --verbose
 @itemx -v
 Verbose mode. Show the compression ratio for each file processed.
 Further -v's increase the verbosity level.
 
-@item -1 .. -9
+@item -0 .. -9
 Set the compression parameters (dictionary size and match length limit)
 as shown in the table below. Note that @samp{-9} can be much slower than
-@samp{-1}. These options have no effect when decompressing.
+@samp{-0}. These options have no effect when decompressing.
+
+The bidimensional parameter space of LZMA can't be mapped to a linear
+scale optimal for all files. If your files are large, very repetitive,
+etc, you may need to use the @samp{--match-length} and
+@samp{--dictionary-size} options directly to achieve optimal
+performance.
 
 @multitable {Level} {Dictionary size} {Match length limit}
 @item Level @tab Dictionary size @tab Match length limit
-@item -1 @tab  1 MiB @tab  10 bytes
-@item -2 @tab  1.5 MiB @tab  12 bytes
-@item -3 @tab  2 MiB @tab  17 bytes
-@item -4 @tab  3 MiB @tab  26 bytes
-@item -5 @tab  4 MiB @tab  44 bytes
-@item -6 @tab  8 MiB @tab  80 bytes
-@item -7 @tab 16 MiB @tab 108 bytes
-@item -8 @tab 24 MiB @tab 163 bytes
+@item -0 @tab 64 KiB @tab  16 bytes
+@item -1 @tab  1 MiB @tab   5 bytes
+@item -2 @tab  1.5 MiB @tab   6 bytes
+@item -3 @tab  2 MiB @tab   8 bytes
+@item -4 @tab  3 MiB @tab  12 bytes
+@item -5 @tab  4 MiB @tab  20 bytes
+@item -6 @tab  8 MiB @tab  36 bytes
+@item -7 @tab 16 MiB @tab  68 bytes
+@item -8 @tab 24 MiB @tab 132 bytes
 @item -9 @tab 32 MiB @tab 273 bytes
 @end multitable
 
@@ -346,7 +369,7 @@ All multibyte values are stored in little endian order.
 
 @table @samp
 @item ID string
-A four byte string, identifying the member type, with the value "LZIP".
+A four byte string, identifying the lzip format, with the value "LZIP".
 
 @item VN (version number, 1 byte)
 Just in case something needs to be modified in the future. Valid values
@@ -381,9 +404,12 @@ safe recovery of undamaged members from multimember files.
 @chapter A small tutorial with examples
 @cindex examples
 
-WARNING! If your data is important, give the @samp{--keep} option to
-lzip and do not remove the original file until you verify the compressed
-file with a command like @samp{lzip -cd file.lz | cmp file -}.
+WARNING! Even if lzip is bug-free, other causes may result in a corrupt
+compressed file (bugs in the system libraries, memory errors, etc).
+Therefore, if the data you are going to compress is important give the
+@samp{--keep} option to lzip and do not remove the original file until
+you verify the compressed file with a command like @w{@samp{lzip -cd
+file.lz | cmp file -}}.
 
 @sp 1
 @noindent
@@ -397,7 +423,7 @@ lzip -v file
 @sp 1
 @noindent
 Example 2: Like example 1 but the created file.lz is multimember with a
-member size of 1MiB.
+member size of 1MiB. The compression ratio is not shown.
 
 @example
 lzip -b 1MiB file
@@ -405,7 +431,25 @@ lzip -b 1MiB file
 
 @sp 1
 @noindent
-Example 3: Compress a whole floppy in /dev/fd0 and send the output to
+Example 3: Restore a regular file from its compressed version file.lz.
+If the operation is successful, file.lz is removed.
+
+@example
+lzip -d file.lz
+@end example
+
+@sp 1
+@noindent
+Example 4: Verify the integrity of the compressed file file.lz and show
+status.
+
+@example
+lzip -tv file.lz
+@end example
+
+@sp 1
+@noindent
+Example 5: Compress a whole floppy in /dev/fd0 and send the output to
 file.lz.
 
 @example
@@ -414,7 +458,16 @@ lzip -c /dev/fd0 > file.lz
 
 @sp 1
 @noindent
-Example 4: Create a multivolume compressed tar archive with a volume
+Example 6: Decompress file.lz partially until 10KiB of decompressed data
+are produced.
+
+@example
+lzip -cd file.lz | dd bs=1024 count=10
+@end example
+
+@sp 1
+@noindent
+Example 7: Create a multivolume compressed tar archive with a volume
 size of 1440KiB.
 
 @example
@@ -423,7 +476,7 @@ tar -c some_directory | lzip -S 1440KiB -o volume_name
 
 @sp 1
 @noindent
-Example 5: Extract a multivolume compressed tar archive.
+Example 8: Extract a multivolume compressed tar archive.
 
 @example
 lzip -cd volume_name*.lz | tar -xf -
@@ -431,31 +484,60 @@ lzip -cd volume_name*.lz | tar -xf -
 
 @sp 1
 @noindent
-Example 6: Create a multivolume compressed backup of a big database file
+Example 9: Create a multivolume compressed backup of a big database file
 with a volume size of 650MB, where each volume is a multimember file
 with a member size of 32MiB.
 
 @example
-lzip -b 32MiB -S 650MB big_database
+lzip -b 32MiB -S 650MB big_db
+@end example
+
+@sp 1
+@anchor{ddrescue-example}
+@noindent
+Example 10: Recover a compressed backup from two copies on CD-ROM (see
+the GNU ddrescue manual for details about ddrescue)
+
+@example
+ddrescue -b2048 /dev/cdrom cdimage1 logfile1
+mount -t iso9660 -o loop,ro cdimage1 /mnt/cdimage
+cp /mnt/cdimage/backup.tar.lz rescued1.tar.lz
+umount /mnt/cdimage
+  (insert second copy in the CD drive)
+ddrescue -b2048 /dev/cdrom cdimage2 logfile2
+mount -t iso9660 -o loop,ro cdimage2 /mnt/cdimage
+cp /mnt/cdimage/backup.tar.lz rescued2.tar.lz
+umount /mnt/cdimage
+lziprecover -m -o rescued.tar.lz rescued1.tar.lz rescued2.tar.lz
 @end example
 
 @sp 1
 @noindent
-Example 7: Recover the first volume of those created in example 6 from
-two copies, @samp{big_database1_00001.lz} and
-@samp{big_database2_00001.lz}, with member 00007 damaged in the first
-copy and member 00018 damaged in the second copy. (Indented lines are
-lzip error messages).
+Example 11: Recover the first volume of those created in example 9 from
+two copies, @samp{big_db1_00001.lz} and @samp{big_db2_00001.lz}, with
+member 00007 damaged in the first copy, member 00018 damaged in the
+second copy, and member 00012 damaged in both copies. (Indented lines
+are abridged error messages from lzip/lziprecover). Two correct copies
+are produced and compared.
 
 @example
-lziprecover big_database1_00001.lz
-lziprecover big_database2_00001.lz
-lzip -t rec*big_database1_00001.lz
-  rec00007big_database1_00001.lz: crc mismatch
-lzip -t rec*big_database2_00001.lz
-  rec00018big_database1_00001.lz: crc mismatch
-cp rec00007big_database2_00001.lz rec00007big_database1_00001.lz
-cat rec*big_database1_00001.lz > big_database3_00001.lz
+lziprecover -s big_db1_00001.lz
+lziprecover -s big_db2_00001.lz
+lzip -t rec*big_db1_00001.lz
+  rec00007big_db1_00001.lz: crc mismatch
+  rec00012big_db1_00001.lz: crc mismatch
+lzip -t rec*big_db2_00001.lz
+  rec00012big_db2_00001.lz: crc mismatch
+  rec00018big_db2_00001.lz: crc mismatch
+lziprecover -m rec00012big_db1_00001.lz rec00012big_db2_00001.lz
+  Input files merged successfully
+cp rec00007big_db2_00001.lz rec00007big_db1_00001.lz
+cp rec00012big_db1_00001_fixed.lz rec00012big_db1_00001.lz
+cp rec00012big_db1_00001_fixed.lz rec00012big_db2_00001.lz
+cp rec00018big_db1_00001.lz rec00018big_db2_00001.lz
+cat rec*big_db1_00001.lz > big_db3_00001.lz
+cat rec*big_db2_00001.lz > big_db4_00001.lz
+zcmp big_db3_00001.lz big_db4_00001.lz
 @end example
 
 
@@ -463,25 +545,104 @@ cat rec*big_database1_00001.lz > big_database3_00001.lz
 @chapter Lziprecover
 @cindex lziprecover
 
-Lziprecover is a program that searches for members in .lz files, and
-writes each member in its own .lz file. You can then use
-@w{@samp{lzip -t}} to test the integrity of the resulting files, and
-decompress those which are undamaged.
+Lziprecover is a data recovery tool for lzip compressed files able to
+repair slightly damaged files, recover badly damaged files from two or
+more copies, and extract undamaged members from multi-member files.
 
-Data from damaged members can be partially recovered writing it to
-stdout as shown in the following example (the resulting file may contain
-garbage data at the end):
+Lziprecover takes as arguments the names of the damaged files and writes
+zero or more recovered files depending on the operation selected and
+whether the recovery succeeded or not. The damaged files themselves are
+never modified.
+
+If the files are too damaged for lziprecover to repair them, data from
+damaged members can be partially recovered writing it to stdout as shown
+in the following example (the resulting file may contain garbage data at
+the end):
 
 @example
 lzip -cd rec00001file.lz > rec00001file
 @end example
 
-Lziprecover takes a single argument, the name of the damaged file, and
-writes a number of files @samp{rec00001file.lz}, @samp{rec00002file.lz},
-etc, containing the extracted members. The output filenames are designed
-so that the use of wildcards in subsequent processing, for example,
-@w{@samp{lzip -dc rec*file.lz > recovered_data}}, processes the files in
-the correct order.
+If the cause of file corruption is damaged media, the combination GNU
+ddrescue + lziprecover is the best option for recovering data from
+multiple damaged copies. @xref{ddrescue-example}, for an example.
+
+@node Invoking Lziprecover
+@chapter Invoking Lziprecover
+@cindex invoking lziprecover
+
+The format for running lziprecover is:
+
+@example
+lziprecover [@var{options}] [@var{files}]
+@end example
+
+Lziprecover supports the following options:
+
+@table @samp
+@item --help
+@itemx -h
+Print an informative help message describing the options and exit.
+
+@item --version
+@itemx -V
+Print the version number of lziprecover on the standard output and exit.
+
+@item --force
+@itemx -f
+Force overwrite of output file.
+
+@item --merge
+@itemx -m
+Try to produce a correct file merging the good parts of two or more
+damaged copies. The copies must be single-member files. The merge will
+fail if the copies have too many damaged areas or if the same byte is
+damaged in all copies. If successful, a repaired copy is written to the
+file @samp{@var{file}_fixed.lz}.
+
+To give you an idea of its possibilities, when merging two copies each
+of them with one damaged area affecting 1 percent of the copy, the
+probability of obtaining a correct file is about 98 percent. With three
+such copies the probability rises to 99.97 percent. For large files with
+small errors, the probability approaches 100 percent even with only two
+copies.
+
+@item --output=@var{file}
+@itemx -o @var{file}
+Place the output into @samp{@var{file}} instead of into
+@samp{@var{file}_fixed.lz}.
+
+If splitting, the names of the files produced are in the form
+@samp{rec00001@var{file}}, etc.
+
+@item --quiet
+@itemx -q
+Quiet operation. Suppress all messages.
+
+@item --repair
+@itemx -R
+Try to repair a small error, affecting only one byte, in a single-member
+@var{file}. If successful, a repaired copy is written to the file
+@samp{@var{file}_fixed.lz}. @samp{@var{file}} is not modified at all.
+
+@item --split
+@itemx -s
+Search for members in @samp{@var{file}} and write each member in its own
+@samp{.lz} file. You can then use @samp{lzip -t} to test the integrity
+of the resulting files, decompress those which are undamaged, and try to
+repair or partially decompress those which are damaged.
+
+The names of the files produced are in the form
+@samp{rec00001@var{file}.lz}, @samp{rec00002@var{file}.lz}, etc, and are
+designed so that the use of wildcards in subsequent processing, for
+example, @w{@samp{lzip -cd rec*@var{file}.lz > recovered_data}},
+processes the files in the correct order.
+
+@item --verbose
+@itemx -v
+Verbose mode. Further -v's increase the verbosity level.
+
+@end table
 
 
 @node Problems

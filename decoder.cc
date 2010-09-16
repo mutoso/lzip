@@ -1,4 +1,4 @@
-/*  Lzip - A data compressor based on the LZMA algorithm
+/*  Lzip - Data compressor based on the LZMA algorithm
     Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -32,18 +32,17 @@
 
 const CRC32 crc32;
 
-
 bool Range_decoder::read_block()
   {
   if( !at_stream_end )
     {
-    stream_pos = readblock( infd_, buffer, buffer_size );
-    if( stream_pos != buffer_size && errno ) throw Error( "read error" );
+    stream_pos = readblock( infd, buffer, buffer_size );
+    if( stream_pos != buffer_size && errno ) throw Error( "Read error" );
     at_stream_end = ( stream_pos < buffer_size );
     partial_member_pos += pos;
     pos = 0;
     }
-  return !finished();
+  return pos < stream_pos;
   }
 
 
@@ -53,9 +52,9 @@ void LZ_decoder::flush_data()
   if( size > 0 )
     {
     crc32.update( crc_, buffer + stream_pos, size );
-    if( outfd_ >= 0 &&
-        writeblock( outfd_, buffer + stream_pos, size ) != size )
-      throw Error( "write error" );
+    if( outfd >= 0 &&
+        writeblock( outfd, buffer + stream_pos, size ) != size )
+      throw Error( "Write error" );
     if( pos >= buffer_size ) { partial_data_pos += pos; pos = 0; }
     stream_pos = pos;
     }
@@ -66,7 +65,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   {
   File_trailer trailer;
   const int trailer_size = File_trailer::size( member_version );
-  const long long member_size = member_position() + trailer_size;
+  const long long member_size = range_decoder.member_position() + trailer_size;
   bool error = false;
 
   for( int i = 0; i < trailer_size && !error; ++i )
@@ -76,10 +75,10 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     else
       {
       error = true;
-      if( verbosity >= 0 )
+      if( pp.verbosity() >= 0 )
         {
         pp();
-        std::fprintf( stderr, "trailer truncated at trailer position %d;"
+        std::fprintf( stderr, "Trailer truncated at trailer position %d;"
                               " some checks may fail.\n", i );
         }
       for( ; i < trailer_size; ++i ) trailer.data[i] = 0;
@@ -89,58 +88,73 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   if( !range_decoder.code_is_zero() )
     {
     error = true;
-    if( verbosity >= 0 )
-      {
-      pp();
-      std::fprintf( stderr, "range_decoder final code is not zero.\n" );
-      }
+    pp( "Range decoder final code is not zero" );
     }
   if( trailer.data_crc() != crc() )
     {
     error = true;
-    if( verbosity >= 0 )
+    if( pp.verbosity() >= 0 )
       {
       pp();
-      std::fprintf( stderr, "crc mismatch; trailer says %08X, data crc is %08X.\n",
+      std::fprintf( stderr, "CRC mismatch; trailer says %08X, data CRC is %08X.\n",
                     (unsigned int)trailer.data_crc(), (unsigned int)crc() );
       }
     }
   if( trailer.data_size() != data_position() )
     {
     error = true;
-    if( verbosity >= 0 )
+    if( pp.verbosity() >= 0 )
       {
       pp();
-      std::fprintf( stderr, "data size mismatch; trailer says %lld, data size is %lld (0x%llX).\n",
+      std::fprintf( stderr, "Data size mismatch; trailer says %lld, data size is %lld (0x%llX).\n",
                     trailer.data_size(), data_position(), data_position() );
       }
     }
   if( trailer.member_size() != member_size )
     {
     error = true;
-    if( verbosity >= 0 )
+    if( pp.verbosity() >= 0 )
       {
       pp();
-      std::fprintf( stderr, "member size mismatch; trailer says %lld, member size is %lld (0x%llX).\n",
+      std::fprintf( stderr, "Member size mismatch; trailer says %lld, member size is %lld (0x%llX).\n",
                     trailer.member_size(), member_size, member_size );
       }
     }
-  if( !error && verbosity >= 3 )
-    std::fprintf( stderr, "data crc %08X, data size %9lld, member size %8lld.  ",
+  if( !error && pp.verbosity() >= 4 && data_position() > 0 && member_size > 0 )
+    std::fprintf( stderr, "%6.3f:1, %6.3f bits/byte, %5.2f%% saved.  ",
+                  (double)data_position() / member_size,
+                  ( 8.0 * member_size ) / data_position(),
+                  100.0 * ( 1.0 - ( (double)member_size / data_position() ) ) );
+  if( !error && pp.verbosity() >= 3 )
+    std::fprintf( stderr, "data CRC %08X, data size %9lld, member size %8lld.  ",
                   (unsigned int)trailer.data_crc(), trailer.data_size(),
                   trailer.member_size() );
   return !error;
   }
 
 
-    // Return value: 0 = OK, 1 = decoder error, 2 = unexpected EOF,
-    //               3 = trailer error, 4 = unknown marker found.
+// Return value: 0 = OK, 1 = decoder error, 2 = unexpected EOF,
+//               3 = trailer error, 4 = unknown marker found.
 int LZ_decoder::decode_member( const Pretty_print & pp )
   {
+  Bit_model bm_match[State::states][pos_states];
+  Bit_model bm_rep[State::states];
+  Bit_model bm_rep0[State::states];
+  Bit_model bm_rep1[State::states];
+  Bit_model bm_rep2[State::states];
+  Bit_model bm_len[State::states][pos_states];
+  Bit_model bm_dis_slot[max_dis_states][1<<dis_slot_bits];
+  Bit_model bm_dis[modeled_distances-end_dis_model+1];
+  Bit_model bm_align[dis_align_size];
+
   unsigned int rep0 = 0;	// rep[0-3] latest four distances
   unsigned int rep1 = 0;	// used for efficient coding of
   unsigned int rep2 = 0;	// repeated distances
   unsigned int rep3 = 0;
+
+  Len_decoder len_decoder;
+  Len_decoder rep_match_len_decoder;
+  Literal_decoder literal_decoder;
   State state;
   range_decoder.load();
 
@@ -150,7 +164,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
     const int pos_state = data_position() & pos_state_mask;
     if( range_decoder.decode_bit( bm_match[state()][pos_state] ) == 0 )
       {
-      const uint8_t prev_byte = get_byte( 0 );
+      const uint8_t prev_byte = get_prev_byte();
       if( state.is_char() )
         put_byte( literal_decoder.decode( range_decoder, prev_byte ) );
       else
@@ -164,12 +178,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
       if( range_decoder.decode_bit( bm_rep[state()] ) == 1 )
         {
         len = 0;
-        if( range_decoder.decode_bit( bm_rep0[state()] ) == 0 )
-          {
-          if( range_decoder.decode_bit( bm_len[state()][pos_state] ) == 0 )
-            { len = 1; state.set_short_rep(); }
-          }
-        else
+        if( range_decoder.decode_bit( bm_rep0[state()] ) == 1 )
           {
           unsigned int distance;
           if( range_decoder.decode_bit( bm_rep1[state()] ) == 0 )
@@ -184,15 +193,20 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
           rep1 = rep0;
           rep0 = distance;
           }
+        else
+          {
+          if( range_decoder.decode_bit( bm_len[state()][pos_state] ) == 0 )
+            { state.set_short_rep(); len = 1; }
+          }
         if( len == 0 )
           {
-          len = min_match_len + rep_match_len_decoder.decode( range_decoder, pos_state );
           state.set_rep();
+          len = min_match_len + rep_match_len_decoder.decode( range_decoder, pos_state );
           }
         }
       else
         {
-        unsigned int rep0_saved = rep0;
+        const unsigned int rep0_saved = rep0;
         len = min_match_len + len_decoder.decode( range_decoder, pos_state );
         const int dis_slot = range_decoder.decode_tree( bm_dis_slot[get_dis_state(len)], dis_slot_bits );
         if( dis_slot < start_dis_model ) rep0 = dis_slot;
@@ -219,19 +233,20 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
                 {
                 range_decoder.load(); continue;
                 }
-              if( verbosity >= 0 )
+              if( pp.verbosity() >= 0 )
                 {
                 pp();
-                std::fprintf( stderr, "unsupported marker code `%d'.\n", len );
+                std::fprintf( stderr, "Unsupported marker code `%d'.\n", len );
                 }
               return 4;
               }
-            if( rep0 >= (unsigned int)dictionary_size )
-              { flush_data(); return 1; }
             }
           }
         rep3 = rep2; rep2 = rep1; rep1 = rep0_saved;
         state.set_match();
+        if( rep0 >= (unsigned int)dictionary_size ||
+            ( rep0 >= (unsigned int)pos && !partial_data_pos ) )
+          { flush_data(); return 1; }
         }
       copy_block( rep0, len );
       }

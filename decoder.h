@@ -1,4 +1,4 @@
-/*  Lzip - A data compressor based on the LZMA algorithm
+/*  Lzip - Data compressor based on the LZMA algorithm
     Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -20,17 +20,17 @@ class Range_decoder
   enum { buffer_size = 16384 };
   long long partial_member_pos;
   uint8_t * const buffer;	// input buffer
-  int pos;
+  int pos;			// current pos in buffer
   int stream_pos;		// when reached, a new block must be read
   uint32_t code;
   uint32_t range;
-  const int infd_;		// input file descriptor
+  const int infd;		// input file descriptor
   bool at_stream_end;
 
   bool read_block();
 
 public:
-  Range_decoder( const int infd )
+  Range_decoder( const int ifd )
     :
     partial_member_pos( 0 ),
     buffer( new uint8_t[buffer_size] ),
@@ -38,13 +38,13 @@ public:
     stream_pos( 0 ),
     code( 0 ),
     range( 0xFFFFFFFFU ),
-    infd_( infd ),
+    infd( ifd ),
     at_stream_end( false ) {}
 
   ~Range_decoder() { delete[] buffer; }
 
   bool code_is_zero() const throw() { return ( code == 0 ); }
-  bool finished() const throw() { return at_stream_end && pos >= stream_pos; }
+  bool finished() { return pos >= stream_pos && !read_block(); }
   long long member_position() const throw()
     { return partial_member_pos + pos; }
   void reset_member_position() throw()
@@ -52,11 +52,11 @@ public:
 
   uint8_t get_byte()
     {
-    if( pos >= stream_pos && !read_block() ) return 0;
+    if( finished() ) return 0;
     return buffer[pos++];
     }
 
-  void load() throw()
+  void load()
     {
     code = 0;
     range = 0xFFFFFFFFU;
@@ -185,36 +185,32 @@ public:
 
   uint8_t decode_matched( Range_decoder & range_decoder,
                           const uint8_t prev_byte, const uint8_t match_byte )
-    { return range_decoder.decode_matched( bm_literal[lstate(prev_byte)], match_byte ); }
+    { return range_decoder.decode_matched( bm_literal[lstate(prev_byte)],
+                                           match_byte ); }
   };
 
 
 class LZ_decoder
   {
   long long partial_data_pos;
-  const int member_version;
   const int dictionary_size;
   const int buffer_size;
-  uint8_t * const buffer;
-  int pos;
+  uint8_t * const buffer;	// output buffer
+  int pos;			// current pos in buffer
   int stream_pos;		// first byte not yet written to file
   uint32_t crc_;
-  const int outfd_;		// output file descriptor
-
-  Bit_model bm_match[State::states][pos_states];
-  Bit_model bm_rep[State::states];
-  Bit_model bm_rep0[State::states];
-  Bit_model bm_rep1[State::states];
-  Bit_model bm_rep2[State::states];
-  Bit_model bm_len[State::states][pos_states];
-  Bit_model bm_dis_slot[max_dis_states][1<<dis_slot_bits];
-  Bit_model bm_dis[modeled_distances-end_dis_model];
-  Bit_model bm_align[dis_align_size];
-
+  const int outfd;		// output file descriptor
+  const int member_version;
   Range_decoder & range_decoder;
-  Len_decoder len_decoder;
-  Len_decoder rep_match_len_decoder;
-  Literal_decoder literal_decoder;
+
+  void flush_data();
+  bool verify_trailer( const Pretty_print & pp ) const;
+
+  uint8_t get_prev_byte() const throw()
+    {
+    const int i = ( ( pos > 0 ) ? pos : buffer_size ) - 1;
+    return buffer[i];
+    }
 
   uint8_t get_byte( const int distance ) const throw()
     {
@@ -238,7 +234,7 @@ class LZ_decoder
       std::memcpy( buffer + pos, buffer + i, len );
       pos += len;
       }
-    else for( ; len > 0 ; --len )
+    else for( ; len > 0; --len )
       {
       buffer[pos] = buffer[i];
       if( ++pos >= buffer_size ) flush_data();
@@ -246,31 +242,27 @@ class LZ_decoder
       }
     }
 
-  void flush_data();
-  bool verify_trailer( const Pretty_print & pp ) const;
-
 public:
-  LZ_decoder( const File_header & header, Range_decoder & rdec, const int outfd )
+  LZ_decoder( const File_header & header, Range_decoder & rdec, const int ofd )
     :
     partial_data_pos( 0 ),
-    member_version( header.version() ),
     dictionary_size( header.dictionary_size() ),
     buffer_size( std::max( 65536, dictionary_size ) ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),
     stream_pos( 0 ),
     crc_( 0xFFFFFFFFU ),
-    outfd_( outfd ),
+    outfd( ofd ),
+    member_version( header.version() ),
     range_decoder( rdec )
     { buffer[buffer_size-1] = 0; }	// prev_byte of first_byte
 
   ~LZ_decoder() { delete[] buffer; }
 
   uint32_t crc() const throw() { return crc_ ^ 0xFFFFFFFFU; }
-  int decode_member( const Pretty_print & pp );
 
-  long long member_position() const throw()
-    { return range_decoder.member_position(); }
   long long data_position() const throw()
     { return partial_data_pos + pos; }
+
+  int decode_member( const Pretty_print & pp );
   };

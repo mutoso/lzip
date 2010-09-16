@@ -1,3 +1,38 @@
+2010-09-16  Antonio Diaz Diaz  <ant_diaz@teleline.es>
+
+	* Version 1.11 released.
+	* Added new option `-0' which produces a compression speed and
+	  ratio comparable to those of `gzip -9'.
+	* fast_encoder.h fast_encoder.cc: New files.
+	* main.cc: Match length limit set by options -1 to -8 has been
+	  reduced to extend range of use towards gzip. Lower numbers now
+	  compress less but faster. (-1 now takes 43% less time for only
+	  20% larger compressed size).
+	* encoder.cc: Compression of option -9 has been slightly increased.
+	* lziprecover.cc: Added new option "--merge" which tries to
+	  produce a correct file merging the good parts of two or more
+	  damaged copies.
+	* lziprecover.cc: Added new option "--repair" for repairing a
+	  1-byte error in single-member files.
+	* decoder.cc (decode_member): Detect file errors earlier to
+	  improve efficiency of lziprecover's new repair capability.
+	  This change also prevents (harmless) access to uninitialized
+	  memory when decompressing a corrupt file.
+	* lziprecover.cc: Added new option "--force".
+	* lziprecover.cc: Added new option "--output".
+	* lziprecover.cc: Added new option "--split" to select the until
+	  now only operation of splitting multimember files.
+	* lziprecover.cc: If no operation is specified, warn the user
+	  and do nothing.
+	* main.cc: Fixed warning about fchown's return value being ignored.
+	* decoder.cc: "-tvvvv" now also shows compression ratio.
+	* main.cc: Set stdin/stdout in binary mode on MSVC and OS2.
+	* New examples have been added to the manual.
+	* testsuite: "test1" renamed to "test.txt"
+	* Matchfinder types HC4 (4 bytes hash-chain) and HT4 (4 bytes
+	  hash-table) have been tested and found no better than the
+	  current BT4.
+
 2010-04-05  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.10 released.
@@ -13,7 +48,7 @@
 2010-01-17  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.9 released.
-	* main.cc (main): return at least 1 if closing stdout fails.
+	* main.cc (main): Return at least 1 if closing stdout fails.
 	* Makefile.in: Added "--name" option to help2man invocation.
 	* testsuite/check.sh: Use "test1" instead of "COPYING" for testing.
 
@@ -140,5 +175,5 @@
 Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
 This file is a collection of facts, and thus it is not copyrightable,
-but just in case, I give you unlimited permission to copy, distribute
-and modify it.
+but just in case, you have unlimited permission to copy, distribute and
+modify it.

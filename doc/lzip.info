@@ -11,18 +11,19 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip Manual
 ***********
 
-This manual is for Lzip (version 1.10, 5 April 2010).
+This manual is for Lzip (version 1.11, 16 September 2010).
 
 * Menu:
 
-* Introduction::	Purpose and features of lzip
-* Algorithm::		How lzip compresses the data
-* Invoking Lzip::	Command line interface
-* File Format::		Detailed format of the compressed file
-* Examples::		A small tutorial with examples
-* Lziprecover::		Recovering data from damaged compressed files
-* Problems::		Reporting bugs
-* Concept Index::	Index of concepts
+* Introduction::          Purpose and features of lzip
+* Algorithm::             How lzip compresses the data
+* Invoking Lzip::         Command line interface
+* File Format::           Detailed format of the compressed file
+* Examples::              A small tutorial with examples
+* Lziprecover::           Recovering data from damaged compressed files
+* Invoking Lziprecover::  Command line interface
+* Problems::              Reporting bugs
+* Concept Index::         Index of concepts
 
 
    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
@@ -68,11 +69,14 @@ multivolume compressed tar archives.
    The amount of memory required for compression is about 5 MiB plus 1
 or 2 times the dictionary size limit (1 if input file size is less than
 dictionary size limit, else 2) plus 8 times the dictionary size really
-used. For decompression it is a little more than the dictionary size
-really used. Lzip will automatically use the smallest possible
-dictionary size without exceeding the given limit. It is important to
-appreciate that the decompression memory requirement is affected at
-compression time by the choice of dictionary size limit.
+used. The option `-0' is special and only requires about 1.5 MiB at
+most. The amount of memory required for decompression is a little more
+than the dictionary size really used.
+
+   Lzip will automatically use the smallest possible dictionary size
+without exceeding the given limit. Keep in mind that the decompression
+memory requirement is affected at compression time by the choice of
+dictionary size limit.
 
    When decompressing, lzip attempts to guess the name for the
 decompressed file from that of the compressed file as follows:
@@ -104,14 +108,12 @@ File: lzip.info,  Node: Algorithm,  Next: Invoking Lzip,  Prev: Introduction,  U
 ***********
 
 Lzip implements a simplified version of the LZMA (Lempel-Ziv-Markov
-chain-Algorithm) algorithm. The original LZMA algorithm was designed by
-Igor Pavlov.
-
-   The high compression of LZMA comes from combining two basic,
-well-proven compression ideas: sliding dictionaries (LZ77/78) and
-markov models (the thing used by every compression algorithm that uses
-a range encoder or similar order-0 entropy coder as its last stage)
-with segregation of contexts according to what the bits are used for.
+chain-Algorithm) algorithm. The high compression of LZMA comes from
+combining two basic, well-proven compression ideas: sliding dictionaries
+(LZ77/78) and markov models (the thing used by every compression
+algorithm that uses a range encoder or similar order-0 entropy coder as
+its last stage) with segregation of contexts according to what the bits
+are used for.
 
    Lzip is a two stage compressor. The first stage is a Lempel-Ziv
 coder, which reduces redundancy by translating chunks of data to their
@@ -153,6 +155,13 @@ member or volume size limits are reached.
 
    10) If there are more data to compress, go back to step 1.
 
+
+The ideas embodied in lzip are due to (at least) the following people:
+Abraham Lempel and Jacob Ziv (for the LZ algorithm), Andrey Markov (for
+the definition of Markov chains), G.N.N. Martin (for the definition of
+range encoding), Igor Pavlov (for putting all the above together in
+LZMA), and Julian Seward (for bzip2's CLI and the idea of unzcrash).
+
 
 File: lzip.info,  Node: Invoking Lzip,  Next: File Format,  Prev: Algorithm,  Up: Top
 
@@ -178,7 +187,7 @@ The format for running lzip is:
      Produce a multimember file and set the member size limit to SIZE
      bytes. Minimum member size limit is 100kB. Small member size may
      degrade compression ratio, so use it only when needed. The default
-     is to produce single member files.
+     is to produce single-member files.
 
 `--stdout'
 `-c'
@@ -202,9 +211,10 @@ The format for running lzip is:
 
 `--match-length=LENGTH'
 `-m LENGTH'
-     Set the match length limit in bytes. Valid values range from 5 to
-     273.  Larger values usually give better compression ratios but
-     longer compression times.
+     Set the match length limit in bytes. After a match this long is
+     found, the search is finished. Valid values range from 5 to 273.
+     Larger values usually give better compression ratios but longer
+     compression times.
 
 `--output=FILE'
 `-o FILE'
@@ -227,6 +237,11 @@ The format for running lzip is:
      dictionary sizes are quantized. If the specified size does not
      match one of the valid sizes, it will be rounded upwards.
 
+     For maximum compression you should use a dictionary size limit as
+     large as possible, but keep in mind that the decompression memory
+     requirement is affected at compression time by the choice of
+     dictionary size limit.
+
 `--volume-size=SIZE'
 `-S SIZE'
      Split the compressed output into several volume files with names
@@ -240,28 +255,35 @@ The format for running lzip is:
 `-t'
      Check integrity of the specified file(s), but don't decompress
      them.  This really performs a trial decompression and throws away
-     the result.  Use `-tvv' or `-tvvv' to see information about the
-     file.
+     the result.  Use it together with `-v' to see information about
+     the file.
 
 `--verbose'
 `-v'
      Verbose mode. Show the compression ratio for each file processed.
      Further -v's increase the verbosity level.
 
-`-1 .. -9'
+`-0 .. -9'
      Set the compression parameters (dictionary size and match length
      limit) as shown in the table below. Note that `-9' can be much
-     slower than `-1'. These options have no effect when decompressing.
+     slower than `-0'. These options have no effect when decompressing.
+
+     The bidimensional parameter space of LZMA can't be mapped to a
+     linear scale optimal for all files. If your files are large, very
+     repetitive, etc, you may need to use the `--match-length' and
+     `--dictionary-size' options directly to achieve optimal
+     performance.
 
      Level   Dictionary size   Match length limit
-     -1      1 MiB             10 bytes
-     -2      1.5 MiB           12 bytes
-     -3      2 MiB             17 bytes
-     -4      3 MiB             26 bytes
-     -5      4 MiB             44 bytes
-     -6      8 MiB             80 bytes
-     -7      16 MiB            108 bytes
-     -8      24 MiB            163 bytes
+     -0      64 KiB            16 bytes
+     -1      1 MiB             5 bytes
+     -2      1.5 MiB           6 bytes
+     -3      2 MiB             8 bytes
+     -4      3 MiB             12 bytes
+     -5      4 MiB             20 bytes
+     -6      8 MiB             36 bytes
+     -7      16 MiB            68 bytes
+     -8      24 MiB            132 bytes
      -9      32 MiB            273 bytes
 
 `--fast'
@@ -316,7 +338,7 @@ additional information before, between, or after them.
    All multibyte values are stored in little endian order.
 
 `ID string'
-     A four byte string, identifying the member type, with the value
+     A four byte string, identifying the lzip format, with the value
      "LZIP".
 
 `VN (version number, 1 byte)'
@@ -353,9 +375,12 @@ File: lzip.info,  Node: Examples,  Next: Lziprecover,  Prev: File Format,  Up: T
 5 A small tutorial with examples
 ********************************
 
-WARNING! If your data is important, give the `--keep' option to lzip
-and do not remove the original file until you verify the compressed
-file with a command like `lzip -cd file.lz | cmp file -'.
+WARNING! Even if lzip is bug-free, other causes may result in a corrupt
+compressed file (bugs in the system libraries, memory errors, etc).
+Therefore, if the data you are going to compress is important give the
+`--keep' option to lzip and do not remove the original file until you
+verify the compressed file with a command like
+`lzip -cd file.lz | cmp file -'.
 
 
 Example 1: Replace a regular file with its compressed version file.lz
@@ -365,77 +390,198 @@ and show the compression ratio.
 
 
 Example 2: Like example 1 but the created file.lz is multimember with a
-member size of 1MiB.
+member size of 1MiB. The compression ratio is not shown.
 
      lzip -b 1MiB file
 
 
-Example 3: Compress a whole floppy in /dev/fd0 and send the output to
+Example 3: Restore a regular file from its compressed version file.lz.
+If the operation is successful, file.lz is removed.
+
+     lzip -d file.lz
+
+
+Example 4: Verify the integrity of the compressed file file.lz and show
+status.
+
+     lzip -tv file.lz
+
+
+Example 5: Compress a whole floppy in /dev/fd0 and send the output to
 file.lz.
 
      lzip -c /dev/fd0 > file.lz
 
 
-Example 4: Create a multivolume compressed tar archive with a volume
+Example 6: Decompress file.lz partially until 10KiB of decompressed data
+are produced.
+
+     lzip -cd file.lz | dd bs=1024 count=10
+
+
+Example 7: Create a multivolume compressed tar archive with a volume
 size of 1440KiB.
 
      tar -c some_directory | lzip -S 1440KiB -o volume_name
 
 
-Example 5: Extract a multivolume compressed tar archive.
+Example 8: Extract a multivolume compressed tar archive.
 
      lzip -cd volume_name*.lz | tar -xf -
 
 
-Example 6: Create a multivolume compressed backup of a big database file
+Example 9: Create a multivolume compressed backup of a big database file
 with a volume size of 650MB, where each volume is a multimember file
 with a member size of 32MiB.
 
-     lzip -b 32MiB -S 650MB big_database
+     lzip -b 32MiB -S 650MB big_db
 
 
-Example 7: Recover the first volume of those created in example 6 from
-two copies, `big_database1_00001.lz' and `big_database2_00001.lz', with
-member 00007 damaged in the first copy and member 00018 damaged in the
-second copy. (Indented lines are lzip error messages).
+Example 10: Recover a compressed backup from two copies on CD-ROM (see
+the GNU ddrescue manual for details about ddrescue)
 
-     lziprecover big_database1_00001.lz
-     lziprecover big_database2_00001.lz
-     lzip -t rec*big_database1_00001.lz
-       rec00007big_database1_00001.lz: crc mismatch
-     lzip -t rec*big_database2_00001.lz
-       rec00018big_database1_00001.lz: crc mismatch
-     cp rec00007big_database2_00001.lz rec00007big_database1_00001.lz
-     cat rec*big_database1_00001.lz > big_database3_00001.lz
+     ddrescue -b2048 /dev/cdrom cdimage1 logfile1
+     mount -t iso9660 -o loop,ro cdimage1 /mnt/cdimage
+     cp /mnt/cdimage/backup.tar.lz rescued1.tar.lz
+     umount /mnt/cdimage
+       (insert second copy in the CD drive)
+     ddrescue -b2048 /dev/cdrom cdimage2 logfile2
+     mount -t iso9660 -o loop,ro cdimage2 /mnt/cdimage
+     cp /mnt/cdimage/backup.tar.lz rescued2.tar.lz
+     umount /mnt/cdimage
+     lziprecover -m -o rescued.tar.lz rescued1.tar.lz rescued2.tar.lz
+
+
+Example 11: Recover the first volume of those created in example 9 from
+two copies, `big_db1_00001.lz' and `big_db2_00001.lz', with member
+00007 damaged in the first copy, member 00018 damaged in the second
+copy, and member 00012 damaged in both copies. (Indented lines are
+abridged error messages from lzip/lziprecover). Two correct copies are
+produced and compared.
+
+     lziprecover -s big_db1_00001.lz
+     lziprecover -s big_db2_00001.lz
+     lzip -t rec*big_db1_00001.lz
+       rec00007big_db1_00001.lz: crc mismatch
+       rec00012big_db1_00001.lz: crc mismatch
+     lzip -t rec*big_db2_00001.lz
+       rec00012big_db2_00001.lz: crc mismatch
+       rec00018big_db2_00001.lz: crc mismatch
+     lziprecover -m rec00012big_db1_00001.lz rec00012big_db2_00001.lz
+       Input files merged successfully
+     cp rec00007big_db2_00001.lz rec00007big_db1_00001.lz
+     cp rec00012big_db1_00001_fixed.lz rec00012big_db1_00001.lz
+     cp rec00012big_db1_00001_fixed.lz rec00012big_db2_00001.lz
+     cp rec00018big_db1_00001.lz rec00018big_db2_00001.lz
+     cat rec*big_db1_00001.lz > big_db3_00001.lz
+     cat rec*big_db2_00001.lz > big_db4_00001.lz
+     zcmp big_db3_00001.lz big_db4_00001.lz
 
 
-File: lzip.info,  Node: Lziprecover,  Next: Problems,  Prev: Examples,  Up: Top
+File: lzip.info,  Node: Lziprecover,  Next: Invoking Lziprecover,  Prev: Examples,  Up: Top
 
 6 Lziprecover
 *************
 
-Lziprecover is a program that searches for members in .lz files, and
-writes each member in its own .lz file. You can then use `lzip -t' to
-test the integrity of the resulting files, and decompress those which
-are undamaged.
+Lziprecover is a data recovery tool for lzip compressed files able to
+repair slightly damaged files, recover badly damaged files from two or
+more copies, and extract undamaged members from multi-member files.
 
-   Data from damaged members can be partially recovered writing it to
-stdout as shown in the following example (the resulting file may contain
-garbage data at the end):
+   Lziprecover takes as arguments the names of the damaged files and
+writes zero or more recovered files depending on the operation selected
+and whether the recovery succeeded or not. The damaged files themselves
+are never modified.
+
+   If the files are too damaged for lziprecover to repair them, data
+from damaged members can be partially recovered writing it to stdout as
+shown in the following example (the resulting file may contain garbage
+data at the end):
 
      lzip -cd rec00001file.lz > rec00001file
 
-   Lziprecover takes a single argument, the name of the damaged file,
-and writes a number of files `rec00001file.lz', `rec00002file.lz', etc,
-containing the extracted members. The output filenames are designed so
-that the use of wildcards in subsequent processing, for example,
-`lzip -dc rec*file.lz > recovered_data', processes the files in the
-correct order.
+   If the cause of file corruption is damaged media, the combination GNU
+ddrescue + lziprecover is the best option for recovering data from
+multiple damaged copies. *Note ddrescue-example::, for an example.
 
 
-File: lzip.info,  Node: Problems,  Next: Concept Index,  Prev: Lziprecover,  Up: Top
+File: lzip.info,  Node: Invoking Lziprecover,  Next: Problems,  Prev: Lziprecover,  Up: Top
 
-7 Reporting Bugs
+7 Invoking Lziprecover
+**********************
+
+The format for running lziprecover is:
+
+     lziprecover [OPTIONS] [FILES]
+
+   Lziprecover supports the following options:
+
+`--help'
+`-h'
+     Print an informative help message describing the options and exit.
+
+`--version'
+`-V'
+     Print the version number of lziprecover on the standard output and
+     exit.
+
+`--force'
+`-f'
+     Force overwrite of output file.
+
+`--merge'
+`-m'
+     Try to produce a correct file merging the good parts of two or more
+     damaged copies. The copies must be single-member files. The merge
+     will fail if the copies have too many damaged areas or if the same
+     byte is damaged in all copies. If successful, a repaired copy is
+     written to the file `FILE_fixed.lz'.
+
+     To give you an idea of its possibilities, when merging two copies
+     each of them with one damaged area affecting 1 percent of the
+     copy, the probability of obtaining a correct file is about 98
+     percent. With three such copies the probability rises to 99.97
+     percent. For large files with small errors, the probability
+     approaches 100 percent even with only two copies.
+
+`--output=FILE'
+`-o FILE'
+     Place the output into `FILE' instead of into `FILE_fixed.lz'.
+
+     If splitting, the names of the files produced are in the form
+     `rec00001FILE', etc.
+
+`--quiet'
+`-q'
+     Quiet operation. Suppress all messages.
+
+`--repair'
+`-R'
+     Try to repair a small error, affecting only one byte, in a
+     single-member FILE. If successful, a repaired copy is written to
+     the file `FILE_fixed.lz'. `FILE' is not modified at all.
+
+`--split'
+`-s'
+     Search for members in `FILE' and write each member in its own
+     `.lz' file. You can then use `lzip -t' to test the integrity of
+     the resulting files, decompress those which are undamaged, and try
+     to repair or partially decompress those which are damaged.
+
+     The names of the files produced are in the form `rec00001FILE.lz',
+     `rec00002FILE.lz', etc, and are designed so that the use of
+     wildcards in subsequent processing, for example,
+     `lzip -cd rec*FILE.lz > recovered_data', processes the files in
+     the correct order.
+
+`--verbose'
+`-v'
+     Verbose mode. Further -v's increase the verbosity level.
+
+
+
+File: lzip.info,  Node: Problems,  Next: Concept Index,  Prev: Invoking Lziprecover,  Up: Top
+
+8 Reporting Bugs
 ****************
 
 There are probably bugs in lzip. There are certainly errors and
@@ -462,7 +608,8 @@ Concept Index
 * file format:                           File Format.           (line 6)
 * getting help:                          Problems.              (line 6)
 * introduction:                          Introduction.          (line 6)
-* invoking:                              Invoking Lzip.         (line 6)
+* invoking lzip:                         Invoking Lzip.         (line 6)
+* invoking lziprecover:                  Invoking Lziprecover.  (line 6)
 * lziprecover:                           Lziprecover.           (line 6)
 * options:                               Invoking Lzip.         (line 6)
 * usage:                                 Invoking Lzip.         (line 6)
@@ -472,13 +619,15 @@ Concept Index
 
 Tag Table:
 Node: Top224
-Node: Introduction897
-Node: Algorithm4207
-Node: Invoking Lzip6433
-Node: File Format10780
-Node: Examples12734
-Node: Lziprecover14572
-Node: Problems15487
-Node: Concept Index16012
+Node: Introduction1029
+Node: Algorithm4421
+Node: Invoking Lzip6939
+Node: File Format11911
+Node: Examples13865
+Ref: ddrescue-example15619
+Node: Lziprecover17412
+Node: Invoking Lziprecover18465
+Node: Problems20826
+Node: Concept Index21360
 
 End Tag Table

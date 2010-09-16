@@ -1,4 +1,4 @@
-/*  Lzip - A data compressor based on the LZMA algorithm
+/*  Lzip - Data compressor based on the LZMA algorithm
     Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -15,8 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-const int max_num_trials = 1 << 12;
-const int price_shift = 6;
+enum { max_num_trials = 1 << 12,
+       price_shift = 6 };
 
 class Dis_slots
   {
@@ -34,6 +34,8 @@ public:
       i += size;
       }
     }
+
+  unsigned char table( const int dis ) const throw() { return data[dis]; }
 
   int operator[]( const uint32_t dis ) const throw()
     {
@@ -54,13 +56,13 @@ public:
   void init() throw()
     {
     const int num_bits = ( bit_model_total_bits - 2 );
-    for( int i = num_bits - 1; i >= 0; --i )
+    int j = 1, end = 2;
+    data[0] = bit_model_total_bits << price_shift;
+    for( int i = num_bits - 1; i >= 0; --i, end <<= 1 )
       {
-      int start = 1 << ( num_bits - i - 1 );
-      int end = 1 << ( num_bits - i);
-      for( int j = start; j < end; ++j )
-        data[j] = (i << price_shift) +
-            ( ((end - j) << price_shift) >> (num_bits - i - 1) );
+      for( ; j < end; ++j )
+        data[j] = ( i << price_shift ) +
+                  ( ( (end - j) << price_shift ) >> ( num_bits - i - 1 ) );
       }
     }
 
@@ -83,8 +85,8 @@ inline int price_bit( const Bit_model & bm, const int bit ) throw()
 
 inline int price_symbol( const Bit_model bm[], int symbol, const int num_bits ) throw()
   {
-  symbol |= ( 1 << num_bits );
   int price = 0;
+  symbol |= ( 1 << num_bits );
   while( symbol > 1 )
     {
     const int bit = symbol & 1;
@@ -151,23 +153,24 @@ class Matchfinder
                               num_prev_positions2 };
 
   long long partial_data_pos;
-  int dictionary_size_;		// bytes to keep in buffer before pos
-  int buffer_size;
-  uint8_t * buffer;
-  int pos;
-  int cyclic_pos;
-  int stream_pos;		// first byte not yet read from file
-  int pos_limit;		// when reached, a new block must be read
-  const int infd_;		// input file descriptor
-  const int match_len_limit_;
+  uint8_t * buffer;		// input buffer
   int32_t * const prev_positions;	// last seen position of key
   int32_t * prev_pos_tree;
+  int dictionary_size_;		// bytes to keep in buffer before pos
+  int buffer_size;
+  int pos;			// current pos in buffer
+  int cyclic_pos;		// current pos in dictionary
+  int stream_pos;		// first byte not yet read from file
+  int pos_limit;		// when reached, a new block must be read
+  const int match_len_limit_;
+  const int cycles;
+  const int infd;		// input file descriptor
   bool at_stream_end;		// stream_pos shows real end of file
 
-  bool read_block() throw();
+  bool read_block();
 
 public:
-  Matchfinder( const int dict_size, const int len_limit, const int infd );
+  Matchfinder( const int dict_size, const int len_limit, const int ifd );
 
   ~Matchfinder()
     { delete[] prev_pos_tree; delete[] prev_positions; std::free( buffer ); }
@@ -199,8 +202,8 @@ public:
     return i;
     }
 
-  bool reset() throw();
-  bool move_pos() throw();
+  void reset();
+  void move_pos();
   int longest_match_len( int * const distances = 0 ) throw();
   };
 
@@ -210,11 +213,11 @@ class Range_encoder
   enum { buffer_size = 65536 };
   uint64_t low;
   long long partial_member_pos;
-  uint8_t * const buffer;
-  int pos;
+  uint8_t * const buffer;	// output buffer
+  int pos;			// current pos in buffer
   uint32_t range;
   int ff_count;
-  const int outfd_;		// output file descriptor
+  const int outfd;		// output file descriptor
   uint8_t cache;
 
   void shift_low()
@@ -231,7 +234,7 @@ class Range_encoder
     }
 
 public:
-  Range_encoder( const int outfd )
+  Range_encoder( const int ofd )
     :
     low( 0 ),
     partial_member_pos( 0 ),
@@ -239,26 +242,13 @@ public:
     pos( 0 ),
     range( 0xFFFFFFFFU ),
     ff_count( 0 ),
-    outfd_( outfd ),
+    outfd( ofd ),
     cache( 0 ) {}
 
   ~Range_encoder() { delete[] buffer; }
 
-  void flush_data()
-    {
-    if( pos > 0 )
-      {
-      if( outfd_ >= 0 )
-        {
-        const int wr = writeblock( outfd_, buffer, pos );
-        if( wr != pos ) throw Error( "write error" );
-        }
-      partial_member_pos += pos;
-      pos = 0;
-      }
-    }
-
   void flush() { for( int i = 0; i < 5; ++i ) shift_low(); }
+  void flush_data();
 
   long long member_position() const throw()
     { return partial_member_pos + pos + ff_count; }
@@ -397,24 +387,28 @@ class Literal_encoder
     { return ( prev_byte >> ( 8 - literal_context_bits ) ); }
 
 public:
-  void encode( Range_encoder & range_encoder, uint8_t prev_byte, uint8_t symbol )
+  void encode( Range_encoder & range_encoder,
+               uint8_t prev_byte, uint8_t symbol )
     { range_encoder.encode_tree( bm_literal[lstate(prev_byte)], symbol, 8 ); }
 
-  void encode_matched( Range_encoder & range_encoder, uint8_t prev_byte, uint8_t match_byte, uint8_t symbol )
-    { range_encoder.encode_matched( bm_literal[lstate(prev_byte)], symbol, match_byte ); }
-
-  int price_matched( uint8_t prev_byte, uint8_t symbol, uint8_t match_byte ) const throw()
-    { return ::price_matched( bm_literal[lstate(prev_byte)], symbol, match_byte ); }
+  void encode_matched( Range_encoder & range_encoder,
+                       uint8_t prev_byte, uint8_t symbol, uint8_t match_byte )
+    { range_encoder.encode_matched( bm_literal[lstate(prev_byte)],
+                                    symbol, match_byte ); }
 
   int price_symbol( uint8_t prev_byte, uint8_t symbol ) const throw()
     { return ::price_symbol( bm_literal[lstate(prev_byte)], symbol, 8 ); }
+
+  int price_matched( uint8_t prev_byte, uint8_t symbol,
+                     uint8_t match_byte ) const throw()
+    { return ::price_matched( bm_literal[lstate(prev_byte)],
+                              symbol, match_byte ); }
   };
 
 
 class LZ_encoder
   {
-  enum { dis_align_mask = dis_align_size - 1,
-         infinite_price = 0x0FFFFFFF,
+  enum { infinite_price = 0x0FFFFFFF,
          max_marker_size = 16,
          num_rep_distances = 4 };	// must be 4
 
@@ -426,7 +420,9 @@ class LZ_encoder
     int price;		// dual use var; cumulative price, match length
     int reps[num_rep_distances];
     void update( const int d, const int p_i, const int pr ) throw()
-      { if( pr < price ) { dis = d; prev_index = p_i; price = pr; } }
+      {
+      if( pr < price ) { dis = d; prev_index = p_i; price = pr; }
+      }
     };
 
   int longest_match_found;
@@ -439,7 +435,7 @@ class LZ_encoder
   Bit_model bm_rep2[State::states];
   Bit_model bm_len[State::states][pos_states];
   Bit_model bm_dis_slot[max_dis_states][1<<dis_slot_bits];
-  Bit_model bm_dis[modeled_distances-end_dis_model];
+  Bit_model bm_dis[modeled_distances-end_dis_model+1];
   Bit_model bm_align[dis_align_size];
 
   Matchfinder & matchfinder;
@@ -509,7 +505,7 @@ class LZ_encoder
       price += dis_prices[dis_state][dis];
     else
       price += dis_slot_prices[dis_state][dis_slots[dis]] +
-               align_prices[dis & dis_align_mask];
+               align_prices[dis & (dis_align_size - 1)];
     return price;
     }
 
@@ -545,15 +541,14 @@ class LZ_encoder
     return len;
     }
 
-  bool move_pos( int n, bool skip = false ) throw()
+  void move_pos( int n, bool skip = false )
     {
     while( --n >= 0 )
       {
       if( skip ) skip = false;
       else matchfinder.longest_match_len();
-      if( !matchfinder.move_pos() ) return false;
+      matchfinder.move_pos();
       }
-    return true;
     }
 
   void backward( int cur )
