@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -25,12 +25,68 @@
 #include <string>
 #include <vector>
 #include <stdint.h>
+#include <unistd.h>
 
 #include "lzip.h"
 #include "decoder.h"
 
 
 const CRC32 crc32;
+
+
+void Pretty_print::operator()( const char * const msg ) const throw()
+  {
+  if( verbosity_ >= 0 )
+    {
+    if( first_post )
+      {
+      first_post = false;
+      std::fprintf( stderr, "  %s: ", name_.c_str() );
+      for( unsigned int i = 0; i < longest_name - name_.size(); ++i )
+        std::fprintf( stderr, " " );
+      if( !msg ) std::fflush( stderr );
+      }
+    if( msg ) std::fprintf( stderr, "%s.\n", msg );
+    }
+  }
+
+
+// Returns the number of bytes really read.
+// If (returned value < size) and (errno == 0), means EOF was reached.
+//
+int readblock( const int fd, uint8_t * const buf, const int size ) throw()
+  {
+  int rest = size;
+  errno = 0;
+  while( rest > 0 )
+    {
+    errno = 0;
+    const int n = read( fd, buf + size - rest, rest );
+    if( n > 0 ) rest -= n;
+    else if( n == 0 ) break;
+    else if( errno != EINTR && errno != EAGAIN ) break;
+    }
+  return ( rest > 0 ) ? size - rest : size;
+  }
+
+
+// Returns the number of bytes really written.
+// If (returned value < size), it is always an error.
+//
+int writeblock( const int fd, const uint8_t * const buf, const int size ) throw()
+  {
+  int rest = size;
+  errno = 0;
+  while( rest > 0 )
+    {
+    errno = 0;
+    const int n = write( fd, buf + size - rest, rest );
+    if( n > 0 ) rest -= n;
+    else if( errno && errno != EINTR && errno != EAGAIN ) break;
+    }
+  return ( rest > 0 ) ? size - rest : size;
+  }
+
 
 bool Range_decoder::read_block()
   {
@@ -120,12 +176,12 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
                     trailer.member_size(), member_size, member_size );
       }
     }
-  if( !error && pp.verbosity() >= 4 && data_position() > 0 && member_size > 0 )
+  if( !error && pp.verbosity() >= 3 && data_position() > 0 && member_size > 0 )
     std::fprintf( stderr, "%6.3f:1, %6.3f bits/byte, %5.2f%% saved.  ",
                   (double)data_position() / member_size,
                   ( 8.0 * member_size ) / data_position(),
                   100.0 * ( 1.0 - ( (double)member_size / data_position() ) ) );
-  if( !error && pp.verbosity() >= 3 )
+  if( !error && pp.verbosity() >= 4 )
     std::fprintf( stderr, "data CRC %08X, data size %9lld, member size %8lld.  ",
                   (unsigned int)trailer.data_crc(), trailer.data_size(),
                   trailer.member_size() );

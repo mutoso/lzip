@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -53,6 +53,7 @@ public:
     st = next[st];
     }
   };
+
 
 enum {
   min_dictionary_bits = 12,
@@ -280,5 +281,7 @@ struct Error
 void show_error( const char * const msg, const int errcode = 0,
                  const bool help = false ) throw();
 void internal_error( const char * const msg );
+
+// defined in decoder.cc
 int readblock( const int fd, uint8_t * const buf, const int size ) throw();
 int writeblock( const int fd, const uint8_t * const buf, const int size ) throw();

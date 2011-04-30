@@ -1,49 +1,22 @@
-Changes in version 1.11:
+Changes in version 1.12:
 
-The option "-0", which produces a compression speed and ratio comparable
-to those of "gzip -9", has been added to lzip.
+The option "-F, --recompress", which forces recompression of files whose
+name already has the ".lz" or ".tlz" suffix, has been added.
 
-Match length limit set by options -1 to -8 has been reduced to extend
-range of use towards gzip. Lower numbers now compress less but faster.
-(-1 now takes 43% less time for only 20% larger compressed size).
+For large values of "--match-length", compression ratio has been
+slightly increased and compression time has been reduced by up to 6%.
 
-(Note that the bidimensional parameter space of LZMA can't be mapped to
-a linear scale optimal for all files. If your files are large, very
-repetitive, etc, you may need to use the --match-length and
---dictionary-size options directly to achieve optimal performance).
+Compression time of option "-0" has been reduced by 2%.
 
-Compression of option -9 has been slightly increased.
+Print only one status line for each multimember file when only one "-v"
+is specified.
 
-The option "--merge", which tries to produce a correct file merging the
-good parts of two or more damaged copies, has been added to lziprecover.
+Print up to 6 bytes of trailing garbage when "-vvvv" is specified.
 
-(To give you an idea of --merge's possibilities, when merging two copies
-each of them with one damaged area affecting 1 percent of the copy, the
-probability of obtaining a correct file is about 98 percent. With three
-such copies the probability rises to 99.97 percent. For large files with
-small errors, the probability approaches 100 percent even with only two
-copies).
+Do not show the message "and `--stdout' was not specified" for file
+types that can't be read (directories, etc).
 
-The option "--repair", which repairs any 1-byte error in the lzma stream
-of lzip files, has been added to lziprecover.
+If "--verbose" is not specified, lziprecover now only shows errors and
+warnings.
 
-Decompressor has been modified to detect file errors earlier, improving
-efficiency of lziprecover's new repair capability.
-
-The option "--force", which forces overwriting of existing output files,
-has been added to lziprecover.
-
-The option "--output", which sets the name of the output file, has been
-added to lziprecover.
-
-The option "--split", which selects the until now only operation of
-splitting multimember files, has been added to lziprecover.
-
-Lziprecover now needs the operation to be specified. Else it warns the
-user and does nothing.
-
-A warning about fchown's return value being ignored has been fixed.
-
-"lzip -tvvvv" now also shows file compression ratio.
-
-Some new examples have been added to the manual.
+Options "--bits", "--position" and "--size" has been added to unzcrash.

@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -52,7 +52,7 @@ public:
 
   uint8_t get_byte()
     {
-    if( finished() ) return 0;
+    if( finished() ) return 0x55;		// make code != 0
     return buffer[pos++];
     }
 

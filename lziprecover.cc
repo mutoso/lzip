@@ -1,5 +1,5 @@
 /*  Lziprecover - Data recovery tool for lzip compressed files
-    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
     Return values: 0 for a normal exit, 1 for environmental problems
     (file not found, invalid flags, I/O errors, etc), 2 to indicate a
     corrupt or invalid input file, 3 for an internal consistency error
-    (eg, bug) which caused lzip to panic.
+    (eg, bug) which caused lziprecover to panic.
 */
 
 #define _FILE_OFFSET_BITS 64
@@ -63,10 +63,10 @@
 
 namespace {
 
+const char * const Program_name = "Lziprecover";
+const char * const program_name = "lziprecover";
+const char * const program_year = "2011";
 const char * invocation_name = 0;
-const char * const Program_name    = "Lziprecover";
-const char * const program_name    = "lziprecover";
-const char * const program_year    = "2010";
 
 #ifdef O_BINARY
 const int o_binary = O_BINARY;
@@ -190,8 +190,8 @@ bool verify_header( const File_header & header )
   if( header.version() != 1 )
     {
     if( verbosity >= 0 )
-      std::fprintf( stderr, "Version %d member format not supported, newer %s needed.\n",
-                    header.version(), program_name );
+      std::fprintf( stderr, "Version %d member format not supported.\n",
+                    header.version() );
     return false;
     }
   return true;
@@ -411,7 +411,7 @@ int merge_files( const std::vector< std::string > & filenames,
   for( unsigned int i = 0; i < filenames.size(); ++i )
     if( try_decompress( infd_vector[i], isize ) )
       {
-      if( verbosity >= 0 )
+      if( verbosity >= 1 )
         std::printf( "File `%s' has no errors. Recovery is not needed.\n",
                      filenames[i].c_str() );
       return 0;
@@ -456,7 +456,7 @@ int merge_files( const std::vector< std::string > & filenames,
   bool done = false;
   for( int var = 1; var <= variations; ++var )
     {
-    if( verbosity >= 0 )
+    if( verbosity >= 1 )
       {
       std::printf( "Trying variation %d of %d \r", var, variations );
       std::fflush( stdout );
@@ -477,13 +477,13 @@ int merge_files( const std::vector< std::string > & filenames,
       { done = true; break; }
     if( var % base_variations == 0 ) block_vector[0].shift( block_vector[1] );
     }
-  if( verbosity >= 0 ) std::printf( "\n" );
+  if( verbosity >= 1 ) std::printf( "\n" );
 
   if( close( outfd ) != 0 )
     { show_error( "Error closing output file", errno ); return 1; }
   if( done )
     {
-    if( verbosity >= 0 )
+    if( verbosity >= 1 )
       std::printf( "Input files merged successfully.\n" );
     return 0;
     }
@@ -512,7 +512,7 @@ int repair_file( const std::string & input_filename,
   long long failure_pos = 0;
   if( try_decompress( infd, isize, &failure_pos ) )
     {
-    if( verbosity >= 0 )
+    if( verbosity >= 1 )
       std::printf( "Input file has no errors. Recovery is not needed.\n" );
     return 0;
     }
@@ -531,7 +531,7 @@ int repair_file( const std::string & input_filename,
   bool done = false;
   for( long long pos = failure_pos; pos >= min_pos; --pos )
     {
-    if( verbosity >= 0 )
+    if( verbosity >= 1 )
       {
       std::printf( "Trying position %lld \r", pos );
       std::fflush( stdout );
@@ -556,13 +556,13 @@ int repair_file( const std::string & input_filename,
         writeblock( outfd, &byte, 1 ) != 1 )
       { show_error( "Error writing output file", errno ); return 1; }
     }
-  if( verbosity >= 0 ) std::printf( "\n" );
+  if( verbosity >= 1 ) std::printf( "\n" );
 
   if( close( outfd ) != 0 )
     { show_error( "Error closing output file", errno ); return 1; }
   if( done )
     {
-    if( verbosity >= 0 )
+    if( verbosity >= 1 )
       std::printf( "Copy of input file repaired successfully.\n" );
     return 0;
     }
@@ -683,23 +683,6 @@ int split_file( const std::string & input_filename,
 } // end namespace
 
 
-void Pretty_print::operator()( const char * const msg ) const throw()
-  {
-  if( verbosity_ >= 0 )
-    {
-    if( first_post )
-      {
-      first_post = false;
-      std::fprintf( stderr, "  %s: ", name_.c_str() );
-      for( unsigned int i = 0; i < longest_name - name_.size(); ++i )
-        std::fprintf( stderr, " " );
-      if( !msg ) std::fflush( stderr );
-      }
-    if( msg ) std::fprintf( stderr, "%s.\n", msg );
-    }
-  }
-
-
 void show_error( const char * const msg, const int errcode, const bool help ) throw()
   {
   if( verbosity >= 0 )
@@ -720,45 +703,9 @@ void show_error( const char * const msg, const int errcode, const bool help ) th
 
 void internal_error( const char * const msg )
   {
-  std::fprintf( stderr, "%s: internal error: %s.\n", program_name, msg );
+  if( verbosity >= 0 )
+    std::fprintf( stderr, "%s: internal error: %s.\n", program_name, msg );
   std::exit( 3 );
-  }
-
-
-// Returns the number of bytes really read.
-// If (returned value < size) and (errno == 0), means EOF was reached.
-//
-int readblock( const int fd, uint8_t * const buf, const int size ) throw()
-  {
-  int rest = size;
-  errno = 0;
-  while( rest > 0 )
-    {
-    errno = 0;
-    const int n = read( fd, buf + size - rest, rest );
-    if( n > 0 ) rest -= n;
-    else if( n == 0 ) break;
-    else if( errno != EINTR && errno != EAGAIN ) break;
-    }
-  return ( rest > 0 ) ? size - rest : size;
-  }
-
-
-// Returns the number of bytes really written.
-// If (returned value < size), it is always an error.
-//
-int writeblock( const int fd, const uint8_t * const buf, const int size ) throw()
-  {
-  int rest = size;
-  errno = 0;
-  while( rest > 0 )
-    {
-    errno = 0;
-    const int n = write( fd, buf + size - rest, rest );
-    if( n > 0 ) rest -= n;
-    else if( errno && errno != EINTR && errno != EAGAIN ) break;
-    }
-  return ( rest > 0 ) ? size - rest : size;
   }
 
 

@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -247,11 +247,11 @@ public:
 
   ~Range_encoder() { delete[] buffer; }
 
-  void flush() { for( int i = 0; i < 5; ++i ) shift_low(); }
-  void flush_data();
-
   long long member_position() const throw()
     { return partial_member_pos + pos + ff_count; }
+
+  void flush() { for( int i = 0; i < 5; ++i ) shift_low(); }
+  void flush_data();
 
   void put_byte( const uint8_t b )
     {
@@ -359,7 +359,9 @@ class Len_encoder
       pps[len] = tmp + price0( choice2 ) +
                  price_symbol( bm_mid[pos_state], len - len_low_symbols, len_mid_bits );
     for( ; len < len_symbols; ++len )
-      pps[len] = tmp + price1( choice2 ) +
+      // using 4 slots per value makes "price" faster
+      prices[3][len] = prices[2][len] = prices[1][len] = prices[0][len] =
+                 tmp + price1( choice2 ) +
                  price_symbol( bm_high, len - len_low_symbols - len_mid_symbols, len_high_bits );
     counters[pos_state] = len_symbols;
     }
@@ -383,7 +385,7 @@ class Literal_encoder
   {
   Bit_model bm_literal[1<<literal_context_bits][0x300];
 
-  int lstate( const int prev_byte ) const throw()
+  int lstate( const uint8_t prev_byte ) const throw()
     { return ( prev_byte >> ( 8 - literal_context_bits ) ); }
 
 public:
@@ -420,9 +422,7 @@ class LZ_encoder
     int price;		// dual use var; cumulative price, match length
     int reps[num_rep_distances];
     void update( const int d, const int p_i, const int pr ) throw()
-      {
-      if( pr < price ) { dis = d; prev_index = p_i; price = pr; }
-      }
+      { if( pr < price ) { dis = d; prev_index = p_i; price = pr; } }
     };
 
   int longest_match_found;
@@ -495,18 +495,21 @@ class LZ_encoder
     return price;
     }
 
+  int price_dis( const int dis, const int dis_state ) const throw()
+    {
+    if( dis < modeled_distances )
+      return dis_prices[dis_state][dis];
+    else
+      return dis_slot_prices[dis_state][dis_slots[dis]] +
+             align_prices[dis & (dis_align_size - 1)];
+    }
+
   int price_pair( const int dis, const int len, const int pos_state ) const throw()
     {
     if( len <= min_match_len && dis >= modeled_distances )
       return infinite_price;
-    int price = len_encoder.price( len, pos_state );
-    const int dis_state = get_dis_state( len );
-    if( dis < modeled_distances )
-      price += dis_prices[dis_state][dis];
-    else
-      price += dis_slot_prices[dis_state][dis_slots[dis]] +
-               align_prices[dis & (dis_align_size - 1)];
-    return price;
+    return len_encoder.price( len, pos_state ) +
+           price_dis( dis, get_dis_state( len ) );
     }
 
   void encode_pair( const uint32_t dis, const int len, const int pos_state ) throw()

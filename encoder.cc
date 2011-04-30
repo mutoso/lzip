@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -357,22 +357,23 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
     return 1;
     }
 
-  {
-  const int normal_match_price = match_price + price0( bm_rep[state()] );
-  int len = min_match_len;
   if( main_len <= replens[rep_index] )
     {
     main_len = replens[rep_index];
-    for( ; len <= main_len; ++len ) trials[len].price = infinite_price;
+    for( int len = min_match_len; len <= main_len; ++len )
+      trials[len].price = infinite_price;
     }
-  else for( ; len <= main_len; ++len )
+  else
     {
-    trials[len].dis = match_distances[len] + num_rep_distances;
-    trials[len].prev_index = 0;
-    trials[len].price = normal_match_price +
-                        price_pair( match_distances[len], len, pos_state );
+    const int normal_match_price = match_price + price0( bm_rep[state()] );
+    for( int len = min_match_len; len <= main_len; ++len )
+      {
+      trials[len].dis = match_distances[len] + num_rep_distances;
+      trials[len].prev_index = 0;
+      trials[len].price = normal_match_price +
+                          price_pair( match_distances[len], len, pos_state );
+      }
     }
-  }
 
   for( int rep = 0; rep < num_rep_distances; ++rep )
     {
@@ -478,10 +479,25 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
       while( num_trials < cur + newlen )
         trials[++num_trials].price = infinite_price;
 
-      for( int len = min_match_len; len <= newlen; ++len )
-        trials[cur+len].update( match_distances[len] + num_rep_distances, cur,
-                                normal_match_price +
-                                price_pair( match_distances[len], len, pos_state ) );
+      int dis = match_distances[min_match_len];
+      int dis_state = get_dis_state( min_match_len );
+      int dis_price = infinite_price;
+      if( dis < modeled_distances )
+        trials[cur+min_match_len].update( dis + num_rep_distances, cur,
+                   normal_match_price + dis_prices[dis_state][dis] +
+                   len_encoder.price( min_match_len, pos_state ) );
+      for( int len = min_match_len + 1; len <= newlen; ++len )
+        {
+        if( dis != match_distances[len] || dis_state < max_dis_states - 1 )
+          {
+          dis = match_distances[len];
+          dis_state = get_dis_state( len );
+          dis_price = price_dis( dis, dis_state );
+          }
+        trials[cur+len].update( dis + num_rep_distances, cur,
+                                normal_match_price + dis_price +
+                                len_encoder.price( len, pos_state ) );
+        }
       }
     }
   }

@@ -11,7 +11,7 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip Manual
 ***********
 
-This manual is for Lzip (version 1.11, 16 September 2010).
+This manual is for Lzip (version 1.12, 30 April 2011).
 
 * Menu:
 
@@ -26,7 +26,7 @@ This manual is for Lzip (version 1.11, 16 September 2010).
 * Concept Index::         Index of concepts
 
 
-   Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
+   Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 
    This manual is free documentation: you have unlimited permission to
 copy, distribute and modify it.
@@ -70,8 +70,8 @@ multivolume compressed tar archives.
 or 2 times the dictionary size limit (1 if input file size is less than
 dictionary size limit, else 2) plus 8 times the dictionary size really
 used. The option `-0' is special and only requires about 1.5 MiB at
-most. The amount of memory required for decompression is a little more
-than the dictionary size really used.
+most. The amount of memory required for decompression is only a few tens
+of KiB larger than the dictionary size really used.
 
    Lzip will automatically use the smallest possible dictionary size
 without exceeding the given limit. Keep in mind that the decompression
@@ -174,50 +174,55 @@ The format for running lzip is:
 
    Lzip supports the following options:
 
-`--help'
 `-h'
+`--help'
      Print an informative help message describing the options and exit.
 
-`--version'
 `-V'
+`--version'
      Print the version number of lzip on the standard output and exit.
 
-`--member-size=SIZE'
 `-b SIZE'
+`--member-size=SIZE'
      Produce a multimember file and set the member size limit to SIZE
      bytes. Minimum member size limit is 100kB. Small member size may
      degrade compression ratio, so use it only when needed. The default
      is to produce single-member files.
 
-`--stdout'
 `-c'
+`--stdout'
      Compress or decompress to standard output. Needed when reading
      from a named pipe (fifo) or from a device. Use it to recover as
      much of the uncompressed data as possible when decompressing a
      corrupt file.
 
-`--decompress'
 `-d'
+`--decompress'
      Decompress.
 
-`--force'
 `-f'
+`--force'
      Force overwrite of output file.
 
-`--keep'
+`-F'
+`--recompress'
+     Force recompression of files whose name already has the `.lz' or
+     `.tlz' suffix.
+
 `-k'
+`--keep'
      Keep (don't delete) input files during compression or
      decompression.
 
-`--match-length=LENGTH'
 `-m LENGTH'
+`--match-length=LENGTH'
      Set the match length limit in bytes. After a match this long is
      found, the search is finished. Valid values range from 5 to 273.
      Larger values usually give better compression ratios but longer
      compression times.
 
-`--output=FILE'
 `-o FILE'
+`--output=FILE'
      When reading from standard input and `--stdout' has not been
      specified, use `FILE' as the virtual name of the uncompressed
      file. This produces a file named `FILE' when decompressing, a file
@@ -225,25 +230,26 @@ The format for running lzip is:
      `FILE00001.lz', `FILE00002.lz', etc, when compressing and
      splitting the output in volumes.
 
-`--quiet'
 `-q'
+`--quiet'
      Quiet operation. Suppress all messages.
 
-`--dictionary-size=SIZE'
 `-s SIZE'
+`--dictionary-size=SIZE'
      Set the dictionary size limit in bytes. Valid values range from
      4KiB to 512MiB. Lzip will use the smallest possible dictionary
      size for each member without exceeding this limit. Note that
      dictionary sizes are quantized. If the specified size does not
-     match one of the valid sizes, it will be rounded upwards.
+     match one of the valid sizes, it will be rounded upwards by adding
+     up to (SIZE / 16) to it.
 
      For maximum compression you should use a dictionary size limit as
      large as possible, but keep in mind that the decompression memory
      requirement is affected at compression time by the choice of
      dictionary size limit.
 
-`--volume-size=SIZE'
 `-S SIZE'
+`--volume-size=SIZE'
      Split the compressed output into several volume files with names
      `original_name00001.lz', `original_name00002.lz', etc, and set the
      volume size limit to SIZE bytes. Each volume is a complete, maybe
@@ -251,17 +257,20 @@ The format for running lzip is:
      volume size may degrade compression ratio, so use it only when
      needed.
 
-`--test'
 `-t'
+`--test'
      Check integrity of the specified file(s), but don't decompress
      them.  This really performs a trial decompression and throws away
      the result.  Use it together with `-v' to see information about
      the file.
 
-`--verbose'
 `-v'
-     Verbose mode. Show the compression ratio for each file processed.
-     Further -v's increase the verbosity level.
+`--verbose'
+     Verbose mode.  When compressing, show the compression ratio for
+     each file processed.  When decompressing or testing, further -v's
+     (up to 4) increase the verbosity level, showing status, dictionary
+     size, compression ratio, trailer contents (CRC, data size, member
+     size), and up to 6 bytes of trailing garbage (if any).
 
 `-0 .. -9'
      Set the compression parameters (dictionary size and match length
@@ -343,8 +352,8 @@ additional information before, between, or after them.
 
 `VN (version number, 1 byte)'
      Just in case something needs to be modified in the future. Valid
-     values are 0 and 1. Version 0 files have only one member and lack
-     `Member size'.
+     values are 0 and 1. Version 0 files are deprecated. They can
+     contain only one member and lack the `Member size' field.
 
 `DS (coded dictionary size, 1 byte)'
      Bits 4-0 contain the base 2 logarithm of the base dictionary size.
@@ -449,7 +458,7 @@ the GNU ddrescue manual for details about ddrescue)
      mount -t iso9660 -o loop,ro cdimage2 /mnt/cdimage
      cp /mnt/cdimage/backup.tar.lz rescued2.tar.lz
      umount /mnt/cdimage
-     lziprecover -m -o rescued.tar.lz rescued1.tar.lz rescued2.tar.lz
+     lziprecover -m -v -o rescued.tar.lz rescued1.tar.lz rescued2.tar.lz
 
 
 Example 11: Recover the first volume of those created in example 9 from
@@ -467,7 +476,7 @@ produced and compared.
      lzip -t rec*big_db2_00001.lz
        rec00012big_db2_00001.lz: crc mismatch
        rec00018big_db2_00001.lz: crc mismatch
-     lziprecover -m rec00012big_db1_00001.lz rec00012big_db2_00001.lz
+     lziprecover -m -v rec00012big_db1_00001.lz rec00012big_db2_00001.lz
        Input files merged successfully
      cp rec00007big_db2_00001.lz rec00007big_db1_00001.lz
      cp rec00012big_db1_00001_fixed.lz rec00012big_db1_00001.lz
@@ -515,21 +524,21 @@ The format for running lziprecover is:
 
    Lziprecover supports the following options:
 
-`--help'
 `-h'
+`--help'
      Print an informative help message describing the options and exit.
 
-`--version'
 `-V'
+`--version'
      Print the version number of lziprecover on the standard output and
      exit.
 
-`--force'
 `-f'
+`--force'
      Force overwrite of output file.
 
-`--merge'
 `-m'
+`--merge'
      Try to produce a correct file merging the good parts of two or more
      damaged copies. The copies must be single-member files. The merge
      will fail if the copies have too many damaged areas or if the same
@@ -543,25 +552,25 @@ The format for running lziprecover is:
      percent. For large files with small errors, the probability
      approaches 100 percent even with only two copies.
 
-`--output=FILE'
 `-o FILE'
+`--output=FILE'
      Place the output into `FILE' instead of into `FILE_fixed.lz'.
 
      If splitting, the names of the files produced are in the form
      `rec00001FILE', etc.
 
-`--quiet'
 `-q'
+`--quiet'
      Quiet operation. Suppress all messages.
 
-`--repair'
 `-R'
+`--repair'
      Try to repair a small error, affecting only one byte, in a
      single-member FILE. If successful, a repaired copy is written to
      the file `FILE_fixed.lz'. `FILE' is not modified at all.
 
-`--split'
 `-s'
+`--split'
      Search for members in `FILE' and write each member in its own
      `.lz' file. You can then use `lzip -t' to test the integrity of
      the resulting files, decompress those which are undamaged, and try
@@ -573,8 +582,8 @@ The format for running lziprecover is:
      `lzip -cd rec*FILE.lz > recovered_data', processes the files in
      the correct order.
 
-`--verbose'
 `-v'
+`--verbose'
      Verbose mode. Further -v's increase the verbosity level.
 
 
@@ -619,15 +628,15 @@ Concept Index
 
 Tag Table:
 Node: Top224
-Node: Introduction1029
-Node: Algorithm4421
-Node: Invoking Lzip6939
-Node: File Format11911
-Node: Examples13865
-Ref: ddrescue-example15619
-Node: Lziprecover17412
-Node: Invoking Lziprecover18465
-Node: Problems20826
-Node: Concept Index21360
+Node: Introduction1031
+Node: Algorithm4439
+Node: Invoking Lzip6957
+Node: File Format12303
+Node: Examples14295
+Ref: ddrescue-example16049
+Node: Lziprecover17848
+Node: Invoking Lziprecover18901
+Node: Problems21262
+Node: Concept Index21796
 
 End Tag Table

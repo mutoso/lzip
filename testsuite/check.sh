@@ -1,6 +1,6 @@
 #! /bin/sh
 # check script for Lzip - Data compressor based on the LZMA algorithm
-# Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
+# Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 #
 # This script is free software: you have unlimited permission
 # to copy, distribute and modify it.
@@ -48,6 +48,13 @@ printf .
 cmp in copy || fail=1
 printf .
 
+"${LZIP}" -cf "${testdir}"/test_v1.lz > out 2>/dev/null
+if [ $? != 1 ] ; then fail=1 ; printf - ; else printf . ; fi
+"${LZIP}" -cF "${testdir}"/test_v1.lz > out || fail=1
+"${LZIP}" -cd out | "${LZIP}" -d > copy || fail=1
+cmp in copy || fail=1
+printf .
+
 for i in s4Ki 0 1 2 3 4 5 6 7 8 9 ; do
 	"${LZIP}" -k -$i in || fail=1
 	mv -f in.lz copy.lz || fail=1
@@ -79,6 +86,11 @@ for i in s4Ki 0 1 2 3 4 5 6 7 8 9 ; do
 	printf .
 done
 
+"${LZIP}" -$i < in > anyothername || fail=1
+"${LZIP}" -d anyothername || fail=1
+cmp in anyothername.out || fail=1
+printf .
+
 # Description of test files for lziprecover:
 # test_bad1.lz: byte at offset 67 changed from 0xCC to 0x33
 # test_bad2.lz: [  34-  66) --> copy of bytes [  68- 100)
@@ -98,47 +110,47 @@ for i in 1 2 3 ; do
 done
 
 "${LZIP}" -0kf -$i in || fail=1
-"${LZIPRECOVER}" -R in.lz > /dev/null || fail=1
+"${LZIPRECOVER}" -R in.lz || fail=1
 printf .
-"${LZIPRECOVER}" -R "${testdir}"/test_v1.lz > /dev/null || fail=1
+"${LZIPRECOVER}" -R "${testdir}"/test_v1.lz || fail=1
 printf .
 
-"${LZIPRECOVER}" -R -o copy.lz "${testdir}"/test_bad1.lz > /dev/null || fail=1
+"${LZIPRECOVER}" -R -o copy.lz "${testdir}"/test_bad1.lz || fail=1
 "${LZIP}" -df copy.lz || fail=1
 cmp in copy || fail=1
 printf .
 
-"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad1.lz "${testdir}"/test_bad2.lz > /dev/null || fail=1
+"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad1.lz "${testdir}"/test_bad2.lz || fail=1
 "${LZIP}" -df copy.lz || fail=1
 cmp in copy || fail=1
 printf .
-"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad2.lz "${testdir}"/test_bad1.lz > /dev/null || fail=1
+"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad2.lz "${testdir}"/test_bad1.lz || fail=1
 "${LZIP}" -df copy.lz || fail=1
 cmp in copy || fail=1
 printf .
 
 for i in 1 2 ; do
 	for j in 3 4 5 ; do
-		"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad${i}.lz "${testdir}"/test_bad${j}.lz > /dev/null || fail=1
+		"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad${i}.lz "${testdir}"/test_bad${j}.lz || fail=1
 		"${LZIP}" -df copy.lz || fail=1
 		cmp in copy || fail=1
 		printf .
-		"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad${j}.lz "${testdir}"/test_bad${i}.lz > /dev/null || fail=1
+		"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad${j}.lz "${testdir}"/test_bad${i}.lz || fail=1
 		"${LZIP}" -df copy.lz || fail=1
 		cmp in copy || fail=1
 		printf .
 	done
 done
 
-"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad3.lz "${testdir}"/test_bad4.lz "${testdir}"/test_bad5.lz > /dev/null || fail=1
+"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad3.lz "${testdir}"/test_bad4.lz "${testdir}"/test_bad5.lz || fail=1
 "${LZIP}" -df copy.lz || fail=1
 cmp in copy || fail=1
 printf .
-"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad4.lz "${testdir}"/test_bad5.lz "${testdir}"/test_bad3.lz > /dev/null || fail=1
+"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad4.lz "${testdir}"/test_bad5.lz "${testdir}"/test_bad3.lz || fail=1
 "${LZIP}" -df copy.lz || fail=1
 cmp in copy || fail=1
 printf .
-"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad5.lz "${testdir}"/test_bad3.lz "${testdir}"/test_bad4.lz > /dev/null || fail=1
+"${LZIPRECOVER}" -m -o copy.lz "${testdir}"/test_bad5.lz "${testdir}"/test_bad3.lz "${testdir}"/test_bad4.lz || fail=1
 "${LZIP}" -df copy.lz || fail=1
 cmp in copy || fail=1
 printf .

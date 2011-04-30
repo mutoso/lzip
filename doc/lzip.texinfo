@@ -5,8 +5,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 16 September 2010
-@set VERSION 1.11
+@set UPDATED 30 April 2011
+@set VERSION 1.12
 
 @dircategory Data Compression
 @direntry
@@ -14,6 +14,7 @@
 @end direntry
 
 
+@ifnothtml
 @titlepage
 @title Lzip
 @subtitle Data compressor based on the LZMA algorithm
@@ -24,7 +25,6 @@
 @vskip 0pt plus 1filll
 @end titlepage
 
-@ifnothtml
 @contents
 @end ifnothtml
 
@@ -46,7 +46,7 @@ This manual is for Lzip (version @value{VERSION}, @value{UPDATED}).
 @end menu
 
 @sp 1
-Copyright @copyright{} 2008, 2009, 2010 Antonio Diaz Diaz.
+Copyright @copyright{} 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 
 This manual is free documentation: you have unlimited permission
 to copy, distribute and modify it.
@@ -89,8 +89,8 @@ The amount of memory required for compression is about 5 MiB plus 1 or 2
 times the dictionary size limit (1 if input file size is less than
 dictionary size limit, else 2) plus 8 times the dictionary size really
 used. The option @samp{-0} is special and only requires about 1.5 MiB at
-most. The amount of memory required for decompression is a little more
-than the dictionary size really used.
+most. The amount of memory required for decompression is only a few tens
+of KiB larger than the dictionary size really used.
 
 Lzip will automatically use the smallest possible dictionary size
 without exceeding the given limit. Keep in mind that the decompression
@@ -200,47 +200,52 @@ lzip [@var{options}] [@var{files}]
 Lzip supports the following options:
 
 @table @samp
-@item --help
-@itemx -h
+@item -h
+@itemx --help
 Print an informative help message describing the options and exit.
 
-@item --version
-@itemx -V
+@item -V
+@itemx --version
 Print the version number of lzip on the standard output and exit.
 
-@item --member-size=@var{size}
-@itemx -b @var{size}
+@item -b @var{size}
+@itemx --member-size=@var{size}
 Produce a multimember file and set the member size limit to @var{size}
 bytes. Minimum member size limit is 100kB. Small member size may degrade
 compression ratio, so use it only when needed. The default is to produce
 single-member files.
 
-@item --stdout
-@itemx -c
+@item -c
+@itemx --stdout
 Compress or decompress to standard output. Needed when reading from a
 named pipe (fifo) or from a device. Use it to recover as much of the
 uncompressed data as possible when decompressing a corrupt file.
 
-@item --decompress
-@itemx -d
+@item -d
+@itemx --decompress
 Decompress.
 
-@item --force
-@itemx -f
+@item -f
+@itemx --force
 Force overwrite of output file.
 
-@item --keep
-@itemx -k
+@item -F
+@itemx --recompress
+Force recompression of files whose name already has the @samp{.lz} or
+@samp{.tlz} suffix.
+
+@item -k
+@itemx --keep
 Keep (don't delete) input files during compression or decompression.
 
-@item --match-length=@var{length}
-@itemx -m @var{length}
+@item -m @var{length}
+@itemx --match-length=@var{length}
 Set the match length limit in bytes. After a match this long is found,
 the search is finished. Valid values range from 5 to 273. Larger values
 usually give better compression ratios but longer compression times.
 
-@item --output=@var{file}
-@itemx -o @var{file}
+@item -o @var{file}
+@itemx --output=@var{file}
 When reading from standard input and @samp{--stdout} has not been
 specified, use @samp{@var{file}} as the virtual name of the uncompressed
 file. This produces a file named @samp{@var{file}} when decompressing, a
@@ -248,40 +253,44 @@ file named @samp{@var{file}.lz} when compressing, and several files
 named @samp{@var{file}00001.lz}, @samp{@var{file}00002.lz}, etc, when
 compressing and splitting the output in volumes.
 
-@item --quiet
-@itemx -q
+@item -q
+@itemx --quiet
 Quiet operation. Suppress all messages.
 
-@item --dictionary-size=@var{size}
-@itemx -s @var{size}
+@item -s @var{size}
+@itemx --dictionary-size=@var{size}
 Set the dictionary size limit in bytes. Valid values range from 4KiB to
 512MiB. Lzip will use the smallest possible dictionary size for each
 member without exceeding this limit. Note that dictionary sizes are
 quantized. If the specified size does not match one of the valid sizes,
-it will be rounded upwards.
+it will be rounded upwards by adding up to (@var{size} / 16) to it.
 
 For maximum compression you should use a dictionary size limit as large
 as possible, but keep in mind that the decompression memory requirement
 is affected at compression time by the choice of dictionary size limit.
 
-@item --volume-size=@var{size}
-@itemx -S @var{size}
+@item -S @var{size}
+@itemx --volume-size=@var{size}
 Split the compressed output into several volume files with names
 @samp{original_name00001.lz}, @samp{original_name00002.lz}, etc, and set
 the volume size limit to @var{size} bytes. Each volume is a complete,
 maybe multimember, lzip file. Minimum volume size limit is 100kB. Small
 volume size may degrade compression ratio, so use it only when needed.
 
-@item --test
-@itemx -t
+@item -t
+@itemx --test
 Check integrity of the specified file(s), but don't decompress them.
 This really performs a trial decompression and throws away the result.
 Use it together with @samp{-v} to see information about the file.
 
-@item --verbose
-@itemx -v
-Verbose mode. Show the compression ratio for each file processed.
-Further -v's increase the verbosity level.
+@item -v
+@itemx --verbose
+Verbose mode.
+When compressing, show the compression ratio for each file processed.
+When decompressing or testing, further -v's (up to 4) increase the
+verbosity level, showing status, dictionary size, compression ratio,
+trailer contents (CRC, data size, member size), and up to 6 bytes of
+trailing garbage (if any).
 
 @item -0 .. -9
 Set the compression parameters (dictionary size and match length limit)
@@ -373,8 +382,8 @@ A four byte string, identifying the lzip format, with the value "LZIP".
 
 @item VN (version number, 1 byte)
 Just in case something needs to be modified in the future. Valid values
-are 0 and 1. Version 0 files have only one member and lack @samp{Member
-size}.
+are 0 and 1. Version 0 files are deprecated. They can contain only one
+member and lack the @samp{Member size} field.
 
 @item DS (coded dictionary size, 1 byte)
 Bits 4-0 contain the base 2 logarithm of the base dictionary size.@*
@@ -508,7 +517,7 @@ ddrescue -b2048 /dev/cdrom cdimage2 logfile2
 mount -t iso9660 -o loop,ro cdimage2 /mnt/cdimage
 cp /mnt/cdimage/backup.tar.lz rescued2.tar.lz
 umount /mnt/cdimage
-lziprecover -m -o rescued.tar.lz rescued1.tar.lz rescued2.tar.lz
+lziprecover -m -v -o rescued.tar.lz rescued1.tar.lz rescued2.tar.lz
 @end example
 
 @sp 1
@@ -529,7 +538,7 @@ lzip -t rec*big_db1_00001.lz
 lzip -t rec*big_db2_00001.lz
   rec00012big_db2_00001.lz: crc mismatch
   rec00018big_db2_00001.lz: crc mismatch
-lziprecover -m rec00012big_db1_00001.lz rec00012big_db2_00001.lz
+lziprecover -m -v rec00012big_db1_00001.lz rec00012big_db2_00001.lz
   Input files merged successfully
 cp rec00007big_db2_00001.lz rec00007big_db1_00001.lz
 cp rec00012big_db1_00001_fixed.lz rec00012big_db1_00001.lz
@@ -567,6 +576,7 @@ If the cause of file corruption is damaged media, the combination GNU
 ddrescue + lziprecover is the best option for recovering data from
 multiple damaged copies. @xref{ddrescue-example}, for an example.
 
+
 @node Invoking Lziprecover
 @chapter Invoking Lziprecover
 @cindex invoking lziprecover
@@ -580,20 +590,20 @@ lziprecover [@var{options}] [@var{files}]
 Lziprecover supports the following options:
 
 @table @samp
-@item --help
-@itemx -h
+@item -h
+@itemx --help
 Print an informative help message describing the options and exit.
 
-@item --version
-@itemx -V
+@item -V
+@itemx --version
 Print the version number of lziprecover on the standard output and exit.
 
-@item --force
-@itemx -f
+@item -f
+@itemx --force
 Force overwrite of output file.
 
-@item --merge
-@itemx -m
+@item -m
+@itemx --merge
 Try to produce a correct file merging the good parts of two or more
 damaged copies. The copies must be single-member files. The merge will
 fail if the copies have too many damaged areas or if the same byte is
@@ -607,26 +617,26 @@ such copies the probability rises to 99.97 percent. For large files with
 small errors, the probability approaches 100 percent even with only two
 copies.
 
-@item --output=@var{file}
-@itemx -o @var{file}
+@item -o @var{file}
+@itemx --output=@var{file}
 Place the output into @samp{@var{file}} instead of into
 @samp{@var{file}_fixed.lz}.
 
 If splitting, the names of the files produced are in the form
 @samp{rec00001@var{file}}, etc.
 
-@item --quiet
-@itemx -q
+@item -q
+@itemx --quiet
 Quiet operation. Suppress all messages.
 
-@item --repair
-@itemx -R
+@item -R
+@itemx --repair
 Try to repair a small error, affecting only one byte, in a single-member
 @var{file}. If successful, a repaired copy is written to the file
 @samp{@var{file}_fixed.lz}. @samp{@var{file}} is not modified at all.
 
-@item --split
-@itemx -s
+@item -s
+@itemx --split
 Search for members in @samp{@var{file}} and write each member in its own
 @samp{.lz} file. You can then use @samp{lzip -t} to test the integrity
 of the resulting files, decompress those which are undamaged, and try to
@@ -638,8 +648,8 @@ designed so that the use of wildcards in subsequent processing, for
 example, @w{@samp{lzip -cd rec*@var{file}.lz > recovered_data}},
 processes the files in the correct order.
 
-@item --verbose
-@itemx -v
+@item -v
+@itemx --verbose
 Verbose mode. Further -v's increase the verbosity level.
 
 @end table

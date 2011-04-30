@@ -8,6 +8,7 @@ SHELL = /bin/sh
 
 objs = arg_parser.o decoder.o encoder.o fast_encoder.o main.o
 recobjs = arg_parser.o decoder.o lziprecover.o
+unzobjs = arg_parser.o unzcrash.o
 
 
 .PHONY : all install install-info install-man install-strip \
@@ -17,21 +18,24 @@ recobjs = arg_parser.o decoder.o lziprecover.o
 all : $(progname) lziprecover
 
 $(progname) : $(objs)
-	$(CXX) $(LDFLAGS) -o $(progname) $(objs)
+	$(CXX) $(LDFLAGS) -o $@ $(objs)
 
 $(progname)_profiled : $(objs)
-	$(CXX) $(LDFLAGS) -pg -o $(progname)_profiled $(objs)
+	$(CXX) $(LDFLAGS) -pg -o $@ $(objs)
 
 lziprecover : $(recobjs)
-	$(CXX) $(LDFLAGS) -o lziprecover $(recobjs)
+	$(CXX) $(LDFLAGS) -o $@ $(recobjs)
 
-unzcrash : testsuite/unzcrash.cc
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(LDFLAGS) -o $@ $<
+unzcrash : $(unzobjs)
+	$(CXX) $(LDFLAGS) -o $@ $(unzobjs)
 
 main.o : main.cc
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -DPROGVERSION=\"$(pkgversion)\" -c -o $@ $<
 
 lziprecover.o : lziprecover.cc
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -DPROGVERSION=\"$(pkgversion)\" -c -o $@ $<
+
+unzcrash.o : testsuite/unzcrash.cc
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -DPROGVERSION=\"$(pkgversion)\" -c -o $@ $<
 
 %.o : %.cc
@@ -44,6 +48,7 @@ encoder.o      : lzip.h encoder.h
 fast_encoder.o : lzip.h encoder.h fast_encoder.h
 main.o         : arg_parser.h lzip.h decoder.h encoder.h fast_encoder.h
 lziprecover.o  : arg_parser.h lzip.h decoder.h Makefile
+unzcrash.o     : arg_parser.h Makefile
 
 
 doc : info man
@@ -57,11 +62,11 @@ man : $(VPATH)/doc/$(progname).1 $(VPATH)/doc/lziprecover.1
 
 $(VPATH)/doc/$(progname).1 : $(progname)
 	help2man -n 'reduces the size of files' \
-	  -o $(VPATH)/doc/$(progname).1 ./$(progname)
+	  -o $@ ./$(progname)
 
 $(VPATH)/doc/lziprecover.1 : lziprecover
 	help2man -n 'recovers data from damaged lzip files' \
-	  -o $(VPATH)/doc/lziprecover.1 --no-info ./lziprecover
+	  -o $@ --no-info ./lziprecover
 
 Makefile : $(VPATH)/configure $(VPATH)/Makefile.in
 	./config.status
@@ -111,9 +116,9 @@ dist : doc
 	  $(DISTNAME)/README \
 	  $(DISTNAME)/configure \
 	  $(DISTNAME)/doc/$(progname).1 \
+	  $(DISTNAME)/doc/lziprecover.1 \
 	  $(DISTNAME)/doc/$(pkgname).info \
 	  $(DISTNAME)/doc/$(pkgname).texinfo \
-	  $(DISTNAME)/doc/lziprecover.1 \
 	  $(DISTNAME)/testsuite/check.sh \
 	  $(DISTNAME)/testsuite/test.txt \
 	  $(DISTNAME)/testsuite/test_bad[1-5].lz \
@@ -127,7 +132,7 @@ dist : doc
 
 clean :
 	-rm -f $(progname) $(progname)_profiled $(objs)
-	-rm -f lziprecover lziprecover.o
+	-rm -f lziprecover lziprecover.o unzcrash unzcrash.o
 
 distclean : clean
 	-rm -f Makefile config.status *.tar *.tar.lz

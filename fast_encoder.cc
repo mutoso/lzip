@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -126,9 +126,6 @@ int Fmatchfinder::longest_match_len( int * const distance ) throw()
     if( len_limit < 4 ) return 0;
     }
 
-  int maxlen = min_match_len - 1;
-  const int min_pos = (pos >= dictionary_size_) ?
-                      (pos - dictionary_size_ + 1) : 0;
   const uint8_t * const data = buffer + pos;
   key4 = ( ( key4 << 4 ) ^ data[3] ) & ( num_prev_positions - 1 );
 
@@ -136,13 +133,16 @@ int Fmatchfinder::longest_match_len( int * const distance ) throw()
   prev_positions[key4] = pos;
 
   int32_t * ptr0 = prev_pos_chain + cyclic_pos;
+  int maxlen = 0;
 
   for( int count = 4; ; )
     {
-    if( newpos < min_pos || --count < 0 ) { *ptr0 = -1; break; }
+    if( newpos < (pos - dictionary_size_ + 1) || newpos < 0 || --count < 0 )
+      { *ptr0 = -1; break; }
     const uint8_t * const newdata = buffer + newpos;
     int len = 0;
-    while( len < len_limit && newdata[len] == data[len] ) ++len;
+    if( newdata[maxlen] == data[maxlen] )
+      while( len < len_limit && newdata[len] == data[len] ) ++len;
 
     const int delta = pos - newpos;
     if( maxlen < len ) { maxlen = len; *distance = delta - 1; }
@@ -176,8 +176,6 @@ void Fmatchfinder::longest_match_len() throw()
     if( len_limit < 4 ) return;
     }
 
-  const int min_pos = (pos >= dictionary_size_) ?
-                      (pos - dictionary_size_ + 1) : 0;
   const uint8_t * const data = buffer + pos;
   key4 = ( ( key4 << 4 ) ^ data[3] ) & ( num_prev_positions - 1 );
 
@@ -186,7 +184,7 @@ void Fmatchfinder::longest_match_len() throw()
 
   int32_t * const ptr0 = prev_pos_chain + cyclic_pos;
 
-  if( newpos < min_pos ) *ptr0 = -1;
+  if( newpos < (pos - dictionary_size_ + 1) || newpos < 0 ) *ptr0 = -1;
   else
     {
     const uint8_t * const newdata = buffer + newpos;
@@ -194,8 +192,7 @@ void Fmatchfinder::longest_match_len() throw()
         std::memcmp( newdata, data, len_limit - 1 ) ) *ptr0 = newpos;
     else
       {
-      const int delta = pos - newpos;
-      int idx = cyclic_pos - delta;
+      int idx = cyclic_pos - pos + newpos;
       if( idx < 0 ) idx += dictionary_size_;
       *ptr0 = prev_pos_chain[idx];
       }
@@ -218,7 +215,7 @@ int FLZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
     const int len = fmatchfinder.true_match_len( 0, reps[i] + 1, max_match_len );
     if( len > replen ) { replen = len; rep_index = i; }
     }
-  if( replen > min_match_len )
+  if( replen > min_match_len && replen + 4 > main_len )
     {
     *disp = rep_index;
     move_pos( replen, true );
@@ -248,7 +245,8 @@ int FLZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
       price += literal_encoder.price_matched( prev_byte, cur_byte, match_byte );
     const int short_rep_price = price1( bm_match[state()][pos_state] ) +
                                 price1( bm_rep[state()] ) +
-                                price_rep_len1( state, pos_state );
+                                price0( bm_rep0[state()] ) +
+                                price0( bm_len[state()][pos_state] );
     if( short_rep_price < price ) *disp = 0;
     }
 

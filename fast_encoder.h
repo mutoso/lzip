@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -113,11 +113,6 @@ class FLZ_encoder
       for( int i = dis; i > 0; --i ) reps[i] = reps[i-1];
       reps[0] = distance;
       }
-    }
-
-  int price_rep_len1( const State & state, const int pos_state ) const throw()
-    {
-    return price0( bm_rep0[state()] ) + price0( bm_len[state()][pos_state] );
     }
 
   void encode_pair( const uint32_t dis, const int len, const int pos_state ) throw()
