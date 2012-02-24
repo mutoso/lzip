@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010, 2011 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011, 2012 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -34,7 +34,7 @@
 const CRC32 crc32;
 
 
-void Pretty_print::operator()( const char * const msg ) const throw()
+void Pretty_print::operator()( const char * const msg ) const
   {
   if( verbosity_ >= 0 )
     {
@@ -54,7 +54,7 @@ void Pretty_print::operator()( const char * const msg ) const throw()
 // Returns the number of bytes really read.
 // If (returned value < size) and (errno == 0), means EOF was reached.
 //
-int readblock( const int fd, uint8_t * const buf, const int size ) throw()
+int readblock( const int fd, uint8_t * const buf, const int size )
   {
   int rest = size;
   errno = 0;
@@ -73,7 +73,7 @@ int readblock( const int fd, uint8_t * const buf, const int size ) throw()
 // Returns the number of bytes really written.
 // If (returned value < size), it is always an error.
 //
-int writeblock( const int fd, const uint8_t * const buf, const int size ) throw()
+int writeblock( const int fd, const uint8_t * const buf, const int size )
   {
   int rest = size;
   errno = 0;
@@ -82,7 +82,7 @@ int writeblock( const int fd, const uint8_t * const buf, const int size ) throw(
     errno = 0;
     const int n = write( fd, buf + size - rest, rest );
     if( n > 0 ) rest -= n;
-    else if( errno && errno != EINTR && errno != EAGAIN ) break;
+    else if( n < 0 && errno != EINTR && errno != EAGAIN ) break;
     }
   return ( rest > 0 ) ? size - rest : size;
   }
@@ -124,21 +124,17 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   const long long member_size = range_decoder.member_position() + trailer_size;
   bool error = false;
 
-  for( int i = 0; i < trailer_size && !error; ++i )
+  const int size = range_decoder.read_data( trailer.data, trailer_size );
+  if( size < trailer_size )
     {
-    if( !range_decoder.finished() )
-      trailer.data[i] = range_decoder.get_byte();
-    else
+    error = true;
+    if( pp.verbosity() >= 0 )
       {
-      error = true;
-      if( pp.verbosity() >= 0 )
-        {
-        pp();
-        std::fprintf( stderr, "Trailer truncated at trailer position %d;"
-                              " some checks may fail.\n", i );
-        }
-      for( ; i < trailer_size; ++i ) trailer.data[i] = 0;
+      pp();
+      std::fprintf( stderr, "Trailer truncated at trailer position %d;"
+                            " some checks may fail.\n", size );
       }
+    for( int i = size; i < trailer_size; ++i ) trailer.data[i] = 0;
     }
   if( member_version == 0 ) trailer.member_size( member_size );
   if( !range_decoder.code_is_zero() )
@@ -292,7 +288,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
               if( pp.verbosity() >= 0 )
                 {
                 pp();
-                std::fprintf( stderr, "Unsupported marker code `%d'.\n", len );
+                std::fprintf( stderr, "Unsupported marker code '%d'.\n", len );
                 }
               return 4;
               }
