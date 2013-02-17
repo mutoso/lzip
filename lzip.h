@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010, 2011, 2012 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,41 +17,23 @@
 
 class State
   {
-  unsigned char st;
+  int st;
 
 public:
   enum { states = 12 };
   State() : st( 0 ) {}
-  unsigned char operator()() const { return st; }
+  int operator()() const { return st; }
   bool is_char() const { return st < 7; }
 
   void set_char()
     {
-    static const unsigned char next[states] =
-      { 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 4, 5 };
+    static const int next[states] = { 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 4, 5 };
     st = next[st];
     }
 
-  void set_match()
-    {
-    static const unsigned char next[states] =
-      { 7, 7, 7, 7, 7, 7, 7, 10, 10, 10, 10, 10 };
-    st = next[st];
-    }
-
-  void set_rep()
-    {
-    static const unsigned char next[states] =
-      { 8, 8, 8, 8, 8, 8, 8, 11, 11, 11, 11, 11 };
-    st = next[st];
-    }
-
-  void set_short_rep()
-    {
-    static const unsigned char next[states] =
-      { 9, 9, 9, 9, 9, 9, 9, 11, 11, 11, 11, 11 };
-    st = next[st];
-    }
+  void set_match()     { st = ( ( st < 7 ) ? 7 : 10 ); }
+  void set_rep()       { st = ( ( st < 7 ) ? 8 : 11 ); }
+  void set_short_rep() { st = ( ( st < 7 ) ? 9 : 11 ); }
   };
 
 
@@ -68,7 +50,7 @@ enum {
   dis_slot_bits = 6,
   start_dis_model = 4,
   end_dis_model = 14,
-  modeled_distances = 1 << (end_dis_model / 2),
+  modeled_distances = 1 << (end_dis_model / 2),		// 128
   dis_align_bits = 4,
   dis_align_size = 1 << dis_align_bits,
 
@@ -86,12 +68,11 @@ enum {
 
   max_dis_states = 4 };
 
-inline int get_dis_state( int len )
-  {
-  len -= min_match_len;
-  if( len >= max_dis_states ) len = max_dis_states - 1;
-  return len;
-  }
+inline int get_dis_state( const int len )
+  { return std::min( len - min_match_len, max_dis_states - 1 ); }
+
+inline int get_lit_state( const uint8_t prev_byte )
+  { return ( prev_byte >> ( 8 - literal_context_bits ) ); }
 
 
 enum { bit_model_move_bits = 5,
@@ -100,17 +81,17 @@ enum { bit_model_move_bits = 5,
 
 struct Bit_model
   {
-  unsigned int probability;
+  int probability;
   Bit_model() : probability( bit_model_total / 2 ) {}
   };
 
 
 class Pretty_print
   {
-  const char * const stdin_name;
-  unsigned int longest_name;
-  const int verbosity_;
   std::string name_;
+  const char * const stdin_name;
+  unsigned longest_name;
+  const int verbosity_;
   mutable bool first_post;
 
 public:
@@ -118,11 +99,11 @@ public:
     : stdin_name( "(stdin)" ), longest_name( 0 ), verbosity_( v ),
       first_post( false )
     {
-    const unsigned int stdin_name_len = std::strlen( stdin_name );
-    for( unsigned int i = 0; i < filenames.size(); ++i )
+    const unsigned stdin_name_len = std::strlen( stdin_name );
+    for( unsigned i = 0; i < filenames.size(); ++i )
       {
       const std::string & s = filenames[i];
-      const unsigned int len = ( ( s == "-" ) ? stdin_name_len : s.size() );
+      const unsigned len = ( ( s == "-" ) ? stdin_name_len : s.size() );
       if( len > longest_name ) longest_name = len;
       }
     if( longest_name == 0 ) longest_name = stdin_name_len;
@@ -149,9 +130,9 @@ class CRC32
 public:
   CRC32()
     {
-    for( unsigned int n = 0; n < 256; ++n )
+    for( unsigned n = 0; n < 256; ++n )
       {
-      unsigned int c = n;
+      unsigned c = n;
       for( int k = 0; k < 8; ++k )
         { if( c & 1 ) c = 0xEDB88320U ^ ( c >> 1 ); else c >>= 1; }
       data[n] = c;
@@ -159,8 +140,10 @@ public:
     }
 
   uint32_t operator[]( const uint8_t byte ) const { return data[byte]; }
+
   void update( uint32_t & crc, const uint8_t byte ) const
     { crc = data[(crc^byte)&0xFF] ^ ( crc >> 8 ); }
+
   void update( uint32_t & crc, const uint8_t * const buffer, const int size ) const
     {
     for( int i = 0; i < size; ++i )
@@ -171,16 +154,15 @@ public:
 extern const CRC32 crc32;
 
 
-inline int real_bits( const unsigned int value )
+inline int real_bits( unsigned value )
   {
-  int bits = 0, i = 1;
-  unsigned int mask = 1;
-  for( ; mask > 0; ++i, mask <<= 1 ) if( value & mask ) bits = i;
+  int bits = 0;
+  while( value > 0 ) { value >>= 1; ++bits; }
   return bits;
   }
 
 
-const uint8_t magic_string[4] = { 'L', 'Z', 'I', 'P' };
+const uint8_t magic_string[4] = { 0x4C, 0x5A, 0x49, 0x50 };	// "LZIP"
 
 struct File_header
   {
@@ -196,10 +178,10 @@ struct File_header
   uint8_t version() const { return data[4]; }
   bool verify_version() const { return ( data[4] <= 1 ); }
 
-  int dictionary_size() const
+  unsigned dictionary_size() const
     {
-    int sz = ( 1 << ( data[5] & 0x1F ) );
-    if( sz > min_dictionary_size && sz <= max_dictionary_size )
+    unsigned sz = ( 1 << ( data[5] & 0x1F ) );
+    if( sz > min_dictionary_size )
       sz -= ( sz / 16 ) * ( ( data[5] >> 5 ) & 7 );
     return sz;
     }
@@ -233,36 +215,36 @@ struct File_trailer
   static int size( const int version = 1 )
     { return ( ( version >= 1 ) ? 20 : 12 ); }
 
-  uint32_t data_crc() const
+  unsigned data_crc() const
     {
-    uint32_t tmp = 0;
+    unsigned tmp = 0;
     for( int i = 3; i >= 0; --i ) { tmp <<= 8; tmp += data[i]; }
     return tmp;
     }
 
-  void data_crc( uint32_t crc )
+  void data_crc( unsigned crc )
     { for( int i = 0; i <= 3; ++i ) { data[i] = (uint8_t)crc; crc >>= 8; } }
 
-  long long data_size() const
+  unsigned long long data_size() const
     {
-    long long tmp = 0;
+    unsigned long long tmp = 0;
     for( int i = 11; i >= 4; --i ) { tmp <<= 8; tmp += data[i]; }
     return tmp;
     }
 
-  void data_size( long long sz )
+  void data_size( unsigned long long sz )
     {
     for( int i = 4; i <= 11; ++i ) { data[i] = (uint8_t)sz; sz >>= 8; }
     }
 
-  long long member_size() const
+  unsigned long long member_size() const
     {
-    long long tmp = 0;
+    unsigned long long tmp = 0;
     for( int i = 19; i >= 12; --i ) { tmp <<= 8; tmp += data[i]; }
     return tmp;
     }
 
-  void member_size( long long sz )
+  void member_size( unsigned long long sz )
     {
     for( int i = 12; i <= 19; ++i ) { data[i] = (uint8_t)sz; sz >>= 8; }
     }
@@ -276,11 +258,11 @@ struct Error
   };
 
 
+// defined in decoder.cc
+int readblock( const int fd, uint8_t * const buf, const int size );
+int writeblock( const int fd, const uint8_t * const buf, const int size );
+
 // defined in main.cc
 void show_error( const char * const msg, const int errcode = 0,
                  const bool help = false );
 void internal_error( const char * const msg );
-
-// defined in decoder.cc
-int readblock( const int fd, uint8_t * const buf, const int size );
-int writeblock( const int fd, const uint8_t * const buf, const int size );

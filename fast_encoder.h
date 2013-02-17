@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010, 2011, 2012 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,11 +17,13 @@
 
 class Fmatchfinder : public Matchfinder_base
   {
-  enum { before = max_match_len + 1,
+  enum { before_size = max_match_len + 1,
          dict_size = 65536,
+         // bytes to keep in buffer after pos
+         after_size = max_match_len,
          dict_factor = 16,
          len_limit = 16,
-         num_prev_pos = 1 << 16,
+         num_prev_positions23 = 0,
          pos_array_factor = 1 };
 
   int key4;			// key made from latest 4 bytes
@@ -29,14 +31,14 @@ class Fmatchfinder : public Matchfinder_base
 public:
   explicit Fmatchfinder( const int ifd )
     :
-    Matchfinder_base( before, dict_size, dict_factor, len_limit,
-                      num_prev_pos, ifd, pos_array_factor ),
+    Matchfinder_base( before_size, dict_size, after_size, dict_factor,
+                      len_limit, num_prev_positions23, pos_array_factor, ifd ),
     key4( 0 )
     {}
 
   void reset() { Matchfinder_base::reset(); key4 = 0; }
   int longest_match_len( int * const distance );
-  void longest_match_len();
+  void longest_match_len( int n );
   };
 
 
@@ -47,14 +49,8 @@ class FLZ_encoder : public LZ_encoder_base
   void move_pos( int n )
     {
     if( --n >= 0 ) fmatchfinder.move_pos();
-    while( --n >= 0 )
-      {
-      fmatchfinder.longest_match_len();
-      fmatchfinder.move_pos();
-      }
+    fmatchfinder.longest_match_len( n );
     }
-
-  void sequence_optimizer( int reps[num_rep_distances], State & state );
 
 public:
   FLZ_encoder( Fmatchfinder & mf, const File_header & header, const int outfd )
@@ -63,5 +59,5 @@ public:
     fmatchfinder( mf )
     {}
 
-  bool encode_member( const long long member_size );
+  bool encode_member( const unsigned long long member_size );
   };

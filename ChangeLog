@@ -1,3 +1,14 @@
+2013-02-17  Antonio Diaz Diaz  <ant_diaz@teleline.es>
+
+	* Version 1.14 released.
+	* Multi-step trials have been implemented.
+	* Compression ratio has been slightly increased.
+	* Compression time has been reduced by 5%.
+	* Decompression time has been reduced by 12%.
+	* Makefile.in: Added new target 'install-bin'.
+	* main.cc: Use 'setmode' instead of '_setmode' on Windows and OS/2.
+	* main.cc: Define 'strtoull' to 'std::strtoul' on Windows.
+
 2012-02-24  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.13 released.
@@ -209,7 +220,7 @@
 	* Version 0.1 released.
 
 
-Copyright (C) 2008, 2009, 2010, 2011, 2012 Antonio Diaz Diaz.
+Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
 This file is a collection of facts, and thus it is not copyrightable,
 but just in case, you have unlimited permission to copy, distribute and

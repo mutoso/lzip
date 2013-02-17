@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010, 2011, 2012 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 class Range_decoder
   {
   enum { buffer_size = 16384 };
-  long long partial_member_pos;
+  unsigned long long partial_member_pos;
   uint8_t * const buffer;	// input buffer
   int pos;			// current pos in buffer
   int stream_pos;		// when reached, a new block must be read
@@ -49,12 +49,12 @@ public:
 
   bool code_is_zero() const { return ( code == 0 ); }
   bool finished() { return pos >= stream_pos && !read_block(); }
-  long long member_position() const { return partial_member_pos + pos; }
+  unsigned long long member_position() const { return partial_member_pos + pos; }
   void reset_member_position() { partial_member_pos = -pos; }
 
   uint8_t get_byte()
     {
-    if( finished() ) return 0x55;		// make code != 0
+    if( finished() ) return 0xAA;		// make code != 0
     return buffer[pos++];
     }
 
@@ -68,14 +68,14 @@ public:
       pos += rd;
       rest -= rd;
       }
-    return ( rest > 0 ) ? size - rest : size;
+    return size - rest;
     }
 
   void load()
     {
     code = 0;
-    range = 0xFFFFFFFFU;
     for( int i = 0; i < 5; ++i ) code = (code << 8) | get_byte();
+    range = 0xFFFFFFFFU;
     }
 
   void normalize()
@@ -89,17 +89,14 @@ public:
     int symbol = 0;
     for( int i = num_bits; i > 0; --i )
       {
-      symbol <<= 1;
-      if( range <= 0x00FFFFFFU )
-        {
-        range <<= 7; code = (code << 8) | get_byte();
-        if( code >= range ) { code -= range; symbol |= 1; }
-        }
-      else
-        {
-        range >>= 1;
-        if( code >= range ) { code -= range; symbol |= 1; }
-        }
+      normalize();
+      range >>= 1;
+//      symbol <<= 1;
+//      if( code >= range ) { code -= range; symbol |= 1; }
+      const uint32_t mask = 0U - (code < range);
+      code -= range;
+      code += range & mask;
+      symbol = (symbol << 1) + (mask + 1);
       }
     return symbol;
     }
@@ -131,36 +128,63 @@ public:
     return model - (1 << num_bits);
     }
 
+  int decode_tree6( Bit_model bm[] )
+    {
+    int model = 1;
+    model = ( model << 1 ) | decode_bit( bm[model] );
+    model = ( model << 1 ) | decode_bit( bm[model] );
+    model = ( model << 1 ) | decode_bit( bm[model] );
+    model = ( model << 1 ) | decode_bit( bm[model] );
+    model = ( model << 1 ) | decode_bit( bm[model] );
+    model = ( model << 1 ) | decode_bit( bm[model] );
+    return model - (1 << 6);
+    }
+
   int decode_tree_reversed( Bit_model bm[], const int num_bits )
     {
     int model = 1;
     int symbol = 0;
     for( int i = 0; i < num_bits; ++i )
       {
-      const int bit = decode_bit( bm[model] );
+      const bool bit = decode_bit( bm[model] );
       model <<= 1;
-      if( bit ) { model |= 1; symbol |= (1 << i); }
+      if( bit ) { ++model; symbol |= (1 << i); }
       }
     return symbol;
     }
 
-  int decode_matched( Bit_model bm[], const int match_byte )
+  int decode_tree_reversed4( Bit_model bm[] )
+    {
+    int model = 1;
+    int symbol = 0;
+    int bit = decode_bit( bm[model] );
+    model = (model << 1) + bit; symbol |= bit;
+    bit = decode_bit( bm[model] );
+    model = (model << 1) + bit; symbol |= (bit << 1);
+    bit = decode_bit( bm[model] );
+    model = (model << 1) + bit; symbol |= (bit << 2);
+    if( decode_bit( bm[model] ) ) symbol |= 8;
+    return symbol;
+    }
+
+  int decode_matched( Bit_model bm[], int match_byte )
     {
     Bit_model * const bm1 = bm + 0x100;
     int symbol = 1;
     for( int i = 7; i >= 0; --i )
       {
-      const int match_bit = ( match_byte >> i ) & 1;
-      const int bit = decode_bit( bm1[(match_bit<<8)+symbol] );
-      symbol = ( symbol << 1 ) | bit;
-      if( match_bit != bit )
+      match_byte <<= 1;
+      const int match_bit = match_byte & 0x100;
+      const int bit = decode_bit( bm1[match_bit+symbol] );
+      symbol = ( symbol << 1 ) + bit;
+      if( match_bit != bit << 8 )
         {
-        while( --i >= 0 )
-          symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+        while( symbol < 0x100 )
+          symbol = ( symbol << 1 ) + decode_bit( bm[symbol] );
         break;
         }
       }
-    return symbol & 0xFF;
+    return symbol - 0x100;
     }
   };
 
@@ -187,27 +211,9 @@ public:
   };
 
 
-class Literal_decoder
-  {
-  Bit_model bm_literal[1<<literal_context_bits][0x300];
-
-  int lstate( const uint8_t prev_byte ) const
-    { return ( prev_byte >> ( 8 - literal_context_bits ) ); }
-
-public:
-  uint8_t decode( Range_decoder & range_decoder, const uint8_t prev_byte )
-    { return range_decoder.decode_tree( bm_literal[lstate(prev_byte)], 8 ); }
-
-  uint8_t decode_matched( Range_decoder & range_decoder,
-                          const uint8_t prev_byte, const uint8_t match_byte )
-    { return range_decoder.decode_matched( bm_literal[lstate(prev_byte)],
-                                           match_byte ); }
-  };
-
-
 class LZ_decoder
   {
-  long long partial_data_pos;
+  unsigned long long partial_data_pos;
   Range_decoder & range_decoder;
   const int dictionary_size;
   const int buffer_size;
@@ -246,7 +252,7 @@ class LZ_decoder
     if( i < 0 ) i += buffer_size;
     if( len < buffer_size - std::max( pos, i ) && len <= std::abs( pos - i ) )
       {
-      std::memcpy( buffer + pos, buffer + i, len );
+      std::memcpy( buffer + pos, buffer + i, len );	// no wrap, no overlap
       pos += len;
       }
     else for( ; len > 0; --len )
@@ -277,9 +283,9 @@ public:
 
   ~LZ_decoder() { delete[] buffer; }
 
-  uint32_t crc() const { return crc_ ^ 0xFFFFFFFFU; }
+  unsigned crc() const { return crc_ ^ 0xFFFFFFFFU; }
 
-  long long data_position() const { return partial_data_pos + pos; }
+  unsigned long long data_position() const { return partial_data_pos + pos; }
 
   int decode_member( const Pretty_print & pp );
   };

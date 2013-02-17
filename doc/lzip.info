@@ -11,7 +11,7 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip Manual
 ***********
 
-This manual is for Lzip (version 1.13, 24 February 2012).
+This manual is for Lzip (version 1.14, 17 February 2013).
 
 * Menu:
 
@@ -24,7 +24,7 @@ This manual is for Lzip (version 1.13, 24 February 2012).
 * Concept Index::         Index of concepts
 
 
-   Copyright (C) 2008, 2009, 2010, 2011, 2012 Antonio Diaz Diaz.
+   Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
    This manual is free documentation: you have unlimited permission to
 copy, distribute and modify it.
@@ -67,12 +67,16 @@ split the compressed output in volumes of a given size, even when
 reading from standard input. This allows the direct creation of
 multivolume compressed tar archives.
 
-   The amount of memory required for compression is about 5 MiB plus 1
-or 2 times the dictionary size limit (1 if input file size is less than
-dictionary size limit, else 2) plus 8 times the dictionary size really
-used. The option `-0' is special and only requires about 1.5 MiB at
-most. The amount of memory required for decompression is only a few tens
-of KiB larger than the dictionary size really used.
+   Lzip is able to compress and decompress streams of unlimited size by
+automatically creating multi-member output. The members so created are
+large (about 2^60 bytes each).
+
+   The amount of memory required for compression is about 1 or 2 times
+the dictionary size limit (1 if input file size is less than dictionary
+size limit, else 2) plus 9 times the dictionary size really used. The
+option `-0' is special and only requires about 1.5 MiB at most. The
+amount of memory required for decompression is only a few tens of KiB
+larger than the dictionary size really used.
 
    Lzip will automatically use the smallest possible dictionary size
 without exceeding the given limit. Keep in mind that the decompression
@@ -325,7 +329,12 @@ File: lzip.info,  Node: File Format,  Next: Examples,  Prev: Invoking Lzip,  Up:
 4 File Format
 *************
 
-In the diagram below, a box like this:
+Perfection is reached, not when there is no longer anything to add, but
+when there is no longer anything to take away.
+-- Antoine de Saint-Exupery
+
+
+   In the diagram below, a box like this:
 +---+
 |   | <-- the vertical bars might be missing
 +---+
@@ -354,15 +363,18 @@ additional information before, between, or after them.
      "LZIP".
 
 `VN (version number, 1 byte)'
-     Just in case something needs to be modified in the future. Valid
-     values are 0 and 1. Version 0 files are deprecated. They can
-     contain only one member and lack the `Member size' field.
+     Just in case something needs to be modified in the future. 1 for
+     now.
 
 `DS (coded dictionary size, 1 byte)'
-     Bits 4-0 contain the base 2 logarithm of the base dictionary size.
-     Bits 7-5 contain the number of "wedges" to substract from the base
-     dictionary size to obtain the dictionary size. The size of a wedge
-     is (base dictionary size / 16).
+     Lzip divides the distance between any two powers of 2 into 8
+     equally spaced intervals, named "wedges". The dictionary size is
+     calculated by taking a power of 2 (the base size) and substracting
+     from it a number of wedges between 0 and 7. The size of a wedge is
+     (base_size / 16).
+     Bits 4-0 contain the base 2 logarithm of the base size (12 to 29).
+     Bits 7-5 contain the number of wedges (0 to 7) to substract from
+     the base size to obtain the dictionary size.
      Valid values for dictionary size range from 4KiB to 512MiB.
 
 `Lzma stream'
@@ -376,9 +388,9 @@ additional information before, between, or after them.
      Size of the uncompressed original data.
 
 `Member size (8 bytes)'
-     Total size of the member, including header and trailer. This
-     facilitates safe recovery of undamaged members from multi-member
-     files.
+     Total size of the member, including header and trailer. This field
+     acts as a distributed index, and facilitates safe recovery of
+     undamaged members from multi-member files.
 
 
 
@@ -493,13 +505,13 @@ Concept Index
 
 Tag Table:
 Node: Top224
-Node: Introduction919
-Node: Algorithm4420
-Node: Invoking Lzip6938
-Node: File Format12290
-Node: Examples14283
-Node: Problems16230
-Node: Concept Index16752
+Node: Introduction925
+Node: Algorithm4590
+Node: Invoking Lzip7108
+Node: File Format12460
+Node: Examples14767
+Node: Problems16714
+Node: Concept Index17236
 
 End Tag Table
 

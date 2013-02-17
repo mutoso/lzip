@@ -1,5 +1,5 @@
 /*  Lzip - Data compressor based on the LZMA algorithm
-    Copyright (C) 2008, 2009, 2010, 2011, 2012 Antonio Diaz Diaz.
+    Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@ void Pretty_print::operator()( const char * const msg ) const
       {
       first_post = false;
       std::fprintf( stderr, "  %s: ", name_.c_str() );
-      for( unsigned int i = 0; i < longest_name - name_.size(); ++i )
+      for( unsigned i = 0; i < longest_name - name_.size(); ++i )
         std::fprintf( stderr, " " );
       if( !msg ) std::fflush( stderr );
       }
@@ -60,13 +60,13 @@ int readblock( const int fd, uint8_t * const buf, const int size )
   errno = 0;
   while( rest > 0 )
     {
-    errno = 0;
     const int n = read( fd, buf + size - rest, rest );
     if( n > 0 ) rest -= n;
-    else if( n == 0 ) break;
+    else if( n == 0 ) break;				// EOF
     else if( errno != EINTR && errno != EAGAIN ) break;
+    errno = 0;
     }
-  return ( rest > 0 ) ? size - rest : size;
+  return size - rest;
   }
 
 
@@ -79,12 +79,12 @@ int writeblock( const int fd, const uint8_t * const buf, const int size )
   errno = 0;
   while( rest > 0 )
     {
-    errno = 0;
     const int n = write( fd, buf + size - rest, rest );
     if( n > 0 ) rest -= n;
     else if( n < 0 && errno != EINTR && errno != EAGAIN ) break;
+    errno = 0;
     }
-  return ( rest > 0 ) ? size - rest : size;
+  return size - rest;
   }
 
 
@@ -121,10 +121,11 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   {
   File_trailer trailer;
   const int trailer_size = File_trailer::size( member_version );
-  const long long member_size = range_decoder.member_position() + trailer_size;
+  const unsigned long long member_size =
+    range_decoder.member_position() + trailer_size;
   bool error = false;
 
-  const int size = range_decoder.read_data( trailer.data, trailer_size );
+  int size = range_decoder.read_data( trailer.data, trailer_size );
   if( size < trailer_size )
     {
     error = true;
@@ -134,9 +135,11 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
       std::fprintf( stderr, "Trailer truncated at trailer position %d;"
                             " some checks may fail.\n", size );
       }
-    for( int i = size; i < trailer_size; ++i ) trailer.data[i] = 0;
+    while( size < trailer_size ) trailer.data[size++] = 0;
     }
+
   if( member_version == 0 ) trailer.member_size( member_size );
+
   if( !range_decoder.code_is_zero() )
     {
     error = true;
@@ -149,7 +152,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
       {
       pp();
       std::fprintf( stderr, "CRC mismatch; trailer says %08X, data CRC is %08X.\n",
-                    (unsigned int)trailer.data_crc(), (unsigned int)crc() );
+                    trailer.data_crc(), crc() );
       }
     }
   if( trailer.data_size() != data_position() )
@@ -158,7 +161,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     if( pp.verbosity() >= 0 )
       {
       pp();
-      std::fprintf( stderr, "Data size mismatch; trailer says %lld, data size is %lld (0x%llX).\n",
+      std::fprintf( stderr, "Data size mismatch; trailer says %llu, data size is %llu (0x%llX).\n",
                     trailer.data_size(), data_position(), data_position() );
       }
     }
@@ -168,7 +171,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     if( pp.verbosity() >= 0 )
       {
       pp();
-      std::fprintf( stderr, "Member size mismatch; trailer says %lld, member size is %lld (0x%llX).\n",
+      std::fprintf( stderr, "Member size mismatch; trailer says %llu, member size is %llu (0x%llX).\n",
                     trailer.member_size(), member_size, member_size );
       }
     }
@@ -178,9 +181,8 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
                   ( 8.0 * member_size ) / data_position(),
                   100.0 * ( 1.0 - ( (double)member_size / data_position() ) ) );
   if( !error && pp.verbosity() >= 4 )
-    std::fprintf( stderr, "data CRC %08X, data size %9lld, member size %8lld.  ",
-                  (unsigned int)trailer.data_crc(), trailer.data_size(),
-                  trailer.member_size() );
+    std::fprintf( stderr, "data CRC %08X, data size %9llu, member size %8llu.  ",
+                  trailer.data_crc(), trailer.data_size(), trailer.member_size() );
   return !error;
   }
 
@@ -189,6 +191,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
 //               3 = trailer error, 4 = unknown marker found.
 int LZ_decoder::decode_member( const Pretty_print & pp )
   {
+  Bit_model bm_literal[1<<literal_context_bits][0x300];
   Bit_model bm_match[State::states][pos_states];
   Bit_model bm_rep[State::states];
   Bit_model bm_rep0[State::states];
@@ -196,32 +199,30 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
   Bit_model bm_rep2[State::states];
   Bit_model bm_len[State::states][pos_states];
   Bit_model bm_dis_slot[max_dis_states][1<<dis_slot_bits];
-  Bit_model bm_dis[modeled_distances-end_dis_model+1];
+  Bit_model bm_dis[modeled_distances-end_dis_model];
   Bit_model bm_align[dis_align_size];
-
-  unsigned int rep0 = 0;	// rep[0-3] latest four distances
-  unsigned int rep1 = 0;	// used for efficient coding of
-  unsigned int rep2 = 0;	// repeated distances
-  unsigned int rep3 = 0;
-
   Len_decoder len_decoder;
   Len_decoder rep_match_len_decoder;
-  Literal_decoder literal_decoder;
+
+  unsigned rep0 = 0;		// rep[0-3] latest four distances
+  unsigned rep1 = 0;		// used for efficient coding of
+  unsigned rep2 = 0;		// repeated distances
+  unsigned rep3 = 0;
+
   State state;
   range_decoder.load();
 
-  while( true )
+  while( !range_decoder.finished() )
     {
-    if( range_decoder.finished() ) { flush_data(); return 2; }
     const int pos_state = data_position() & pos_state_mask;
     if( range_decoder.decode_bit( bm_match[state()][pos_state] ) == 0 )
       {
       const uint8_t prev_byte = get_prev_byte();
       if( state.is_char() )
-        put_byte( literal_decoder.decode( range_decoder, prev_byte ) );
+        put_byte( range_decoder.decode_tree( bm_literal[get_lit_state(prev_byte)], 8 ) );
       else
-        put_byte( literal_decoder.decode_matched( range_decoder, prev_byte,
-                                                  get_byte( rep0 ) ) );
+        put_byte( range_decoder.decode_matched( bm_literal[get_lit_state(prev_byte)],
+                                                get_byte( rep0 ) ) );
       state.set_char();
       }
     else
@@ -232,7 +233,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
         len = 0;
         if( range_decoder.decode_bit( bm_rep0[state()] ) == 1 )
           {
-          unsigned int distance;
+          unsigned distance;
           if( range_decoder.decode_bit( bm_rep1[state()] ) == 0 )
             distance = rep1;
           else
@@ -258,20 +259,20 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
         }
       else
         {
-        const unsigned int rep0_saved = rep0;
+        const unsigned rep0_saved = rep0;
         len = min_match_len + len_decoder.decode( range_decoder, pos_state );
-        const int dis_slot = range_decoder.decode_tree( bm_dis_slot[get_dis_state(len)], dis_slot_bits );
+        const int dis_slot = range_decoder.decode_tree6( bm_dis_slot[get_dis_state(len)] );
         if( dis_slot < start_dis_model ) rep0 = dis_slot;
         else
           {
           const int direct_bits = ( dis_slot >> 1 ) - 1;
           rep0 = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
           if( dis_slot < end_dis_model )
-            rep0 += range_decoder.decode_tree_reversed( bm_dis + rep0 - dis_slot, direct_bits );
+            rep0 += range_decoder.decode_tree_reversed( bm_dis + rep0 - dis_slot - 1, direct_bits );
           else
             {
             rep0 += range_decoder.decode( direct_bits - dis_align_bits ) << dis_align_bits;
-            rep0 += range_decoder.decode_tree_reversed( bm_align, dis_align_bits );
+            rep0 += range_decoder.decode_tree_reversed4( bm_align );
             if( rep0 == 0xFFFFFFFFU )		// Marker found
               {
               rep0 = rep0_saved;
@@ -296,11 +297,13 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
           }
         rep3 = rep2; rep2 = rep1; rep1 = rep0_saved;
         state.set_match();
-        if( rep0 >= (unsigned int)dictionary_size ||
-            ( rep0 >= (unsigned int)pos && !partial_data_pos ) )
+        if( rep0 >= (unsigned)dictionary_size ||
+            ( rep0 >= (unsigned)pos && !partial_data_pos ) )
           { flush_data(); return 1; }
         }
       copy_block( rep0, len );
       }
     }
+  flush_data();
+  return 2;
   }

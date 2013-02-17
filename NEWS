@@ -1,18 +1,11 @@
-Changes in version 1.13:
+Changes in version 1.14:
 
-Lziprecover has been moved to its own package.
+Multi-step trials have been implemented.
 
-Inability to change output file attributes has been downgraded from
-error to warning.
+Compression ratio has been slightly increased.
 
-Compression time of option "-0" has been reduced by 2%.
+Compression time has been reduced by 5%.
 
-A reorganization of the compression code has been made.
+Decompression time has been reduced by 12%.
 
-A small change has been made in the "--help" output and man page.
-
-Quote characters in messages have been changed as advised by GNU Coding
-Standards.
-
-Configure option "--datadir" has been renamed to "--datarootdir" to
-follow GNU Standards.
+The target "install-bin" has been added to the Makefile.

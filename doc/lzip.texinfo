@@ -6,8 +6,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 24 February 2012
-@set VERSION 1.13
+@set UPDATED 17 February 2013
+@set VERSION 1.14
 
 @dircategory Data Compression
 @direntry
@@ -45,7 +45,8 @@ This manual is for Lzip (version @value{VERSION}, @value{UPDATED}).
 @end menu
 
 @sp 1
-Copyright @copyright{} 2008, 2009, 2010, 2011, 2012 Antonio Diaz Diaz.
+Copyright @copyright{} 2008, 2009, 2010, 2011, 2012, 2013
+Antonio Diaz Diaz.
 
 This manual is free documentation: you have unlimited permission
 to copy, distribute and modify it.
@@ -87,12 +88,16 @@ split the compressed output in volumes of a given size, even when
 reading from standard input. This allows the direct creation of
 multivolume compressed tar archives.
 
-The amount of memory required for compression is about 5 MiB plus 1 or 2
-times the dictionary size limit (1 if input file size is less than
-dictionary size limit, else 2) plus 8 times the dictionary size really
-used. The option @samp{-0} is special and only requires about 1.5 MiB at
-most. The amount of memory required for decompression is only a few tens
-of KiB larger than the dictionary size really used.
+Lzip is able to compress and decompress streams of unlimited size by
+automatically creating multi-member output. The members so created are
+large (about 2^60 bytes each).
+
+The amount of memory required for compression is about 1 or 2 times the
+dictionary size limit (1 if input file size is less than dictionary size
+limit, else 2) plus 9 times the dictionary size really used. The option
+@samp{-0} is special and only requires about 1.5 MiB at most. The amount
+of memory required for decompression is only a few tens of KiB larger
+than the dictionary size really used.
 
 Lzip will automatically use the smallest possible dictionary size
 without exceeding the given limit. Keep in mind that the decompression
@@ -348,6 +353,11 @@ Table of SI and binary prefixes (unit multipliers):
 @chapter File Format
 @cindex file format
 
+Perfection is reached, not when there is no longer anything to add, but
+when there is no longer anything to take away.@*
+--- Antoine de Saint-Exupery
+
+@sp 1
 In the diagram below, a box like this:
 @verbatim
 +---+
@@ -383,15 +393,16 @@ All multibyte values are stored in little endian order.
 A four byte string, identifying the lzip format, with the value "LZIP".
 
 @item VN (version number, 1 byte)
-Just in case something needs to be modified in the future. Valid values
-are 0 and 1. Version 0 files are deprecated. They can contain only one
-member and lack the @samp{Member size} field.
+Just in case something needs to be modified in the future. 1 for now.
 
 @item DS (coded dictionary size, 1 byte)
-Bits 4-0 contain the base 2 logarithm of the base dictionary size.@*
-Bits 7-5 contain the number of "wedges" to substract from the base
-dictionary size to obtain the dictionary size. The size of a wedge is
-(base dictionary size / 16).@*
+Lzip divides the distance between any two powers of 2 into 8 equally
+spaced intervals, named "wedges". The dictionary size is calculated by
+taking a power of 2 (the base size) and substracting from it a number of
+wedges between 0 and 7. The size of a wedge is (base_size / 16).@*
+Bits 4-0 contain the base 2 logarithm of the base size (12 to 29).@*
+Bits 7-5 contain the number of wedges (0 to 7) to substract from the
+base size to obtain the dictionary size.@*
 Valid values for dictionary size range from 4KiB to 512MiB.
 
 @item Lzma stream
@@ -405,8 +416,9 @@ CRC of the uncompressed original data.
 Size of the uncompressed original data.
 
 @item Member size (8 bytes)
-Total size of the member, including header and trailer. This facilitates
-safe recovery of undamaged members from multi-member files.
+Total size of the member, including header and trailer. This field acts
+as a distributed index, and facilitates safe recovery of undamaged
+members from multi-member files.
 
 @end table
 
@@ -419,8 +431,8 @@ WARNING! Even if lzip is bug-free, other causes may result in a corrupt
 compressed file (bugs in the system libraries, memory errors, etc).
 Therefore, if the data you are going to compress is important, give the
 @samp{--keep} option to lzip and do not remove the original file until
-you verify the compressed file with a command like @w{@samp{lzip -cd
-file.lz | cmp file -}}.
+you verify the compressed file with a command like
+@w{@samp{lzip -cd file.lz | cmp file -}}.
 
 @sp 1
 @noindent
