@@ -1,4 +1,4 @@
-/*  Lzip - Data compressor based on the LZMA algorithm
+/*  Lzip - LZMA lossless data compressor
     Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -122,22 +122,22 @@ public:
 
   int decode_tree( Bit_model bm[], const int num_bits )
     {
-    int model = 1;
+    int symbol = 1;
     for( int i = num_bits; i > 0; --i )
-      model = ( model << 1 ) | decode_bit( bm[model] );
-    return model - (1 << num_bits);
+      symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    return symbol - (1 << num_bits);
     }
 
   int decode_tree6( Bit_model bm[] )
     {
-    int model = 1;
-    model = ( model << 1 ) | decode_bit( bm[model] );
-    model = ( model << 1 ) | decode_bit( bm[model] );
-    model = ( model << 1 ) | decode_bit( bm[model] );
-    model = ( model << 1 ) | decode_bit( bm[model] );
-    model = ( model << 1 ) | decode_bit( bm[model] );
-    model = ( model << 1 ) | decode_bit( bm[model] );
-    return model - (1 << 6);
+    int symbol = 1;
+    symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    return symbol - (1 << 6);
     }
 
   int decode_tree_reversed( Bit_model bm[], const int num_bits )
@@ -176,37 +176,26 @@ public:
       match_byte <<= 1;
       const int match_bit = match_byte & 0x100;
       const int bit = decode_bit( bm1[match_bit+symbol] );
-      symbol = ( symbol << 1 ) + bit;
+      symbol = ( symbol << 1 ) | bit;
       if( match_bit != bit << 8 )
         {
         while( symbol < 0x100 )
-          symbol = ( symbol << 1 ) + decode_bit( bm[symbol] );
+          symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
         break;
         }
       }
     return symbol - 0x100;
     }
-  };
 
-
-class Len_decoder
-  {
-  Bit_model choice1;
-  Bit_model choice2;
-  Bit_model bm_low[pos_states][len_low_symbols];
-  Bit_model bm_mid[pos_states][len_mid_symbols];
-  Bit_model bm_high[len_high_symbols];
-
-public:
-  int decode( Range_decoder & range_decoder, const int pos_state )
+  int decode_len( Len_model & lm, const int pos_state )
     {
-    if( range_decoder.decode_bit( choice1 ) == 0 )
-      return range_decoder.decode_tree( bm_low[pos_state], len_low_bits );
-    if( range_decoder.decode_bit( choice2 ) == 0 )
+    if( decode_bit( lm.choice1 ) == 0 )
+      return decode_tree( lm.bm_low[pos_state], len_low_bits );
+    if( decode_bit( lm.choice2 ) == 0 )
       return len_low_symbols +
-             range_decoder.decode_tree( bm_mid[pos_state], len_mid_bits );
+             decode_tree( lm.bm_mid[pos_state], len_mid_bits );
     return len_low_symbols + len_mid_symbols +
-           range_decoder.decode_tree( bm_high, len_high_bits );
+           decode_tree( lm.bm_high, len_high_bits );
     }
   };
 
@@ -214,7 +203,7 @@ public:
 class LZ_decoder
   {
   unsigned long long partial_data_pos;
-  Range_decoder & range_decoder;
+  Range_decoder & rdec;
   const int dictionary_size;
   const int buffer_size;
   uint8_t * const buffer;	// output buffer
@@ -267,10 +256,10 @@ class LZ_decoder
   void operator=( const LZ_decoder & );		// declared as private
 
 public:
-  LZ_decoder( const File_header & header, Range_decoder & rdec, const int ofd )
+  LZ_decoder( const File_header & header, Range_decoder & rde, const int ofd )
     :
     partial_data_pos( 0 ),
-    range_decoder( rdec ),
+    rdec( rde ),
     dictionary_size( header.dictionary_size() ),
     buffer_size( std::max( 65536, dictionary_size ) ),
     buffer( new uint8_t[buffer_size] ),
@@ -284,7 +273,6 @@ public:
   ~LZ_decoder() { delete[] buffer; }
 
   unsigned crc() const { return crc_ ^ 0xFFFFFFFFU; }
-
   unsigned long long data_position() const { return partial_data_pos + pos; }
 
   int decode_member( const Pretty_print & pp );

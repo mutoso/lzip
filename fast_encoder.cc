@@ -1,4 +1,4 @@
-/*  Lzip - Data compressor based on the LZMA algorithm
+/*  Lzip - LZMA lossless data compressor
     Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -124,21 +124,21 @@ bool FLZ_encoder::encode_member( const unsigned long long member_size )
   for( int i = 0; i < num_rep_distances; ++i ) reps[i] = 0;
 
   if( fmatchfinder.data_position() != 0 ||
-      range_encoder.member_position() != File_header::size )
+      renc.member_position() != File_header::size )
     return false;			// can be called only once
 
   if( !fmatchfinder.finished() )	// encode first byte
     {
     const uint8_t prev_byte = 0;
     const uint8_t cur_byte = fmatchfinder[0];
-    range_encoder.encode_bit( bm_match[state()][0], 0 );
+    renc.encode_bit( bm_match[state()][0], 0 );
     encode_literal( prev_byte, cur_byte );
-    crc32.update( crc_, cur_byte );
+    crc32.update_byte( crc_, cur_byte );
     fmatchfinder.longest_match_len( 1 );
     }
 
   while( !fmatchfinder.finished() &&
-         range_encoder.member_position() < member_size_limit )
+         renc.member_position() < member_size_limit )
     {
     int match_distance;
     const int main_len = fmatchfinder.longest_match_len( &match_distance );
@@ -153,23 +153,23 @@ bool FLZ_encoder::encode_member( const unsigned long long member_size )
       }
     if( len > min_match_len && len + 4 > main_len )
       {
-      crc32.update( crc_, fmatchfinder.ptr_to_current_pos(), len );
-      range_encoder.encode_bit( bm_match[state()][pos_state], 1 );
-      range_encoder.encode_bit( bm_rep[state()], 1 );
+      crc32.update_buf( crc_, fmatchfinder.ptr_to_current_pos(), len );
+      renc.encode_bit( bm_match[state()][pos_state], 1 );
+      renc.encode_bit( bm_rep[state()], 1 );
       const bool bit = ( dis == 0 );
-      range_encoder.encode_bit( bm_rep0[state()], !bit );
+      renc.encode_bit( bm_rep0[state()], !bit );
       if( bit )
-        range_encoder.encode_bit( bm_len[state()][pos_state], 1 );
+        renc.encode_bit( bm_len[state()][pos_state], 1 );
       else
         {
         const int distance = reps[dis];
         for( int i = dis; i > 0; --i ) reps[i] = reps[i-1];
         reps[0] = distance;
-        range_encoder.encode_bit( bm_rep1[state()], dis > 1 );
+        renc.encode_bit( bm_rep1[state()], dis > 1 );
         if( dis > 1 )
-          range_encoder.encode_bit( bm_rep2[state()], dis > 2 );
+          renc.encode_bit( bm_rep2[state()], dis > 2 );
         }
-      rep_match_len_encoder.encode( range_encoder, len, pos_state );
+      rep_len_encoder.encode( renc, len, pos_state );
       state.set_rep();
       move_pos( len );
       continue;
@@ -178,10 +178,10 @@ bool FLZ_encoder::encode_member( const unsigned long long member_size )
     if( main_len > min_match_len ||
         ( main_len == min_match_len && match_distance < modeled_distances ) )
       {
-      crc32.update( crc_, fmatchfinder.ptr_to_current_pos(), main_len );
+      crc32.update_buf( crc_, fmatchfinder.ptr_to_current_pos(), main_len );
       dis = match_distance;
-      range_encoder.encode_bit( bm_match[state()][pos_state], 1 );
-      range_encoder.encode_bit( bm_rep[state()], 0 );
+      renc.encode_bit( bm_match[state()][pos_state], 1 );
+      renc.encode_bit( bm_rep[state()], 0 );
       encode_pair( dis, main_len, pos_state );
       state.set_match();
       move_pos( main_len );
@@ -193,7 +193,7 @@ bool FLZ_encoder::encode_member( const unsigned long long member_size )
     const uint8_t prev_byte = fmatchfinder[-1];
     const uint8_t cur_byte = fmatchfinder[0];
     const uint8_t match_byte = fmatchfinder[-reps[0]-1];
-    crc32.update( crc_, cur_byte );
+    crc32.update_byte( crc_, cur_byte );
     fmatchfinder.move_pos();
 
     if( match_byte == cur_byte )
@@ -209,17 +209,17 @@ bool FLZ_encoder::encode_member( const unsigned long long member_size )
                                   price0( bm_len[state()][pos_state] );
       if( short_rep_price < price )
         {
-        range_encoder.encode_bit( bm_match[state()][pos_state], 1 );
-        range_encoder.encode_bit( bm_rep[state()], 1 );
-        range_encoder.encode_bit( bm_rep0[state()], 0 );
-        range_encoder.encode_bit( bm_len[state()][pos_state], 0 );
+        renc.encode_bit( bm_match[state()][pos_state], 1 );
+        renc.encode_bit( bm_rep[state()], 1 );
+        renc.encode_bit( bm_rep0[state()], 0 );
+        renc.encode_bit( bm_len[state()][pos_state], 0 );
         state.set_short_rep();
         continue;
         }
       }
 
     // literal byte
-    range_encoder.encode_bit( bm_match[state()][pos_state], 0 );
+    renc.encode_bit( bm_match[state()][pos_state], 0 );
     if( state.is_char() )
       encode_literal( prev_byte, cur_byte );
     else

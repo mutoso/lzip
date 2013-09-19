@@ -1,4 +1,4 @@
-/*  Lzip - Data compressor based on the LZMA algorithm
+/*  Lzip - LZMA lossless data compressor
     Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -15,7 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 /*
-    Return values: 0 for a normal exit, 1 for environmental problems
+    Exit status: 0 for a normal exit, 1 for environmental problems
     (file not found, invalid flags, I/O errors, etc), 2 to indicate a
     corrupt or invalid input file, 3 for an internal consistency error
     (eg, bug) which caused lzip to panic.
@@ -84,17 +84,14 @@ struct { const char * from; const char * to; } const known_extensions[] = {
 
 struct Lzma_options
   {
-  int dictionary_size;		// 4KiB..512MiB
-  int match_len_limit;		// 5..273
+  int dictionary_size;		// 4 KiB .. 512 MiB
+  int match_len_limit;		// 5 .. 273
   };
 
 enum Mode { m_compress, m_decompress, m_test };
-const unsigned long long max_member_size = 0x1000000000000000ULL;
-const unsigned long long max_volume_size = 0x7FFFFFFFFFFFFFFFULL;
 
 std::string output_filename;
 int outfd = -1;
-int verbosity = 0;
 const mode_t usr_rw = S_IRUSR | S_IWUSR;
 const mode_t all_rw = usr_rw | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
 mode_t outfd_mode = usr_rw;
@@ -103,7 +100,7 @@ bool delete_output_on_interrupt = false;
 
 void show_help()
   {
-  std::printf( "%s - Data compressor based on the LZMA algorithm.\n", Program_name );
+  std::printf( "%s - LZMA lossless data compressor.\n", Program_name );
   std::printf( "\nUsage: %s [options] [files]\n", invocation_name );
   std::printf( "\nOptions:\n"
                "  -h, --help                     display this help and exit\n"
@@ -117,7 +114,7 @@ void show_help()
                "  -m, --match-length=<bytes>     set match length limit in bytes [36]\n"
                "  -o, --output=<file>            if reading stdin, place the output into <file>\n"
                "  -q, --quiet                    suppress all messages\n"
-               "  -s, --dictionary-size=<bytes>  set dictionary size limit in bytes [8MiB]\n"
+               "  -s, --dictionary-size=<bytes>  set dictionary size limit in bytes [8 MiB]\n"
                "  -S, --volume-size=<bytes>      set volume size limit in bytes\n"
                "  -t, --test                     test compressed file integrity\n"
                "  -v, --verbose                  be verbose (a 2nd -v gives more)\n"
@@ -131,7 +128,12 @@ void show_help()
                "The bidimensional parameter space of LZMA can't be mapped to a linear\n"
                "scale optimal for all files. If your files are large, very repetitive,\n"
                "etc, you may need to use the --match-length and --dictionary-size\n"
-               "options directly to achieve optimal performance.\n"
+               "options directly to achieve optimal performance. For example, -9m64\n"
+               "usually compresses executables more (and faster) than -9.\n"
+               "\nExit status: 0 for a normal exit, 1 for environmental problems (file\n"
+               "not found, invalid flags, I/O errors, etc), 2 to indicate a corrupt or\n"
+               "invalid input file, 3 for an internal consistency error (eg, bug) which\n"
+               "caused lzip to panic.\n"
                "\nReport bugs to lzip-bug@nongnu.org\n"
                "Lzip home page: http://www.nongnu.org/lzip/lzip.html\n" );
   }
@@ -160,8 +162,9 @@ void show_header( const File_header & header )
   for( int i = 0; i < 8 && ( num > 9999 || ( exact && num >= factor ) ); ++i )
     { num /= factor; if( num % factor != 0 ) exact = false;
       p = prefix[i]; np = ""; }
-  std::fprintf( stderr, "version %d, dictionary size %s%4u %sB.  ",
-                header.version(), np, num, p );
+  if( verbosity >= 4 && header.version() != 1 )
+    std::fprintf( stderr, "version %d, ", header.version() );
+  std::fprintf( stderr, "dictionary size %s%4u %sB.  ", np, num, p );
   }
 
 
@@ -169,8 +172,8 @@ unsigned long long getnum( const char * const ptr,
                            const unsigned long long llimit,
                            const unsigned long long ulimit )
   {
-  errno = 0;
   char * tail;
+  errno = 0;
   unsigned long long result = strtoull( ptr, &tail, 0 );
   if( tail == ptr )
     {
@@ -244,7 +247,7 @@ int extension_index( const std::string & name )
   }
 
 
-int open_instream( const std::string & name, struct stat * const in_statsp,
+int open_instream( const char * const name, struct stat * const in_statsp,
                    const Mode program_mode, const int eindex,
                    const bool recompress, const bool to_stdout )
   {
@@ -253,17 +256,16 @@ int open_instream( const std::string & name, struct stat * const in_statsp,
     {
     if( verbosity >= 0 )
       std::fprintf( stderr, "%s: Input file '%s' already has '%s' suffix.\n",
-                    program_name, name.c_str(),
-                    known_extensions[eindex].from );
+                    program_name, name, known_extensions[eindex].from );
     }
   else
     {
-    infd = open( name.c_str(), O_RDONLY | o_binary );
+    infd = open( name, O_RDONLY | o_binary );
     if( infd < 0 )
       {
       if( verbosity >= 0 )
         std::fprintf( stderr, "%s: Can't open input file '%s': %s.\n",
-                      program_name, name.c_str(), std::strerror( errno ) );
+                      program_name, name, std::strerror( errno ) );
       }
     else
       {
@@ -272,12 +274,13 @@ int open_instream( const std::string & name, struct stat * const in_statsp,
       const bool can_read = ( i == 0 &&
                               ( S_ISBLK( mode ) || S_ISCHR( mode ) ||
                                 S_ISFIFO( mode ) || S_ISSOCK( mode ) ) );
-      if( i != 0 || ( !S_ISREG( mode ) && ( !to_stdout || !can_read ) ) )
+      const bool no_ofile = to_stdout || program_mode == m_test;
+      if( i != 0 || ( !S_ISREG( mode ) && ( !can_read || !no_ofile ) ) )
         {
         if( verbosity >= 0 )
           std::fprintf( stderr, "%s: Input file '%s' is not a regular file%s.\n",
-                        program_name, name.c_str(),
-                        ( can_read && !to_stdout ) ?
+                        program_name, name,
+                        ( can_read && !no_ofile ) ?
                         " and '--stdout' was not specified" : "" );
         close( infd );
         infd = -1;
@@ -430,8 +433,9 @@ int compress( const unsigned long long member_size,
     while( true )		// encode one member per iteration
       {
       LZ_encoder encoder( matchfinder, header, outfd );
-      const unsigned long long size = ( ( volume_size > 0 ) ?
-        std::min( member_size, volume_size - partial_volume_size ) : member_size );
+      const unsigned long long size = ( volume_size > 0 ) ?
+        std::min( member_size, volume_size - partial_volume_size ) : member_size;
+      show_progress( in_size, &matchfinder, &pp, in_statsp );	// init
       if( !encoder.encode_member( size ) )
         { pp( "Encoder error" ); retval = 1; break; }
       in_size += matchfinder.data_position();
@@ -497,8 +501,9 @@ int fcompress( const unsigned long long member_size,
     while( true )		// encode one member per iteration
       {
       FLZ_encoder encoder( fmatchfinder, header, outfd );
-      const unsigned long long size = ( ( volume_size > 0 ) ?
-        std::min( member_size, volume_size - partial_volume_size ) : member_size );
+      const unsigned long long size = ( volume_size > 0 ) ?
+        std::min( member_size, volume_size - partial_volume_size ) : member_size;
+      show_progress( in_size, &fmatchfinder, &pp, in_statsp );	// init
       if( !encoder.encode_member( size ) )
         { pp( "Encoder error" ); retval = 1; break; }
       in_size += fmatchfinder.data_position();
@@ -597,7 +602,7 @@ int decompress( const int infd, const Pretty_print & pp, const bool testing )
       if( rdec.finished() )			// End Of File
         {
         if( first_member )
-          { pp( "Error reading member header" ); retval = 1; }
+          { pp( "File ends unexpectedly at member header" ); retval = 2; }
         else if( verbosity >= 4 && size > 0 )
           show_trailing_garbage( header.data, size, pp, true );
         break;
@@ -623,7 +628,7 @@ int decompress( const int infd, const Pretty_print & pp, const bool testing )
         { pp( "Invalid dictionary size in member header" ); retval = 2; break; }
 
       if( verbosity >= 2 || ( verbosity == 1 && first_member ) )
-        { pp(); if( verbosity >= 2 ) show_header( header ); }
+        { pp(); if( verbosity >= 3 ) show_header( header ); }
 
       LZ_decoder decoder( header, rdec, outfd );
       const int result = decoder.decode_member( pp );
@@ -643,8 +648,7 @@ int decompress( const int infd, const Pretty_print & pp, const bool testing )
         retval = 2; break;
         }
       if( verbosity >= 2 )
-        { if( testing ) std::fprintf( stderr, "ok\n" );
-          else std::fprintf( stderr, "done\n" ); pp.reset(); }
+        { std::fprintf( stderr, testing ? "ok\n" : "done\n" ); pp.reset(); }
       }
     }
   catch( std::bad_alloc )
@@ -654,8 +658,7 @@ int decompress( const int infd, const Pretty_print & pp, const bool testing )
     }
   catch( Error e ) { pp(); show_error( e.msg, errno ); retval = 1; }
   if( verbosity == 1 && retval == 0 )
-    { if( testing ) std::fprintf( stderr, "ok\n" );
-      else std::fprintf( stderr, "done\n" ); }
+    std::fprintf( stderr, testing ? "ok\n" : "done\n" );
   return retval;
   }
 
@@ -675,6 +678,9 @@ void set_signals()
   }
 
 } // end namespace
+
+
+int verbosity = 0;
 
 
 void show_error( const char * const msg, const int errcode, const bool help )
@@ -703,10 +709,38 @@ void internal_error( const char * const msg )
   }
 
 
+void show_progress( const unsigned long long partial_size,
+                    const Matchfinder_base * const m,
+                    const Pretty_print * const p,
+                    const struct stat * const in_statsp )
+  {
+  static unsigned long long cfile_size = 0;	// file_size / 100
+  static unsigned long long psize = 0;
+  static const Matchfinder_base * mb = 0;
+  static const Pretty_print * pp = 0;
+
+  if( m )					// initialize static vars
+    {
+    psize = partial_size; mb = m; pp = p;
+    cfile_size = ( in_statsp && S_ISREG( in_statsp->st_mode ) ) ?
+                 in_statsp->st_size / 100 : 0;
+    return;
+    }
+  if( mb && pp )
+    {
+    const unsigned long long pos = psize + mb->data_position();
+    if( cfile_size > 0 )
+      std::fprintf( stderr, "%4llu%%", pos / cfile_size );
+    std::fprintf( stderr, "  %.1f MB\r", pos / 1000000.0 );
+    pp->reset(); (*pp)();			// restore cursor position
+    }
+  }
+
+
 int main( const int argc, const char * const argv[] )
   {
-  // Mapping from gzip/bzip2 style 1..9 compression modes
-  // to the corresponding LZMA compression modes.
+  /* Mapping from gzip/bzip2 style 1..9 compression modes
+     to the corresponding LZMA compression modes. */
   const Lzma_options option_mapping[] =
     {
     { 1 << 16,  16 },		// -0 entry values not used
@@ -720,6 +754,8 @@ int main( const int argc, const char * const argv[] )
     { 3 << 23, 132 },		// -8
     { 1 << 25, 273 } };		// -9
   Lzma_options encoder_options = option_mapping[6];	// default = "-6"
+  const unsigned long long max_member_size = 0x0100000000000000ULL;
+  const unsigned long long max_volume_size = 0x4000000000000000ULL;
   unsigned long long member_size = max_member_size;
   unsigned long long volume_size = 0;
   std::string input_filename;
@@ -754,6 +790,7 @@ int main( const int argc, const char * const argv[] )
     { 'h', "help",            Arg_parser::no  },
     { 'k', "keep",            Arg_parser::no  },
     { 'm', "match-length",    Arg_parser::yes },
+    { 'n', "threads",         Arg_parser::yes },
     { 'o', "output",          Arg_parser::yes },
     { 'q', "quiet",           Arg_parser::no  },
     { 's', "dictionary-size", Arg_parser::yes },
@@ -790,6 +827,7 @@ int main( const int argc, const char * const argv[] )
       case 'm': encoder_options.match_len_limit =
                   getnum( arg, min_match_len_limit, max_match_len );
                 zero = false; break;
+      case 'n': break;
       case 'o': default_output_filename = arg; break;
       case 'q': verbosity = -1; break;
       case 's': encoder_options.dictionary_size = get_dict_size( arg );
@@ -827,7 +865,7 @@ int main( const int argc, const char * const argv[] )
       ( filenames_given || default_output_filename.size() ) )
     set_signals();
 
-  Pretty_print pp( filenames, verbosity );
+  Pretty_print pp( filenames );
 
   int retval = 0;
   for( unsigned i = 0; i < filenames.size(); ++i )
@@ -862,7 +900,7 @@ int main( const int argc, const char * const argv[] )
       {
       input_filename = filenames[i];
       const int eindex = extension_index( input_filename );
-      infd = open_instream( input_filename, &in_stats, program_mode,
+      infd = open_instream( input_filename.c_str(), &in_stats, program_mode,
                             eindex, recompress, to_stdout );
       if( infd < 0 ) { if( retval < 1 ) retval = 1; continue; }
       if( program_mode != m_test )

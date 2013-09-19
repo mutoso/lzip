@@ -1,4 +1,4 @@
-/*  Lzip - Data compressor based on the LZMA algorithm
+/*  Lzip - LZMA lossless data compressor
     Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -30,10 +30,11 @@ public:
     static const int next[states] = { 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 4, 5 };
     st = next[st];
     }
-
-  void set_match()     { st = ( ( st < 7 ) ? 7 : 10 ); }
-  void set_rep()       { st = ( ( st < 7 ) ? 8 : 11 ); }
-  void set_short_rep() { st = ( ( st < 7 ) ? 9 : 11 ); }
+  void set_char1()     { st -= ( st < 4 ) ? st : 3; }	// for st < 7
+  void set_char2()     { st -= ( st < 10 ) ? 3 : 6; }	// for st >= 7
+  void set_match()     { st = ( st < 7 ) ? 7 : 10; }
+  void set_rep()       { st = ( st < 7 ) ? 8 : 11; }
+  void set_short_rep() { st = ( st < 7 ) ? 9 : 11; }
   };
 
 
@@ -47,6 +48,7 @@ enum {
   pos_states = 1 << pos_state_bits,
   pos_state_mask = pos_states - 1,
 
+  len_states = 4,
   dis_slot_bits = 6,
   start_dis_model = 4,
   end_dis_model = 14,
@@ -64,12 +66,10 @@ enum {
 
   min_match_len = 2,					// must be 2
   max_match_len = min_match_len + max_len_symbols - 1,	// 273
-  min_match_len_limit = 5,
+  min_match_len_limit = 5 };
 
-  max_dis_states = 4 };
-
-inline int get_dis_state( const int len )
-  { return std::min( len - min_match_len, max_dis_states - 1 ); }
+inline int get_len_state( const int len )
+  { return std::min( len - min_match_len, len_states - 1 ); }
 
 inline int get_lit_state( const uint8_t prev_byte )
   { return ( prev_byte >> ( 8 - literal_context_bits ) ); }
@@ -85,25 +85,32 @@ struct Bit_model
   Bit_model() : probability( bit_model_total / 2 ) {}
   };
 
+struct Len_model
+  {
+  Bit_model choice1;
+  Bit_model choice2;
+  Bit_model bm_low[pos_states][len_low_symbols];
+  Bit_model bm_mid[pos_states][len_mid_symbols];
+  Bit_model bm_high[len_high_symbols];
+  };
+
 
 class Pretty_print
   {
   std::string name_;
   const char * const stdin_name;
   unsigned longest_name;
-  const int verbosity_;
   mutable bool first_post;
 
 public:
-  Pretty_print( const std::vector< std::string > & filenames, const int v )
-    : stdin_name( "(stdin)" ), longest_name( 0 ), verbosity_( v ),
-      first_post( false )
+  explicit Pretty_print( const std::vector< std::string > & filenames )
+    : stdin_name( "(stdin)" ), longest_name( 0 ), first_post( false )
     {
     const unsigned stdin_name_len = std::strlen( stdin_name );
     for( unsigned i = 0; i < filenames.size(); ++i )
       {
       const std::string & s = filenames[i];
-      const unsigned len = ( ( s == "-" ) ? stdin_name_len : s.size() );
+      const unsigned len = ( s == "-" ) ? stdin_name_len : s.size();
       if( len > longest_name ) longest_name = len;
       }
     if( longest_name == 0 ) longest_name = stdin_name_len;
@@ -118,7 +125,6 @@ public:
 
   void reset() const { if( name_.size() ) first_post = true; }
   const char * name() const { return name_.c_str(); }
-  int verbosity() const { return verbosity_; }
   void operator()( const char * const msg = 0 ) const;
   };
 
@@ -141,10 +147,11 @@ public:
 
   uint32_t operator[]( const uint8_t byte ) const { return data[byte]; }
 
-  void update( uint32_t & crc, const uint8_t byte ) const
+  void update_byte( uint32_t & crc, const uint8_t byte ) const
     { crc = data[(crc^byte)&0xFF] ^ ( crc >> 8 ); }
 
-  void update( uint32_t & crc, const uint8_t * const buffer, const int size ) const
+  void update_buf( uint32_t & crc, const uint8_t * const buffer,
+                   const int size ) const
     {
     for( int i = 0; i < size; ++i )
       crc = data[(crc^buffer[i])&0xFF] ^ ( crc >> 8 );
@@ -186,15 +193,15 @@ struct File_header
     return sz;
     }
 
-  bool dictionary_size( const int sz )
+  bool dictionary_size( const unsigned sz )
     {
     if( sz >= min_dictionary_size && sz <= max_dictionary_size )
       {
       data[5] = real_bits( sz - 1 );
       if( sz > min_dictionary_size )
         {
-        const int base_size = 1 << data[5];
-        const int wedge = base_size / 16;
+        const unsigned base_size = 1 << data[5];
+        const unsigned wedge = base_size / 16;
         for( int i = 7; i >= 1; --i )
           if( base_size - ( i * wedge ) >= sz )
             { data[5] |= ( i << 5 ); break; }
@@ -263,6 +270,12 @@ int readblock( const int fd, uint8_t * const buf, const int size );
 int writeblock( const int fd, const uint8_t * const buf, const int size );
 
 // defined in main.cc
+extern int verbosity;
 void show_error( const char * const msg, const int errcode = 0,
                  const bool help = false );
 void internal_error( const char * const msg );
+class Matchfinder_base;
+void show_progress( const unsigned long long partial_size = 0,
+                    const Matchfinder_base * const m = 0,
+                    const Pretty_print * const p = 0,
+                    const struct stat * const in_statsp = 0 );

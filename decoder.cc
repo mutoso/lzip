@@ -1,4 +1,4 @@
-/*  Lzip - Data compressor based on the LZMA algorithm
+/*  Lzip - LZMA lossless data compressor
     Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -36,7 +36,7 @@ const CRC32 crc32;
 
 void Pretty_print::operator()( const char * const msg ) const
   {
-  if( verbosity_ >= 0 )
+  if( verbosity >= 0 )
     {
     if( first_post )
       {
@@ -51,9 +51,9 @@ void Pretty_print::operator()( const char * const msg ) const
   }
 
 
-// Returns the number of bytes really read.
-// If (returned value < size) and (errno == 0), means EOF was reached.
-//
+/* Returns the number of bytes really read.
+   If (returned value < size) and (errno == 0), means EOF was reached.
+*/
 int readblock( const int fd, uint8_t * const buf, const int size )
   {
   int rest = size;
@@ -70,9 +70,9 @@ int readblock( const int fd, uint8_t * const buf, const int size )
   }
 
 
-// Returns the number of bytes really written.
-// If (returned value < size), it is always an error.
-//
+/* Returns the number of bytes really written.
+   If (returned value < size), it is always an error.
+*/
 int writeblock( const int fd, const uint8_t * const buf, const int size )
   {
   int rest = size;
@@ -104,10 +104,10 @@ bool Range_decoder::read_block()
 
 void LZ_decoder::flush_data()
   {
-  const int size = pos - stream_pos;
-  if( size > 0 )
+  if( pos > stream_pos )
     {
-    crc32.update( crc_, buffer + stream_pos, size );
+    const int size = pos - stream_pos;
+    crc32.update_buf( crc_, buffer + stream_pos, size );
     if( outfd >= 0 &&
         writeblock( outfd, buffer + stream_pos, size ) != size )
       throw Error( "Write error" );
@@ -122,14 +122,14 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   File_trailer trailer;
   const int trailer_size = File_trailer::size( member_version );
   const unsigned long long member_size =
-    range_decoder.member_position() + trailer_size;
+    rdec.member_position() + trailer_size;
   bool error = false;
 
-  int size = range_decoder.read_data( trailer.data, trailer_size );
+  int size = rdec.read_data( trailer.data, trailer_size );
   if( size < trailer_size )
     {
     error = true;
-    if( pp.verbosity() >= 0 )
+    if( verbosity >= 0 )
       {
       pp();
       std::fprintf( stderr, "Trailer truncated at trailer position %d;"
@@ -140,7 +140,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
 
   if( member_version == 0 ) trailer.member_size( member_size );
 
-  if( !range_decoder.code_is_zero() )
+  if( !rdec.code_is_zero() )
     {
     error = true;
     pp( "Range decoder final code is not zero" );
@@ -148,7 +148,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   if( trailer.data_crc() != crc() )
     {
     error = true;
-    if( pp.verbosity() >= 0 )
+    if( verbosity >= 0 )
       {
       pp();
       std::fprintf( stderr, "CRC mismatch; trailer says %08X, data CRC is %08X.\n",
@@ -158,7 +158,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   if( trailer.data_size() != data_position() )
     {
     error = true;
-    if( pp.verbosity() >= 0 )
+    if( verbosity >= 0 )
       {
       pp();
       std::fprintf( stderr, "Data size mismatch; trailer says %llu, data size is %llu (0x%llX).\n",
@@ -168,27 +168,27 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   if( trailer.member_size() != member_size )
     {
     error = true;
-    if( pp.verbosity() >= 0 )
+    if( verbosity >= 0 )
       {
       pp();
       std::fprintf( stderr, "Member size mismatch; trailer says %llu, member size is %llu (0x%llX).\n",
                     trailer.member_size(), member_size, member_size );
       }
     }
-  if( !error && pp.verbosity() >= 3 && data_position() > 0 && member_size > 0 )
+  if( !error && verbosity >= 2 && data_position() > 0 && member_size > 0 )
     std::fprintf( stderr, "%6.3f:1, %6.3f bits/byte, %5.2f%% saved.  ",
                   (double)data_position() / member_size,
                   ( 8.0 * member_size ) / data_position(),
                   100.0 * ( 1.0 - ( (double)member_size / data_position() ) ) );
-  if( !error && pp.verbosity() >= 4 )
+  if( !error && verbosity >= 4 )
     std::fprintf( stderr, "data CRC %08X, data size %9llu, member size %8llu.  ",
                   trailer.data_crc(), trailer.data_size(), trailer.member_size() );
   return !error;
   }
 
 
-// Return value: 0 = OK, 1 = decoder error, 2 = unexpected EOF,
-//               3 = trailer error, 4 = unknown marker found.
+/* Return value: 0 = OK, 1 = decoder error, 2 = unexpected EOF,
+                 3 = trailer error, 4 = unknown marker found. */
 int LZ_decoder::decode_member( const Pretty_print & pp )
   {
   Bit_model bm_literal[1<<literal_context_bits][0x300];
@@ -198,49 +198,52 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
   Bit_model bm_rep1[State::states];
   Bit_model bm_rep2[State::states];
   Bit_model bm_len[State::states][pos_states];
-  Bit_model bm_dis_slot[max_dis_states][1<<dis_slot_bits];
+  Bit_model bm_dis_slot[len_states][1<<dis_slot_bits];
   Bit_model bm_dis[modeled_distances-end_dis_model];
   Bit_model bm_align[dis_align_size];
-  Len_decoder len_decoder;
-  Len_decoder rep_match_len_decoder;
-
+  Len_model match_len_model;
+  Len_model rep_len_model;
   unsigned rep0 = 0;		// rep[0-3] latest four distances
   unsigned rep1 = 0;		// used for efficient coding of
   unsigned rep2 = 0;		// repeated distances
   unsigned rep3 = 0;
-
   State state;
-  range_decoder.load();
 
-  while( !range_decoder.finished() )
+  rdec.load();
+  while( !rdec.finished() )
     {
     const int pos_state = data_position() & pos_state_mask;
-    if( range_decoder.decode_bit( bm_match[state()][pos_state] ) == 0 )
+    if( rdec.decode_bit( bm_match[state()][pos_state] ) == 0 )	// 1st bit
       {
       const uint8_t prev_byte = get_prev_byte();
       if( state.is_char() )
-        put_byte( range_decoder.decode_tree( bm_literal[get_lit_state(prev_byte)], 8 ) );
+        {
+        state.set_char1();
+        put_byte( rdec.decode_tree( bm_literal[get_lit_state(prev_byte)], 8 ) );
+        }
       else
-        put_byte( range_decoder.decode_matched( bm_literal[get_lit_state(prev_byte)],
-                                                get_byte( rep0 ) ) );
-      state.set_char();
+        {
+        state.set_char2();
+        put_byte( rdec.decode_matched( bm_literal[get_lit_state(prev_byte)],
+                                       get_byte( rep0 ) ) );
+        }
       }
     else
       {
       int len;
-      if( range_decoder.decode_bit( bm_rep[state()] ) == 1 )
+      if( rdec.decode_bit( bm_rep[state()] ) != 0 )		// 2nd bit
         {
-        len = 0;
-        if( range_decoder.decode_bit( bm_rep0[state()] ) == 1 )
+        if( rdec.decode_bit( bm_rep0[state()] ) != 0 )		// 3rd bit
           {
           unsigned distance;
-          if( range_decoder.decode_bit( bm_rep1[state()] ) == 0 )
+          if( rdec.decode_bit( bm_rep1[state()] ) == 0 )	// 4th bit
             distance = rep1;
           else
             {
-            if( range_decoder.decode_bit( bm_rep2[state()] ) == 0 )
+            if( rdec.decode_bit( bm_rep2[state()] ) == 0 )	// 5th bit
               distance = rep2;
-            else { distance = rep3; rep3 = rep2; }
+            else
+              { distance = rep3; rep3 = rep2; }
             rep2 = rep1;
             }
           rep1 = rep0;
@@ -248,35 +251,33 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
           }
         else
           {
-          if( range_decoder.decode_bit( bm_len[state()][pos_state] ) == 0 )
-            { state.set_short_rep(); len = 1; }
+          if( rdec.decode_bit( bm_len[state()][pos_state] ) == 0 ) // 4th bit
+            { state.set_short_rep(); put_byte( get_byte( rep0 ) ); continue; }
           }
-        if( len == 0 )
-          {
-          state.set_rep();
-          len = min_match_len + rep_match_len_decoder.decode( range_decoder, pos_state );
-          }
+        state.set_rep();
+        len = min_match_len + rdec.decode_len( rep_len_model, pos_state );
         }
       else
         {
         const unsigned rep0_saved = rep0;
-        len = min_match_len + len_decoder.decode( range_decoder, pos_state );
-        const int dis_slot = range_decoder.decode_tree6( bm_dis_slot[get_dis_state(len)] );
+        len = min_match_len + rdec.decode_len( match_len_model, pos_state );
+        const int dis_slot = rdec.decode_tree6( bm_dis_slot[get_len_state(len)] );
         if( dis_slot < start_dis_model ) rep0 = dis_slot;
         else
           {
           const int direct_bits = ( dis_slot >> 1 ) - 1;
           rep0 = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
           if( dis_slot < end_dis_model )
-            rep0 += range_decoder.decode_tree_reversed( bm_dis + rep0 - dis_slot - 1, direct_bits );
+            rep0 += rdec.decode_tree_reversed( bm_dis + rep0 - dis_slot - 1,
+                                               direct_bits );
           else
             {
-            rep0 += range_decoder.decode( direct_bits - dis_align_bits ) << dis_align_bits;
-            rep0 += range_decoder.decode_tree_reversed4( bm_align );
+            rep0 += rdec.decode( direct_bits - dis_align_bits ) << dis_align_bits;
+            rep0 += rdec.decode_tree_reversed4( bm_align );
             if( rep0 == 0xFFFFFFFFU )		// Marker found
               {
               rep0 = rep0_saved;
-              range_decoder.normalize();
+              rdec.normalize();
               flush_data();
               if( len == min_match_len )	// End Of Stream marker
                 {
@@ -284,9 +285,9 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
                 }
               if( len == min_match_len + 1 )	// Sync Flush marker
                 {
-                range_decoder.load(); continue;
+                rdec.load(); continue;
                 }
-              if( pp.verbosity() >= 0 )
+              if( verbosity >= 0 )
                 {
                 pp();
                 std::fprintf( stderr, "Unsupported marker code '%d'.\n", len );

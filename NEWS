@@ -1,11 +1,13 @@
-Changes in version 1.14:
+Changes in version 1.15:
 
-Multi-step trials have been implemented.
+Lzip now shows the progress of compression at verbosity level 2 (-vv).
 
-Compression ratio has been slightly increased.
+Decompressing and testing no more show file version.
 
-Compression time has been reduced by 5%.
+Option "-n, --threads" is now accepted and ignored for compatibility
+with plzip.
 
-Decompression time has been reduced by 12%.
+The configure script now accepts options with a separate argument.
 
-The target "install-bin" has been added to the Makefile.
+The chapter "Stream format" and the appendix "Reference source code"
+have been added to the manual.

@@ -1,3 +1,13 @@
+2013-09-20  Antonio Diaz Diaz  <antonio@gnu.org>
+
+	* Version 1.15 released.
+	* Show progress of compression at verbosity level 2 (-vv).
+	* main.cc (show_header): Do not show header version.
+	* Ignore option '-n, --threads' for compatibility with plzip.
+	* configure: Options now accept a separate argument.
+	* Added chapter 'Stream format' and appendix 'Reference source code'
+	  to the manual.
+
 2013-02-17  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
 	* Version 1.14 released.

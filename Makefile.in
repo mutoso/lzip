@@ -45,8 +45,7 @@ $(VPATH)/doc/$(pkgname).info : $(VPATH)/doc/$(pkgname).texinfo
 man : $(VPATH)/doc/$(progname).1
 
 $(VPATH)/doc/$(progname).1 : $(progname)
-	help2man -n 'reduces the size of files' \
-	  -o $@ ./$(progname)
+	help2man -n 'reduces the size of files' -o $@ ./$(progname)
 
 Makefile : $(VPATH)/configure $(VPATH)/Makefile.in
 	./config.status

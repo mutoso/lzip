@@ -1,5 +1,5 @@
 /*  Arg_parser - POSIX/GNU command line argument parser. (C++ version)
-    Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012
+    Copyright (C) 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013
     Antonio Diaz Diaz.
 
     This library is free software: you can redistribute it and/or modify
@@ -44,7 +44,7 @@ bool Arg_parser::parse_long_option( const char * const opt, const char * const a
 
   // Test all long options for either exact match or abbreviated matches.
   for( int i = 0; options[i].code != 0; ++i )
-    if( options[i].name && !std::strncmp( options[i].name, &opt[2], len ) )
+    if( options[i].name && std::strncmp( options[i].name, &opt[2], len ) == 0 )
       {
       if( std::strlen( options[i].name ) == len )	// Exact match found
         { index = i; exact = true; break; }
@@ -156,12 +156,12 @@ Arg_parser::Arg_parser( const int argc, const char * const argv[],
   while( argind < argc )
     {
     const unsigned char ch1 = argv[argind][0];
-    const unsigned char ch2 = ( ch1 ? argv[argind][1] : 0 );
+    const unsigned char ch2 = ch1 ? argv[argind][1] : 0;
 
     if( ch1 == '-' && ch2 )		// we found an option
       {
       const char * const opt = argv[argind];
-      const char * const arg = (argind + 1 < argc) ? argv[argind+1] : 0;
+      const char * const arg = ( argind + 1 < argc ) ? argv[argind+1] : 0;
       if( ch2 == '-' )
         {
         if( !argv[argind][2] ) { ++argind; break; }	// we found "--"

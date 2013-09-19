@@ -1,4 +1,4 @@
-/*  Lzip - Data compressor based on the LZMA algorithm
+/*  Lzip - LZMA lossless data compressor
     Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@ public:
 
 extern Dis_slots dis_slots;
 
-static inline uint8_t get_slot( const uint32_t dis )
+inline uint8_t get_slot( const uint32_t dis )
   {
   if( dis < (1 << 10) ) return dis_slots[dis];
   if( dis < (1 << 19) ) return dis_slots[dis>> 9] + 18;
@@ -113,9 +113,9 @@ inline int price_symbol_reversed( const Bit_model bm[], int symbol,
   for( int i = num_bits; i > 0; --i )
     {
     const int bit = symbol & 1;
-    symbol >>= 1;
     price += price_bit( bm[model], bit );
     model = ( model << 1 ) | bit;
+    symbol >>= 1;
     }
   return price;
   }
@@ -372,13 +372,8 @@ public:
   };
 
 
-class Len_encoder
+class Len_encoder : public Len_model
   {
-  Bit_model choice1;
-  Bit_model choice2;
-  Bit_model bm_low[pos_states][len_low_symbols];
-  Bit_model bm_mid[pos_states][len_mid_symbols];
-  Bit_model bm_high[len_high_symbols];
   int prices[pos_states][max_len_symbols];
   const int len_symbols;
   int counters[pos_states];
@@ -410,8 +405,7 @@ public:
     for( int i = 0; i < pos_states; ++i ) update_prices( i );
     }
 
-  void encode( Range_encoder & range_encoder, int symbol,
-               const int pos_state );
+  void encode( Range_encoder & renc, int symbol, const int pos_state );
 
   int price( const int symbol, const int pos_state ) const
     { return prices[pos_state][symbol - min_match_len]; }
@@ -433,13 +427,13 @@ protected:
   Bit_model bm_rep1[State::states];
   Bit_model bm_rep2[State::states];
   Bit_model bm_len[State::states][pos_states];
-  Bit_model bm_dis_slot[max_dis_states][1<<dis_slot_bits];
+  Bit_model bm_dis_slot[len_states][1<<dis_slot_bits];
   Bit_model bm_dis[modeled_distances-end_dis_model];
   Bit_model bm_align[dis_align_size];
 
-  Range_encoder range_encoder;
-  Len_encoder len_encoder;
-  Len_encoder rep_match_len_encoder;
+  Range_encoder renc;
+  Len_encoder match_len_encoder;
+  Len_encoder rep_len_encoder;
 
   const int num_dis_slots;
 
@@ -449,13 +443,13 @@ protected:
                    const int match_len_limit, const int outfd )
     :
     crc_( 0xFFFFFFFFU ),
-    range_encoder( outfd ),
-    len_encoder( match_len_limit ),
-    rep_match_len_encoder( match_len_limit ),
+    renc( outfd ),
+    match_len_encoder( match_len_limit ),
+    rep_len_encoder( match_len_limit ),
     num_dis_slots( 2 * real_bits( dictionary_size - 1 ) )
     {
     for( int i = 0; i < File_header::size; ++i )
-      range_encoder.put_byte( header.data[i] );
+      renc.put_byte( header.data[i] );
     }
 
        // move-to-front dis in/into reps
@@ -483,18 +477,18 @@ protected:
                               symbol, match_byte ); }
 
   void encode_literal( const uint8_t prev_byte, const uint8_t symbol )
-    { range_encoder.encode_tree( bm_literal[get_lit_state(prev_byte)], symbol, 8 ); }
+    { renc.encode_tree( bm_literal[get_lit_state(prev_byte)], symbol, 8 ); }
 
   void encode_matched( const uint8_t prev_byte, const uint8_t symbol,
                        const uint8_t match_byte )
-    { range_encoder.encode_matched( bm_literal[get_lit_state(prev_byte)],
-                                    symbol, match_byte ); }
+    { renc.encode_matched( bm_literal[get_lit_state(prev_byte)], symbol,
+                           match_byte ); }
 
   void encode_pair( const uint32_t dis, const int len, const int pos_state )
     {
-    len_encoder.encode( range_encoder, len, pos_state );
+    match_len_encoder.encode( renc, len, pos_state );
     const int dis_slot = get_slot( dis );
-    range_encoder.encode_tree( bm_dis_slot[get_dis_state(len)], dis_slot, dis_slot_bits );
+    renc.encode_tree( bm_dis_slot[get_len_state(len)], dis_slot, dis_slot_bits );
 
     if( dis_slot >= start_dis_model )
       {
@@ -503,12 +497,12 @@ protected:
       const uint32_t direct_dis = dis - base;
 
       if( dis_slot < end_dis_model )
-        range_encoder.encode_tree_reversed( bm_dis + base - dis_slot - 1,
-                                            direct_dis, direct_bits );
+        renc.encode_tree_reversed( bm_dis + base - dis_slot - 1, direct_dis,
+                                   direct_bits );
       else
         {
-        range_encoder.encode( direct_dis >> dis_align_bits, direct_bits - dis_align_bits );
-        range_encoder.encode_tree_reversed( bm_align, direct_dis, dis_align_bits );
+        renc.encode( direct_dis >> dis_align_bits, direct_bits - dis_align_bits );
+        renc.encode_tree_reversed( bm_align, direct_dis, dis_align_bits );
         }
       }
     }
@@ -516,8 +510,7 @@ protected:
   void full_flush( const unsigned long long data_position, const State state );
 
 public:
-  unsigned long long member_position() const
-    { return range_encoder.member_position(); }
+  unsigned long long member_position() const { return renc.member_position(); }
   };
 
 
@@ -567,8 +560,8 @@ class LZ_encoder : public LZ_encoder_base
   struct Pair pairs[max_match_len+1];
   Trial trials[max_num_trials];
 
-  int dis_slot_prices[max_dis_states][2*max_dictionary_bits];
-  int dis_prices[max_dis_states][modeled_distances];
+  int dis_slot_prices[len_states][2*max_dictionary_bits];
+  int dis_prices[len_states][modeled_distances];
   int align_prices[dis_align_size];
   int align_price_count;
 
@@ -598,22 +591,22 @@ class LZ_encoder : public LZ_encoder_base
   int price_rep0_len( const int len, const State state, const int pos_state ) const
     {
     return price_rep( 0, state, pos_state ) +
-           rep_match_len_encoder.price( len, pos_state );
+           rep_len_encoder.price( len, pos_state );
     }
 
-  int price_dis( const int dis, const int dis_state ) const
+  int price_dis( const int dis, const int len_state ) const
     {
     if( dis < modeled_distances )
-      return dis_prices[dis_state][dis];
+      return dis_prices[len_state][dis];
     else
-      return dis_slot_prices[dis_state][get_slot( dis )] +
+      return dis_slot_prices[len_state][get_slot( dis )] +
              align_prices[dis & (dis_align_size - 1)];
     }
 
   int price_pair( const int dis, const int len, const int pos_state ) const
     {
-    return len_encoder.price( len, pos_state ) +
-           price_dis( dis, get_dis_state( len ) );
+    return match_len_encoder.price( len, pos_state ) +
+           price_dis( dis, get_len_state( len ) );
     }
 
   int read_match_distances()
