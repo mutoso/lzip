@@ -1,9 +1,9 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
+    Copyright (C) 2008-2014 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
+    the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -46,7 +46,7 @@ void Pretty_print::operator()( const char * const msg ) const
         std::fprintf( stderr, " " );
       if( !msg ) std::fflush( stderr );
       }
-    if( msg ) std::fprintf( stderr, "%s.\n", msg );
+    if( msg ) std::fprintf( stderr, "%s\n", msg );
     }
   }
 
@@ -56,17 +56,17 @@ void Pretty_print::operator()( const char * const msg ) const
 */
 int readblock( const int fd, uint8_t * const buf, const int size )
   {
-  int rest = size;
+  int sz = 0;
   errno = 0;
-  while( rest > 0 )
+  while( sz < size )
     {
-    const int n = read( fd, buf + size - rest, rest );
-    if( n > 0 ) rest -= n;
+    const int n = read( fd, buf + sz, size - sz );
+    if( n > 0 ) sz += n;
     else if( n == 0 ) break;				// EOF
-    else if( errno != EINTR && errno != EAGAIN ) break;
+    else if( errno != EINTR ) break;
     errno = 0;
     }
-  return size - rest;
+  return sz;
   }
 
 
@@ -75,16 +75,16 @@ int readblock( const int fd, uint8_t * const buf, const int size )
 */
 int writeblock( const int fd, const uint8_t * const buf, const int size )
   {
-  int rest = size;
+  int sz = 0;
   errno = 0;
-  while( rest > 0 )
+  while( sz < size )
     {
-    const int n = write( fd, buf + size - rest, rest );
-    if( n > 0 ) rest -= n;
-    else if( n < 0 && errno != EINTR && errno != EAGAIN ) break;
+    const int n = write( fd, buf + sz, size - sz );
+    if( n > 0 ) sz += n;
+    else if( n < 0 && errno != EINTR ) break;
     errno = 0;
     }
-  return size - rest;
+  return sz;
   }
 
 
@@ -108,8 +108,7 @@ void LZ_decoder::flush_data()
     {
     const int size = pos - stream_pos;
     crc32.update_buf( crc_, buffer + stream_pos, size );
-    if( outfd >= 0 &&
-        writeblock( outfd, buffer + stream_pos, size ) != size )
+    if( outfd >= 0 && writeblock( outfd, buffer + stream_pos, size ) != size )
       throw Error( "Write error" );
     if( pos >= buffer_size ) { partial_data_pos += pos; pos = 0; }
     stream_pos = pos;
@@ -121,8 +120,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   {
   File_trailer trailer;
   const int trailer_size = File_trailer::size( member_version );
-  const unsigned long long member_size =
-    rdec.member_position() + trailer_size;
+  const unsigned long long member_size = rdec.member_position() + trailer_size;
   bool error = false;
 
   int size = rdec.read_data( trailer.data, trailer_size );
@@ -143,7 +141,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   if( !rdec.code_is_zero() )
     {
     error = true;
-    pp( "Range decoder final code is not zero" );
+    pp( "Range decoder final code is not zero." );
     }
   if( trailer.data_crc() != crc() )
     {
@@ -219,7 +217,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
       if( state.is_char() )
         {
         state.set_char1();
-        put_byte( rdec.decode_tree( bm_literal[get_lit_state(prev_byte)], 8 ) );
+        put_byte( rdec.decode_tree8( bm_literal[get_lit_state(prev_byte)] ) );
         }
       else
         {
@@ -298,8 +296,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
           }
         rep3 = rep2; rep2 = rep1; rep1 = rep0_saved;
         state.set_match();
-        if( rep0 >= (unsigned)dictionary_size ||
-            ( rep0 >= (unsigned)pos && !partial_data_pos ) )
+        if( rep0 >= dictionary_size || rep0 >= data_position() )
           { flush_data(); return 1; }
         }
       copy_block( rep0, len );

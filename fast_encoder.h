@@ -1,9 +1,9 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
+    Copyright (C) 2008-2014 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
+    the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -22,23 +22,43 @@ class Fmatchfinder : public Matchfinder_base
          // bytes to keep in buffer after pos
          after_size = max_match_len,
          dict_factor = 16,
-         len_limit = 16,
          num_prev_positions23 = 0,
          pos_array_factor = 1 };
 
   int key4;			// key made from latest 4 bytes
 
+  void reset_key4()
+    {
+    key4 = 0;
+    for( int i = 0; i < 3 && i < available_bytes(); ++i )
+      key4 = ( key4 << 4 ) ^ buffer[i];
+    }
+
 public:
   explicit Fmatchfinder( const int ifd )
     :
     Matchfinder_base( before_size, dict_size, after_size, dict_factor,
-                      len_limit, num_prev_positions23, pos_array_factor, ifd ),
-    key4( 0 )
-    {}
+                      num_prev_positions23, pos_array_factor, ifd )
+    { reset_key4(); }
 
-  void reset() { Matchfinder_base::reset(); key4 = 0; }
+  enum { len_limit = 16 };
+  void reset() { Matchfinder_base::reset(); reset_key4(); }
   int longest_match_len( int * const distance );
-  void longest_match_len( int n );
+
+  void update_and_move( int n )
+    {
+    while( --n >= 0 )
+      {
+      if( available_bytes() >= 4 )
+        {
+        key4 = ( ( key4 << 4 ) ^ buffer[pos+3] ) & key4_mask;
+        const int newpos = prev_positions[key4];
+        prev_positions[key4] = pos + 1;
+        pos_array[cyclic_pos] = newpos;
+        }
+      move_pos();
+      }
+    }
   };
 
 
@@ -46,16 +66,10 @@ class FLZ_encoder : public LZ_encoder_base
   {
   Fmatchfinder & fmatchfinder;
 
-  void move_pos( int n )
-    {
-    if( --n >= 0 ) fmatchfinder.move_pos();
-    fmatchfinder.longest_match_len( n );
-    }
-
 public:
   FLZ_encoder( Fmatchfinder & mf, const File_header & header, const int outfd )
     :
-    LZ_encoder_base( header, mf.dictionary_size(), mf.match_len_limit(), outfd ),
+    LZ_encoder_base( header, outfd ),
     fmatchfinder( mf )
     {}
 

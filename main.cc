@@ -1,9 +1,9 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
+    Copyright (C) 2008-2014 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
+    the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -59,6 +59,10 @@
 #include "encoder.h"
 #include "fast_encoder.h"
 
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 #if CHAR_BIT != 8
 #error "Environments where CHAR_BIT != 8 are not supported."
 #endif
@@ -68,14 +72,8 @@ namespace {
 
 const char * const Program_name = "Lzip";
 const char * const program_name = "lzip";
-const char * const program_year = "2013";
+const char * const program_year = "2014";
 const char * invocation_name = 0;
-
-#ifdef O_BINARY
-const int o_binary = O_BINARY;
-#else
-const int o_binary = 0;
-#endif
 
 struct { const char * from; const char * to; } const known_extensions[] = {
   { ".lz",  ""     },
@@ -141,9 +139,9 @@ void show_help()
 
 void show_version()
   {
-  std::printf( "%s %s\n", Program_name, PROGVERSION );
+  std::printf( "%s %s\n", program_name, PROGVERSION );
   std::printf( "Copyright (C) %s Antonio Diaz Diaz.\n", program_year );
-  std::printf( "License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>\n"
+  std::printf( "License GPLv2+: GNU GPL version 2 or later <http://gnu.org/licenses/gpl.html>\n"
                "This is free software: you are free to change and redistribute it.\n"
                "There is NO WARRANTY, to the extent permitted by law.\n" );
   }
@@ -260,7 +258,7 @@ int open_instream( const char * const name, struct stat * const in_statsp,
     }
   else
     {
-    infd = open( name, O_RDONLY | o_binary );
+    infd = open( name, O_RDONLY | O_BINARY );
     if( infd < 0 )
       {
       if( verbosity >= 0 )
@@ -320,7 +318,7 @@ void set_d_outname( const std::string & name, const int i )
 
 bool open_outstream( const bool force )
   {
-  int flags = O_CREAT | O_WRONLY | o_binary;
+  int flags = O_CREAT | O_WRONLY | O_BINARY;
   if( force ) flags |= O_TRUNC; else flags |= O_EXCL;
 
   outfd = open( output_filename.c_str(), flags, outfd_mode );
@@ -376,10 +374,14 @@ void close_and_set_permissions( const struct stat * const in_statsp )
   bool warning = false;
   if( in_statsp )
     {
+    const mode_t mode = in_statsp->st_mode;
     // fchown will in many cases return with EPERM, which can be safely ignored.
-    if( ( fchown( outfd, in_statsp->st_uid, in_statsp->st_gid ) != 0 &&
-          errno != EPERM ) ||
-        fchmod( outfd, in_statsp->st_mode ) != 0 ) warning = true;
+    if( fchown( outfd, in_statsp->st_uid, in_statsp->st_gid ) == 0 )
+      { if( fchmod( outfd, mode ) != 0 ) warning = true; }
+    else
+      if( errno != EPERM ||
+          fchmod( outfd, mode & ~( S_ISUID | S_ISGID | S_ISVTX ) ) != 0 )
+        warning = true;
     }
   if( close( outfd ) != 0 ) cleanup_and_fail( 1 );
   outfd = -1;
@@ -414,6 +416,8 @@ int compress( const unsigned long long member_size,
               const Lzma_options & encoder_options, const int infd,
               const Pretty_print & pp, const struct stat * const in_statsp )
   {
+  const unsigned long long cfile_size =
+    (in_statsp && S_ISREG( in_statsp->st_mode )) ? in_statsp->st_size / 100 : 0;
   int retval = 0;
   File_header header;
   header.set_magic();
@@ -422,7 +426,7 @@ int compress( const unsigned long long member_size,
   if( !header.dictionary_size( encoder_options.dictionary_size ) ||
       encoder_options.match_len_limit < min_match_len_limit ||
       encoder_options.match_len_limit > max_match_len )
-    internal_error( "invalid argument to encoder" );
+    internal_error( "invalid argument to encoder." );
 
   try {
     Matchfinder matchfinder( header.dictionary_size(),
@@ -435,9 +439,10 @@ int compress( const unsigned long long member_size,
       LZ_encoder encoder( matchfinder, header, outfd );
       const unsigned long long size = ( volume_size > 0 ) ?
         std::min( member_size, volume_size - partial_volume_size ) : member_size;
-      show_progress( in_size, &matchfinder, &pp, in_statsp );	// init
+      if( verbosity >= 2 )
+        show_progress( in_size, &matchfinder, &pp, cfile_size );	// init
       if( !encoder.encode_member( size ) )
-        { pp( "Encoder error" ); retval = 1; break; }
+        { pp( "Encoder error." ); retval = 1; break; }
       in_size += matchfinder.data_position();
       out_size += encoder.member_position();
       if( matchfinder.finished() ) break;
@@ -451,7 +456,7 @@ int compress( const unsigned long long member_size,
             {
             close_and_set_permissions( in_statsp );
             if( !next_filename() )
-              { pp( "Too many volume files" ); retval = 1; break; }
+              { pp( "Too many volume files." ); retval = 1; break; }
             if( !open_outstream( true ) ) { retval = 1; break; }
             delete_output_on_interrupt = true;
             }
@@ -475,7 +480,7 @@ int compress( const unsigned long long member_size,
     }
   catch( std::bad_alloc )
     {
-    pp( "Not enough memory. Try a smaller dictionary size" );
+    pp( "Not enough memory. Try a smaller dictionary size." );
     retval = 1;
     }
   catch( Error e ) { pp(); show_error( e.msg, errno ); retval = 1; }
@@ -487,6 +492,8 @@ int fcompress( const unsigned long long member_size,
                const unsigned long long volume_size, const int infd,
                const Pretty_print & pp, const struct stat * const in_statsp )
   {
+  const unsigned long long cfile_size =
+    (in_statsp && S_ISREG( in_statsp->st_mode )) ? in_statsp->st_size / 100 : 0;
   int retval = 0;
   File_header header;
   header.set_magic();
@@ -495,7 +502,7 @@ int fcompress( const unsigned long long member_size,
   try {
     Fmatchfinder fmatchfinder( infd );
     if( !header.dictionary_size( fmatchfinder.dictionary_size() ) )
-      internal_error( "invalid argument to encoder" );
+      internal_error( "invalid argument to encoder." );
 
     unsigned long long in_size = 0, out_size = 0, partial_volume_size = 0;
     while( true )		// encode one member per iteration
@@ -503,9 +510,10 @@ int fcompress( const unsigned long long member_size,
       FLZ_encoder encoder( fmatchfinder, header, outfd );
       const unsigned long long size = ( volume_size > 0 ) ?
         std::min( member_size, volume_size - partial_volume_size ) : member_size;
-      show_progress( in_size, &fmatchfinder, &pp, in_statsp );	// init
+      if( verbosity >= 2 )
+        show_progress( in_size, &fmatchfinder, &pp, cfile_size );	// init
       if( !encoder.encode_member( size ) )
-        { pp( "Encoder error" ); retval = 1; break; }
+        { pp( "Encoder error." ); retval = 1; break; }
       in_size += fmatchfinder.data_position();
       out_size += encoder.member_position();
       if( fmatchfinder.finished() ) break;
@@ -519,7 +527,7 @@ int fcompress( const unsigned long long member_size,
             {
             close_and_set_permissions( in_statsp );
             if( !next_filename() )
-              { pp( "Too many volume files" ); retval = 1; break; }
+              { pp( "Too many volume files." ); retval = 1; break; }
             if( !open_outstream( true ) ) { retval = 1; break; }
             delete_output_on_interrupt = true;
             }
@@ -543,7 +551,7 @@ int fcompress( const unsigned long long member_size,
     }
   catch( std::bad_alloc )
     {
-    pp( "Not enough memory. Try a smaller dictionary size" );
+    pp( "Not enough memory. Try a smaller dictionary size." );
     retval = 1;
     }
   catch( Error e ) { pp(); show_error( e.msg, errno ); retval = 1; }
@@ -583,6 +591,7 @@ void show_trailing_garbage( const uint8_t * const data, const int size,
       garbage_msg += xdigit( data[i] & 0x0F );
       }
     }
+  garbage_msg += '.';
   pp( garbage_msg.c_str() );
   }
 
@@ -602,7 +611,7 @@ int decompress( const int infd, const Pretty_print & pp, const bool testing )
       if( rdec.finished() )			// End Of File
         {
         if( first_member )
-          { pp( "File ends unexpectedly at member header" ); retval = 2; }
+          { pp( "File ends unexpectedly at member header." ); retval = 2; }
         else if( verbosity >= 4 && size > 0 )
           show_trailing_garbage( header.data, size, pp, true );
         break;
@@ -610,7 +619,7 @@ int decompress( const int infd, const Pretty_print & pp, const bool testing )
       if( !header.verify_magic() )
         {
         if( first_member )
-          { pp( "Bad magic number (file not in lzip format)" ); retval = 2; }
+          { pp( "Bad magic number (file not in lzip format)." ); retval = 2; }
         else if( verbosity >= 4 )
           show_trailing_garbage( header.data, size, pp, false );
         break;
@@ -625,7 +634,7 @@ int decompress( const int infd, const Pretty_print & pp, const bool testing )
         }
       if( header.dictionary_size() < min_dictionary_size ||
           header.dictionary_size() > max_dictionary_size )
-        { pp( "Invalid dictionary size in member header" ); retval = 2; break; }
+        { pp( "Invalid dictionary size in member header." ); retval = 2; break; }
 
       if( verbosity >= 2 || ( verbosity == 1 && first_member ) )
         { pp(); if( verbosity >= 3 ) show_header( header ); }
@@ -639,10 +648,10 @@ int decompress( const int infd, const Pretty_print & pp, const bool testing )
           {
           pp();
           if( result == 2 )
-            std::fprintf( stderr, "File ends unexpectedly at pos %llu\n",
+            std::fprintf( stderr, "File ends unexpectedly at pos %llu.\n",
                           partial_file_pos );
           else
-            std::fprintf( stderr, "Decoder error at pos %llu\n",
+            std::fprintf( stderr, "Decoder error at pos %llu.\n",
                           partial_file_pos );
           }
         retval = 2; break;
@@ -651,11 +660,7 @@ int decompress( const int infd, const Pretty_print & pp, const bool testing )
         { std::fprintf( stderr, testing ? "ok\n" : "done\n" ); pp.reset(); }
       }
     }
-  catch( std::bad_alloc )
-    {
-    pp( "Not enough memory. Find a machine with more memory" );
-    retval = 1;
-    }
+  catch( std::bad_alloc ) { pp( "Not enough memory." ); retval = 1; }
   catch( Error e ) { pp(); show_error( e.msg, errno ); retval = 1; }
   if( verbosity == 1 && retval == 0 )
     std::fprintf( stderr, testing ? "ok\n" : "done\n" );
@@ -691,7 +696,7 @@ void show_error( const char * const msg, const int errcode, const bool help )
       {
       std::fprintf( stderr, "%s: %s", program_name, msg );
       if( errcode > 0 )
-        std::fprintf( stderr, ": %s", std::strerror( errcode ) );
+        std::fprintf( stderr, ": %s.", std::strerror( errcode ) );
       std::fprintf( stderr, "\n" );
       }
     if( help )
@@ -704,7 +709,7 @@ void show_error( const char * const msg, const int errcode, const bool help )
 void internal_error( const char * const msg )
   {
   if( verbosity >= 0 )
-    std::fprintf( stderr, "%s: internal error: %s.\n", program_name, msg );
+    std::fprintf( stderr, "%s: internal error: %s\n", program_name, msg );
   std::exit( 3 );
   }
 
@@ -712,25 +717,20 @@ void internal_error( const char * const msg )
 void show_progress( const unsigned long long partial_size,
                     const Matchfinder_base * const m,
                     const Pretty_print * const p,
-                    const struct stat * const in_statsp )
+                    const unsigned long long cfile_size )
   {
-  static unsigned long long cfile_size = 0;	// file_size / 100
+  static unsigned long long csize = 0;		// file_size / 100
   static unsigned long long psize = 0;
   static const Matchfinder_base * mb = 0;
   static const Pretty_print * pp = 0;
 
   if( m )					// initialize static vars
-    {
-    psize = partial_size; mb = m; pp = p;
-    cfile_size = ( in_statsp && S_ISREG( in_statsp->st_mode ) ) ?
-                 in_statsp->st_size / 100 : 0;
-    return;
-    }
+    { csize = cfile_size; psize = partial_size; mb = m; pp = p; }
   if( mb && pp )
     {
     const unsigned long long pos = psize + mb->data_position();
-    if( cfile_size > 0 )
-      std::fprintf( stderr, "%4llu%%", pos / cfile_size );
+    if( csize > 0 )
+      std::fprintf( stderr, "%4llu%%", pos / csize );
     std::fprintf( stderr, "  %.1f MB\r", pos / 1000000.0 );
     pp->reset(); (*pp)();			// restore cursor position
     }
@@ -812,10 +812,9 @@ int main( const int argc, const char * const argv[] )
     const char * const arg = parser.argument( argind ).c_str();
     switch( code )
       {
-      case '0': zero = true; break;
-      case '1': case '2': case '3': case '4':
+      case '0': case '1': case '2': case '3': case '4':
       case '5': case '6': case '7': case '8': case '9':
-                zero = false;
+                zero = ( code == '0' );
                 encoder_options = option_mapping[code-'0']; break;
       case 'b': member_size = getnum( arg, 100000, max_member_size ); break;
       case 'c': to_stdout = true; break;
@@ -836,7 +835,7 @@ int main( const int argc, const char * const argv[] )
       case 't': program_mode = m_test; break;
       case 'v': if( verbosity < 4 ) ++verbosity; break;
       case 'V': show_version(); return 0;
-      default : internal_error( "uncaught option" );
+      default : internal_error( "uncaught option." );
       }
     } // end process options
 
@@ -873,13 +872,13 @@ int main( const int argc, const char * const argv[] )
     struct stat in_stats;
     output_filename.clear();
 
-    if( !filenames[i].size() || filenames[i] == "-" )
+    if( filenames[i].empty() || filenames[i] == "-" )
       {
       input_filename.clear();
       infd = STDIN_FILENO;
       if( program_mode != m_test )
         {
-        if( to_stdout || !default_output_filename.size() )
+        if( to_stdout || default_output_filename.empty() )
           outfd = STDOUT_FILENO;
         else
           {

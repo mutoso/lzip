@@ -6,8 +6,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 20 September 2013
-@set VERSION 1.15
+@set UPDATED 26 August 2014
+@set VERSION 1.16
 
 @dircategory Data Compression
 @direntry
@@ -47,8 +47,7 @@ This manual is for Lzip (version @value{VERSION}, @value{UPDATED}).
 @end menu
 
 @sp 1
-Copyright @copyright{} 2008, 2009, 2010, 2011, 2012, 2013
-Antonio Diaz Diaz.
+Copyright @copyright{} 2008-2014 Antonio Diaz Diaz.
 
 This manual is free documentation: you have unlimited permission
 to copy, distribute and modify it.
@@ -59,40 +58,87 @@ to copy, distribute and modify it.
 @cindex introduction
 
 Lzip is a lossless data compressor with a user interface similar to the
-one of gzip or bzip2. Lzip decompresses almost as fast as gzip and
-compresses more than bzip2, which makes it well suited for software
-distribution and data archiving. Lzip is a clean implementation of the
-LZMA algorithm.
+one of gzip or bzip2. Lzip is about as fast as gzip, compresses most
+files more than bzip2, and is better than both from a data recovery
+perspective. Lzip is a clean implementation of the LZMA
+(Lempel-Ziv-Markov chain-Algorithm) "algorithm".
 
-The lzip file format is designed for long-term data archiving and
-provides very safe integrity checking. The member trailer stores the
-32-bit CRC of the original data, the size of the original data and the
-size of the member. These values, together with the value remaining in
-the range decoder and the end-of-stream marker, provide a 4 factor
-integrity checking which guarantees that the decompressed version of the
-data is identical to the original. This guards against corruption of the
-compressed data, and against undetected bugs in lzip (hopefully very
-unlikely). The chances of data corruption going undetected are
-microscopic. Be aware, though, that the check occurs upon decompression,
-so it can only tell you that something is wrong. It can't help you
-recover the original uncompressed data.
+The lzip file format is designed for long-term data archiving, taking
+into account both data integrity and decoder availability:
 
-If you ever need to recover data from a damaged lzip file, try the
-lziprecover program. Lziprecover makes lzip files resistant to bit-flip
-(one of the most common forms of data corruption), and provides data
-recovery capabilities, including error-checked merging of damaged copies
-of a file.
+@itemize @bullet
+@item
+The lzip format provides very safe integrity checking and some data
+recovery means. The lziprecover program can repair bit-flip errors (one
+of the most common forms of data corruption) in lzip files, and provides
+data recovery capabilities, including error-checked merging of damaged
+copies of a file.
+
+@item
+The lzip format is as simple as possible (but not simpler). The lzip
+manual provides the code of a simple decompressor along with a detailed
+explanation of how it works, so that with the only help of the lzip
+manual it would be possible for a digital archaeologist to extract the
+data from a lzip file long after quantum computers eventually render
+LZMA obsolete.
+
+@item
+Additionally lzip is copylefted, which guarantees that it will remain
+free forever.
+@end itemize
+
+A nice feature of the lzip format is that a corrupt byte is easier to
+repair the nearer it is from the beginning of the file. Therefore, with
+the help of lziprecover, losing an entire archive just because of a
+corrupt byte near the beginning is a thing of the past.
+
+The member trailer stores the 32-bit CRC of the original data, the size
+of the original data and the size of the member. These values, together
+with the value remaining in the range decoder and the end-of-stream
+marker, provide a 4 factor integrity checking which guarantees that the
+decompressed version of the data is identical to the original. This
+guards against corruption of the compressed data, and against undetected
+bugs in lzip (hopefully very unlikely). The chances of data corruption
+going undetected are microscopic. Be aware, though, that the check
+occurs upon decompression, so it can only tell you that something is
+wrong. It can't help you recover the original uncompressed data.
 
 Lzip uses the same well-defined exit status values used by bzip2, which
 makes it safer than compressors returning ambiguous warning values (like
-gzip) when it is used as a back end for tar or zutils.
+gzip) when it is used as a back end for other programs like tar or
+zutils.
 
-Lzip replaces every file given in the command line with a compressed
-version of itself, with the name "original_name.lz". Each compressed
-file has the same modification date, permissions, and, when possible,
-ownership as the corresponding original, so that these properties can be
-correctly restored at decompression time. Lzip is able to read from some
-types of non regular files if the @samp{--stdout} option is specified.
+The amount of memory required for compression is about 1 or 2 times the
+dictionary size limit (1 if input file size is less than dictionary size
+limit, else 2) plus 9 times the dictionary size really used. The option
+@samp{-0} is special and only requires about 1.5 MiB at most. The amount
+of memory required for decompression is about 46 kB larger than the
+dictionary size really used.
+
+Lzip will automatically use the smallest possible dictionary size for
+each file without exceeding the given limit. Keep in mind that the
+decompression memory requirement is affected at compression time by the
+choice of dictionary size limit.
+
+When compressing, lzip replaces every file given in the command line
+with a compressed version of itself, with the name "original_name.lz".
+When decompressing, lzip attempts to guess the name for the decompressed
+file from that of the compressed file as follows:
+
+@multitable {anyothername} {becomes} {anyothername.out}
+@item filename.lz  @tab becomes @tab filename
+@item filename.tlz @tab becomes @tab filename.tar
+@item anyothername @tab becomes @tab anyothername.out
+@end multitable
+
+(De)compressing a file is much like copying or moving it; therefore lzip
+preserves the access and modification dates, permissions, and, when
+possible, ownership of the file just as "cp -p" does. (If the user ID or
+the group ID can't be duplicated, the file permission bits S_ISUID and
+S_ISGID are cleared).
+
+Lzip is able to read from some types of non regular files if the
+@samp{--stdout} option is specified.
 
 If no file names are specified, lzip compresses (or decompresses) from
 standard input to standard output. In this case, lzip will decline to
@@ -114,50 +160,33 @@ Lzip is able to compress and decompress streams of unlimited size by
 automatically creating multi-member output. The members so created are
 large, about 64 PiB each.
 
-The amount of memory required for compression is about 1 or 2 times the
-dictionary size limit (1 if input file size is less than dictionary size
-limit, else 2) plus 9 times the dictionary size really used. The option
-@samp{-0} is special and only requires about 1.5 MiB at most. The amount
-of memory required for decompression is only a few tens of KiB larger
-than the dictionary size really used.
-
-Lzip will automatically use the smallest possible dictionary size
-without exceeding the given limit. Keep in mind that the decompression
-memory requirement is affected at compression time by the choice of
-dictionary size limit.
-
-When decompressing, lzip attempts to guess the name for the decompressed
-file from that of the compressed file as follows:
-
-@multitable {anyothername} {becomes} {anyothername.out}
-@item filename.lz  @tab becomes @tab filename
-@item filename.tlz @tab becomes @tab filename.tar
-@item anyothername @tab becomes @tab anyothername.out
-@end multitable
-
 
 @node Algorithm
 @chapter Algorithm
 @cindex algorithm
 
-Lzip implements a simplified version of the LZMA (Lempel-Ziv-Markov
-chain-Algorithm) algorithm. The high compression of LZMA comes from
-combining two basic, well-proven compression ideas: sliding dictionaries
-(LZ77/78) and markov models (the thing used by every compression
-algorithm that uses a range encoder or similar order-0 entropy coder as
-its last stage) with segregation of contexts according to what the bits
-are used for.
+There is no such thing as a "LZMA algorithm"; it is more like a "LZMA
+coding scheme". For example, the option '-0' of lzip uses the scheme in
+almost the simplest way possible; issuing the longest match it can find,
+or a literal byte if it can't find a match. Inversely, a much more
+elaborated way of finding coding sequences of minimum price than the one
+currently used by lzip could be developed, and the resulting sequence
+could also be coded using the LZMA coding scheme.
+
+Lzip currently implements two variants of the LZMA algorithm; fast (used
+by option -0) and normal (used by all other compression levels).
+
+The high compression of LZMA comes from combining two basic, well-proven
+compression ideas: sliding dictionaries (LZ77/78) and markov models (the
+thing used by every compression algorithm that uses a range encoder or
+similar order-0 entropy coder as its last stage) with segregation of
+contexts according to what the bits are used for.
 
 Lzip is a two stage compressor. The first stage is a Lempel-Ziv coder,
 which reduces redundancy by translating chunks of data to their
 corresponding distance-length pairs. The second stage is a range encoder
 that uses a different probability model for each type of data;
 distances, lengths, literal bytes, etc.
-
-The match finder, part of the LZ coder, is the most important piece of
-the LZMA algorithm, as it is in many Lempel-Ziv based algorithms. Most
-of lzip's execution time is spent in the match finder, and it has the
-greatest influence on the compression ratio.
 
 Here is how it works, step by step:
 
@@ -179,7 +208,7 @@ price represents the number of output bits produced.
 6) The range encoder encodes the sequence produced by the main encoder
 and sends the produced bytes to the output stream.
 
-7) Go back to step 3 until the input data is finished or until the
+7) Go back to step 3 until the input data are finished or until the
 member or volume size limits are reached.
 
 8) The range encoder is flushed.
@@ -273,7 +302,7 @@ Quiet operation. Suppress all messages.
 @itemx --dictionary-size=@var{bytes}
 Set the dictionary size limit in bytes. Valid values range from 4 KiB to
 512 MiB. Lzip will use the smallest possible dictionary size for each
-member without exceeding this limit. Note that dictionary sizes are
+file without exceeding this limit. Note that dictionary sizes are
 quantized. If the specified size does not match one of the valid sizes,
 it will be rounded upwards by adding up to (@var{bytes} / 16) to it.
 
@@ -469,7 +498,7 @@ that could be individually described.
 It seems that the only way of describing the LZMA-302eos stream is
 describing the algorithm that decodes it. And given the many details
 about the range decoder that need to be described accurately, the source
-code of a real decoder seems the only appropiate reference to use.
+code of a real decoder seems the only appropriate reference to use.
 
 What follows is a description of the decoding algorithm for LZMA-302eos
 streams using as reference the source code of "lzd", an educational
@@ -566,14 +595,14 @@ byte. @samp{rep} is any one of @samp{rep0}, @samp{rep1}, @samp{rep2} or
 @samp{rep3}. The types of previous sequences corresponding to each state
 are:
 
-@multitable {State} {literal, shortrep, literal, literal}
+@multitable {State} {rep or (!literal, shortrep), literal, literal}
 @headitem State @tab Types of previous sequences
 @item  0 @tab literal, literal, literal
 @item  1 @tab match, literal, literal
-@item  2 @tab (rep or shortrep), literal, literal
+@item  2 @tab rep or (!literal, shortrep), literal, literal
 @item  3 @tab literal, shortrep, literal, literal
 @item  4 @tab match, literal
-@item  5 @tab (rep or shortrep), literal
+@item  5 @tab rep or (!literal, shortrep), literal
 @item  6 @tab literal, shortrep, literal
 @item  7 @tab literal, match
 @item  8 @tab literal, rep
@@ -639,7 +668,7 @@ The LZMA stream is consumed one byte at a time by the range decoder.
 variable number of decoded bits, depending on how well these bits agree
 with their context. (See @samp{decode_bit} in the source).
 
-The range decoder state consists of two unsigned 32-bit variables,
+The range decoder state consists of two unsigned 32-bit variables;
 @code{range} (representing the most significant part of the range size
 not yet decoded), and @code{code} (representing the current point within
 @code{range}). @code{range} is initialized to (2^32 - 1), and
@@ -656,7 +685,7 @@ the source).
 After decoding the member header and obtaining the dictionary size, the
 range decoder is initialized and then the LZMA decoder enters a loop
 (See @samp{decode_member} in the source) where it invokes the range
-decoder with the appropiate contexts to decode the different coding
+decoder with the appropriate contexts to decode the different coding
 sequences (matches, repeated matches, and literal bytes), until the "End
 Of Stream" marker is decoded.
 
@@ -667,7 +696,7 @@ Of Stream" marker is decoded.
 
 WARNING! Even if lzip is bug-free, other causes may result in a corrupt
 compressed file (bugs in the system libraries, memory errors, etc).
-Therefore, if the data you are going to compress is important, give the
+Therefore, if the data you are going to compress are important, give the
 @samp{--keep} option to lzip and do not remove the original file until
 you verify the compressed file with a command like
 @w{@samp{lzip -cd file.lz | cmp file -}}.
@@ -785,7 +814,7 @@ find by running @w{@samp{lzip --version}}.
 
 @verbatim
 /*  Lzd - Educational decompressor for lzip files
-    Copyright (C) 2013 Antonio Diaz Diaz.
+    Copyright (C) 2013, 2014 Antonio Diaz Diaz.
 
     This program is free software: you have unlimited permission
     to copy, distribute and modify it.
@@ -995,7 +1024,7 @@ public:
         break;
         }
       }
-    return symbol - 0x100;
+    return symbol & 0xFF;
     }
 
   int decode_len( Len_model & lm, const int pos_state )
@@ -1045,7 +1074,7 @@ public:
     pos( 0 ),
     stream_pos( 0 ),
     crc_( 0xFFFFFFFFU )
-    { buffer[dictionary_size-1] = 0; }		// prev_byte of first_byte
+    { buffer[dictionary_size-1] = 0; }		// prev_byte of first byte
 
   ~LZ_decoder() { delete[] buffer; }
 
@@ -1064,7 +1093,7 @@ void LZ_decoder::flush_data()
     crc32.update_buf( crc_, buffer + stream_pos, size );
     errno = 0;
     if( std::fwrite( buffer + stream_pos, 1, size, stdout ) != size )
-      { std::fprintf( stderr, "Write error: %s\n", std::strerror( errno ) );
+      { std::fprintf( stderr, "Write error: %s.\n", std::strerror( errno ) );
         std::exit( 1 ); }
     if( pos >= dictionary_size ) { partial_data_pos += pos; pos = 0; }
     stream_pos = pos;
@@ -1162,13 +1191,13 @@ bool LZ_decoder::decode_member()		// Returns false if error
             }
           }
         state.set_match();
-        if( rep0 >= dictionary_size || ( rep0 >= pos && !partial_data_pos ) )
-          return false;
+        if( rep0 >= dictionary_size || rep0 >= data_position() )
+          { flush_data(); return false; }
         }
-      for( int i = 0; i < len; ++i )
-        put_byte( get_byte( rep0 ) );
+      for( int i = 0; i < len; ++i ) put_byte( get_byte( rep0 ) );
       }
     }
+  flush_data();
   return false;
   }
 
@@ -1184,7 +1213,7 @@ int main( const int argc, const char * const argv[] )
                  "It is not safe to use lzd for any real work.\n"
                  "\nUsage: %s < file.lz > file\n", argv[0] );
     std::printf( "Lzd decompresses from standard input to standard output.\n"
-                 "\nCopyright (C) 2013 Antonio Diaz Diaz.\n"
+                 "\nCopyright (C) 2014 Antonio Diaz Diaz.\n"
                  "This is free software: you are free to change and redistribute it.\n"
                  "There is NO WARRANTY, to the extent permitted by law.\n"
                  "Report bugs to lzip-bug@nongnu.org\n"
@@ -1195,8 +1224,7 @@ int main( const int argc, const char * const argv[] )
   for( bool first_member = true; ; first_member = false )
     {
     File_header header;
-    for( int i = 0; i < 6; ++i )
-      header[i] = std::getc( stdin );
+    for( int i = 0; i < 6; ++i ) header[i] = std::getc( stdin );
     if( std::feof( stdin ) || std::memcmp( header, "LZIP", 4 ) != 0 )
       {
       if( first_member )
@@ -1231,7 +1259,7 @@ int main( const int argc, const char * const argv[] )
     }
 
   if( std::fclose( stdout ) != 0 )
-    { std::fprintf( stderr, "Can't close stdout: %s\n", std::strerror( errno ) );
+    { std::fprintf( stderr, "Can't close stdout: %s.\n", std::strerror( errno ) );
       return 1; }
   return 0;
   }

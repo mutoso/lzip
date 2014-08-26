@@ -1,13 +1,17 @@
-Changes in version 1.15:
+Changes in version 1.16:
 
-Lzip now shows the progress of compression at verbosity level 2 (-vv).
+Compression ratio of option -9 has been slightly increased.
 
-Decompressing and testing no more show file version.
+Compression time has been reduced by 4%.
 
-Option "-n, --threads" is now accepted and ignored for compatibility
-with plzip.
+"lzip -0" is now comparable in compression speed and ratio to "gzip -6".
 
-The configure script now accepts options with a separate argument.
+Copying of file dates, permissions, and ownership now behaves like "cp -p".
+(If the user ID or the group ID can't be duplicated, the file permission
+bits S_ISUID and S_ISGID are cleared).
 
-The chapter "Stream format" and the appendix "Reference source code"
-have been added to the manual.
+Some minor improvements have been made.
+
+"lzip.texinfo" has been renamed to "lzip.texi".
+
+The license has been changed to GPL version 2 or later.

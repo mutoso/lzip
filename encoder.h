@@ -1,9 +1,9 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
+    Copyright (C) 2008-2014 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
+    the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -15,7 +15,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-enum { max_num_trials = 1 << 12,
+enum { max_num_trials = 1 << 13,
        price_shift_bits = 6,
        price_step_bits = 2,
        price_step = 1 << price_step_bits };
@@ -42,7 +42,7 @@ public:
 
 extern Dis_slots dis_slots;
 
-inline uint8_t get_slot( const uint32_t dis )
+inline uint8_t get_slot( const unsigned dis )
   {
   if( dis < (1 << 10) ) return dis_slots[dis];
   if( dis < (1 << 19) ) return dis_slots[dis>> 9] + 18;
@@ -58,19 +58,18 @@ class Prob_prices
 public:
   void init()
     {
-    for( int i = price_step / 2; i < bit_model_total; i += price_step )
+    for( int i = 0; i < bit_model_total >> price_step_bits; ++i )
       {
-      unsigned val = i;
-      int bits = 0;			// base 2 logarithm of val
+      unsigned val = ( i * price_step ) + ( price_step / 2 );
+      int bits = 0;				// base 2 logarithm of val
       for( int j = 0; j < price_shift_bits; ++j )
         {
         val = val * val;
         bits <<= 1;
         while( val >= 1 << 16 ) { val >>= 1; ++bits; }
         }
-      bits += 15;			// remaining bits in val
-      data[i >> price_step_bits] =
-        ( bit_model_total_bits << price_shift_bits ) - bits;
+      bits += 15;				// remaining bits in val
+      data[i] = ( bit_model_total_bits << price_shift_bits ) - bits;
       }
     }
 
@@ -91,17 +90,41 @@ inline int price_bit( const Bit_model bm, const int bit )
   { if( bit ) return price1( bm ); else return price0( bm ); }
 
 
-inline int price_symbol( const Bit_model bm[], int symbol, const int num_bits )
+inline int price_symbol3( const Bit_model bm[], int symbol )
   {
-  int price = 0;
-  symbol |= ( 1 << num_bits );
-  while( symbol > 1 )
-    {
-    const int bit = symbol & 1;
-    symbol >>= 1;
-    price += price_bit( bm[symbol], bit );
-    }
-  return price;
+  int bit = symbol & 1;
+  symbol |= 8; symbol >>= 1;
+  int price = price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  return price + price_bit( bm[1], symbol & 1 );
+  }
+
+
+inline int price_symbol6( const Bit_model bm[], int symbol )
+  {
+  int bit = symbol & 1;
+  symbol |= 64; symbol >>= 1;
+  int price = price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  return price + price_bit( bm[1], symbol & 1 );
+  }
+
+
+inline int price_symbol8( const Bit_model bm[], int symbol )
+  {
+  int bit = symbol & 1;
+  symbol |= 0x100; symbol >>= 1;
+  int price = price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
+  return price + price_bit( bm[1], symbol & 1 );
   }
 
 
@@ -121,18 +144,17 @@ inline int price_symbol_reversed( const Bit_model bm[], int symbol,
   }
 
 
-inline int price_matched( const Bit_model bm[], unsigned symbol,
-                          unsigned match_byte )
+inline int price_matched( const Bit_model bm[], int symbol, int match_byte )
   {
   int price = 0;
-  unsigned mask = 0x100;
-  symbol |= 0x100;
+  int mask = 0x100;
+  symbol |= mask;
 
   do {
     match_byte <<= 1;
-    const unsigned match_bit = match_byte & mask;
+    const int match_bit = match_byte & mask;
     symbol <<= 1;
-    const unsigned bit = symbol & 0x100;
+    const int bit = symbol & 0x100;
     price += price_bit( bm[match_bit+(symbol>>9)+mask], bit );
     mask &= ~(match_byte ^ symbol);	// if( match_bit != bit ) mask = 0;
     }
@@ -152,17 +174,16 @@ class Matchfinder_base
 protected:
   unsigned long long partial_data_pos;
   uint8_t * buffer;		// input buffer
-  int32_t * prev_positions;	// last seen position of key
+  int32_t * prev_positions;	// 1 + last seen position of key. else 0
   int32_t * pos_array;		// may be tree or chain
   const int before_size;	// bytes to keep in buffer before dictionary
-  const int match_len_limit_;
   int buffer_size;
   int dictionary_size_;		// bytes to keep in buffer before pos
   int pos;			// current pos in buffer
   int cyclic_pos;		// cycles through [0, dictionary_size]
-  int pos_limit;		// when reached, a new block must be read
   int stream_pos;		// first byte not yet read from file
-  unsigned key4_mask;
+  int pos_limit;		// when reached, a new block must be read
+  int key4_mask;
   int num_prev_positions;	// size of prev_positions
   int pos_array_size;
   const int infd;		// input file descriptor
@@ -170,19 +191,19 @@ protected:
 
   Matchfinder_base( const int before, const int dict_size,
                     const int after_size, const int dict_factor,
-                    const int match_len_limit, const int num_prev_positions23,
+                    const int num_prev_positions23,
                     const int pos_array_factor, const int ifd );
 
   ~Matchfinder_base()
     { delete[] prev_positions; std::free( buffer ); }
 
 public:
-  uint8_t operator[]( const int i ) const { return buffer[pos+i]; }
+  uint8_t operator[]( const int distance ) const
+    { return buffer[pos-distance]; }
   int available_bytes() const { return stream_pos - pos; }
   unsigned long long data_position() const { return partial_data_pos + pos; }
   int dictionary_size() const { return dictionary_size_; }
   bool finished() const { return at_stream_end && pos >= stream_pos; }
-  int match_len_limit() const { return match_len_limit_; }
   const uint8_t * ptr_to_current_pos() const { return buffer + pos; }
 
   int true_match_len( const int index, const int distance, int len_limit ) const
@@ -224,14 +245,15 @@ class Matchfinder : public Matchfinder_base
          pos_array_factor = 2 };
 
   const int cycles;
+  const int match_len_limit_;
 
 public:
-  Matchfinder( const int dict_size, const int match_len_limit, const int ifd )
+  Matchfinder( const int dict_size, const int len_limit, const int ifd )
     :
     Matchfinder_base( before_size, dict_size, after_size, dict_factor,
-                      match_len_limit, num_prev_positions23, pos_array_factor, ifd ),
-    cycles( ( match_len_limit < max_match_len ) ?
-            16 + ( match_len_limit / 2 ) : 256 )
+                      num_prev_positions23, pos_array_factor, ifd ),
+    cycles( ( len_limit < max_match_len ) ? 16 + ( len_limit / 2 ) : 256 ),
+    match_len_limit_( len_limit )
     {}
 
   bool dec_pos( const int ahead )
@@ -243,7 +265,8 @@ public:
     return true;
     }
 
-  int get_match_pairs( struct Pair * pairs = 0 );
+  int match_len_limit() const { return match_len_limit_; }
+  int get_match_pairs( Pair * pairs = 0 );
   };
 
 
@@ -255,7 +278,7 @@ class Range_encoder
   uint8_t * const buffer;	// output buffer
   int pos;			// current pos in buffer
   uint32_t range;
-  int ff_count;
+  unsigned ff_count;
   const int outfd;		// output file descriptor
   uint8_t cache;
 
@@ -329,17 +352,42 @@ public:
     if( range <= 0x00FFFFFFU ) { range <<= 8; shift_low(); }
     }
 
-  void encode_tree( Bit_model bm[], const int symbol, const int num_bits )
+  void encode_tree3( Bit_model bm[], const int symbol )
     {
-    int mask = ( 1 << ( num_bits - 1 ) );
     int model = 1;
-    for( int i = num_bits; i > 0; --i, mask >>= 1 )
-      {
+    int bit = ( symbol >> 2 ) & 1;
+    encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
+    bit = ( symbol >> 1 ) & 1;
+    encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
+    encode_bit( bm[model], symbol & 1 );
+    }
+
+  void encode_tree6( Bit_model bm[], const int symbol )
+    {
+    int model = 1;
+    int bit = ( symbol >> 5 ) & 1;
+    encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
+    bit = ( symbol >> 4 ) & 1;
+    encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
+    bit = ( symbol >> 3 ) & 1;
+    encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
+    bit = ( symbol >> 2 ) & 1;
+    encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
+    bit = ( symbol >> 1 ) & 1;
+    encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
+    encode_bit( bm[model], symbol & 1 );
+    }
+
+  void encode_tree8( Bit_model bm[], const int symbol )
+    {
+    int model = 1;
+    int mask = ( 1 << 7 );
+    do {
       const int bit = ( symbol & mask );
       encode_bit( bm[model], bit );
-      model <<= 1;
-      if( bit ) model |= 1;
+      model <<= 1; if( bit ) ++model;
       }
+    while( mask >>= 1 );
     }
 
   void encode_tree_reversed( Bit_model bm[], int symbol, const int num_bits )
@@ -354,58 +402,95 @@ public:
       }
     }
 
-  void encode_matched( Bit_model bm[], unsigned symbol, unsigned match_byte )
+  void encode_matched( Bit_model bm[], int symbol, int match_byte )
     {
-    unsigned mask = 0x100;
-    symbol |= 0x100;
+    int mask = 0x100;
+    symbol |= mask;
 
     do {
       match_byte <<= 1;
-      const unsigned match_bit = match_byte & mask;
+      const int match_bit = match_byte & mask;
       symbol <<= 1;
-      const unsigned bit = symbol & 0x100;
+      const int bit = symbol & 0x100;
       encode_bit( bm[match_bit+(symbol>>9)+mask], bit );
       mask &= ~(match_byte ^ symbol);	// if( match_bit != bit ) mask = 0;
       }
     while( symbol < 0x10000 );
     }
+
+  void encode_len( Len_model & lm, int symbol, const int pos_state )
+    {
+    symbol -= min_match_len;
+    bool bit = ( symbol >= len_low_symbols );
+    encode_bit( lm.choice1, bit );
+    if( !bit )
+      encode_tree3( lm.bm_low[pos_state], symbol );
+    else
+      {
+      bit = ( symbol >= len_low_symbols + len_mid_symbols );
+      encode_bit( lm.choice2, bit );
+      if( !bit )
+        encode_tree3( lm.bm_mid[pos_state], symbol - len_low_symbols );
+      else
+        encode_tree8( lm.bm_high, symbol - len_low_symbols - len_mid_symbols );
+      }
+    }
   };
 
 
-class Len_encoder : public Len_model
+class Len_prices
   {
-  int prices[pos_states][max_len_symbols];
+  const Len_model & lm;
   const int len_symbols;
+  const int count;
+  int prices[pos_states][max_len_symbols];
   int counters[pos_states];
 
-  void update_prices( const int pos_state )
+  void update_low_mid_prices( const int pos_state )
     {
+    counters[pos_state] = count;
     int * const pps = prices[pos_state];
-    int tmp = price0( choice1 );
+    int tmp = price0( lm.choice1 );
     int len = 0;
     for( ; len < len_low_symbols && len < len_symbols; ++len )
-      pps[len] = tmp +
-                 price_symbol( bm_low[pos_state], len, len_low_bits );
-    tmp = price1( choice1 );
+      pps[len] = tmp + price_symbol3( lm.bm_low[pos_state], len );
+    if( len >= len_symbols ) return;
+    tmp = price1( lm.choice1 ) + price0( lm.choice2 );
     for( ; len < len_low_symbols + len_mid_symbols && len < len_symbols; ++len )
-      pps[len] = tmp + price0( choice2 ) +
-                 price_symbol( bm_mid[pos_state], len - len_low_symbols, len_mid_bits );
-    for( ; len < len_symbols; ++len )
+      pps[len] = tmp +
+                 price_symbol3( lm.bm_mid[pos_state], len - len_low_symbols );
+    }
+
+  void update_high_prices()
+    {
+    const int tmp = price1( lm.choice1 ) + price1( lm.choice2 );
+    for( int len = len_low_symbols + len_mid_symbols; len < len_symbols; ++len )
       // using 4 slots per value makes "price" faster
-      prices[3][len] = prices[2][len] = prices[1][len] = prices[0][len] =
-                 tmp + price1( choice2 ) +
-                 price_symbol( bm_high, len - len_low_symbols - len_mid_symbols, len_high_bits );
-    counters[pos_state] = len_symbols;
+      prices[3][len] = prices[2][len] = prices[1][len] = prices[0][len] = tmp +
+        price_symbol8( lm.bm_high, len - len_low_symbols - len_mid_symbols );
     }
 
 public:
-  explicit Len_encoder( const int match_len_limit )
-    : len_symbols( match_len_limit + 1 - min_match_len )
+  Len_prices( const Len_model & m, const int match_len_limit )
+    :
+    lm( m ),
+    len_symbols( match_len_limit + 1 - min_match_len ),
+    count( ( match_len_limit > 12 ) ? 1 : len_symbols )
     {
-    for( int i = 0; i < pos_states; ++i ) update_prices( i );
+    for( int i = 0; i < pos_states; ++i ) counters[i] = 0;
     }
 
-  void encode( Range_encoder & renc, int symbol, const int pos_state );
+  void decrement_counter( const int pos_state ) { --counters[pos_state]; }
+
+  void update_prices()
+    {
+    bool high_pending = false;
+    for( int pos_state = 0; pos_state < pos_states; ++pos_state )
+      if( counters[pos_state] <= 0 )
+        { update_low_mid_prices( pos_state ); high_pending = true; }
+    if( high_pending && len_symbols > len_low_symbols + len_mid_symbols )
+      update_high_prices();
+    }
 
   int price( const int symbol, const int pos_state ) const
     { return prices[pos_state][symbol - min_match_len]; }
@@ -432,69 +517,47 @@ protected:
   Bit_model bm_align[dis_align_size];
 
   Range_encoder renc;
-  Len_encoder match_len_encoder;
-  Len_encoder rep_len_encoder;
-
-  const int num_dis_slots;
+  Len_model match_len_model;
+  Len_model rep_len_model;
 
   unsigned crc() const { return crc_ ^ 0xFFFFFFFFU; }
 
-  LZ_encoder_base( const File_header & header, const int dictionary_size,
-                   const int match_len_limit, const int outfd )
+  LZ_encoder_base( const File_header & header, const int outfd )
     :
     crc_( 0xFFFFFFFFU ),
-    renc( outfd ),
-    match_len_encoder( match_len_limit ),
-    rep_len_encoder( match_len_limit ),
-    num_dis_slots( 2 * real_bits( dictionary_size - 1 ) )
+    renc( outfd )
     {
     for( int i = 0; i < File_header::size; ++i )
       renc.put_byte( header.data[i] );
     }
 
-       // move-to-front dis in/into reps
-  void mtf_reps( const int dis, int reps[num_rep_distances] )
-    {
-    if( dis >= num_rep_distances )
-      {
-      for( int i = num_rep_distances - 1; i > 0; --i ) reps[i] = reps[i-1];
-      reps[0] = dis - num_rep_distances;
-      }
-    else if( dis > 0 )
-      {
-      const int distance = reps[dis];
-      for( int i = dis; i > 0; --i ) reps[i] = reps[i-1];
-      reps[0] = distance;
-      }
-    }
-
   int price_literal( const uint8_t prev_byte, const uint8_t symbol ) const
-    { return price_symbol( bm_literal[get_lit_state(prev_byte)], symbol, 8 ); }
+    { return price_symbol8( bm_literal[get_lit_state(prev_byte)], symbol ); }
 
   int price_matched( const uint8_t prev_byte, const uint8_t symbol,
                      const uint8_t match_byte ) const
-    { return ::price_matched( bm_literal[get_lit_state(prev_byte)],
-                              symbol, match_byte ); }
+    { return ::price_matched( bm_literal[get_lit_state(prev_byte)], symbol,
+                              match_byte ); }
 
   void encode_literal( const uint8_t prev_byte, const uint8_t symbol )
-    { renc.encode_tree( bm_literal[get_lit_state(prev_byte)], symbol, 8 ); }
+    { renc.encode_tree8( bm_literal[get_lit_state(prev_byte)], symbol ); }
 
   void encode_matched( const uint8_t prev_byte, const uint8_t symbol,
                        const uint8_t match_byte )
     { renc.encode_matched( bm_literal[get_lit_state(prev_byte)], symbol,
                            match_byte ); }
 
-  void encode_pair( const uint32_t dis, const int len, const int pos_state )
+  void encode_pair( const unsigned dis, const int len, const int pos_state )
     {
-    match_len_encoder.encode( renc, len, pos_state );
+    renc.encode_len( match_len_model, len, pos_state );
     const int dis_slot = get_slot( dis );
-    renc.encode_tree( bm_dis_slot[get_len_state(len)], dis_slot, dis_slot_bits );
+    renc.encode_tree6( bm_dis_slot[get_len_state(len)], dis_slot );
 
     if( dis_slot >= start_dis_model )
       {
       const int direct_bits = ( dis_slot >> 1 ) - 1;
-      const uint32_t base = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
-      const uint32_t direct_dis = dis - base;
+      const unsigned base = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
+      const unsigned direct_dis = dis - base;
 
       if( dis_slot < end_dis_model )
         renc.encode_tree_reversed( bm_dis + base - dis_slot - 1, direct_dis,
@@ -524,51 +587,66 @@ class LZ_encoder : public LZ_encoder_base
     {
     State state;
     int price;		// dual use var; cumulative price, match length
-    int dis;		// rep index or match distance
+    int dis;		// rep index or match distance. (-1 for literal)
     int prev_index;	// index of prev trial in trials[]
-    int dis2;
     int prev_index2;	//   -2  trial is single step
 			//   -1  literal + rep0
-			// >= 0  rep or match + literal + rep0
+			// >= 0  ( rep or match ) + literal + rep0
     int reps[num_rep_distances];
 
-    void update( const int pr, const int d, const int p_i )
+    void update( const int pr, const int distance, const int p_i )
       {
       if( pr < price )
-        { price = pr; dis = d; prev_index = p_i;
+        { price = pr; dis = distance; prev_index = p_i;
           prev_index2 = single_step_trial; }
       }
 
-    void update2( const int pr, const int d, const int p_i )
+    void update2( const int pr, const int p_i )
       {
       if( pr < price )
-        { price = pr; dis = d; prev_index = p_i;
+        { price = pr; dis = 0; prev_index = p_i;
           prev_index2 = dual_step_trial; }
       }
 
-    void update3( const int pr, const int d, const int p_i,
-                                const int d2, const int p_i2 )
+    void update3( const int pr, const int distance, const int p_i,
+                  const int p_i2 )
       {
       if( pr < price )
-        { price = pr; dis = d; prev_index = p_i;
-          dis2 = d2; prev_index2 = p_i2; }
+        { price = pr; dis = distance; prev_index = p_i; prev_index2 = p_i2; }
       }
     };
 
   Matchfinder & matchfinder;
+  Len_prices match_len_prices;
+  Len_prices rep_len_prices;
   int pending_num_pairs;
-  struct Pair pairs[max_match_len+1];
+  Pair pairs[max_match_len+1];
   Trial trials[max_num_trials];
 
   int dis_slot_prices[len_states][2*max_dictionary_bits];
   int dis_prices[len_states][modeled_distances];
   int align_prices[dis_align_size];
-  int align_price_count;
+  const int num_dis_slots;
 
-  void fill_align_prices();
-  void fill_distance_prices();
+  void update_distance_prices();
 
-  int price_rep_len1( const State state, const int pos_state ) const
+       // move-to-front dis in/into reps if( dis > 0 )
+  static void mtf_reps( const int dis, int reps[num_rep_distances] )
+    {
+    if( dis >= num_rep_distances )
+      {
+      for( int i = num_rep_distances - 1; i > 0; --i ) reps[i] = reps[i-1];
+      reps[0] = dis - num_rep_distances;
+      }
+    else if( dis > 0 )
+      {
+      const int distance = reps[dis];
+      for( int i = dis; i > 0; --i ) reps[i] = reps[i-1];
+      reps[0] = distance;
+      }
+    }
+
+  int price_shortrep( const State state, const int pos_state ) const
     {
     return price0( bm_rep0[state()] ) + price0( bm_len[state()][pos_state] );
     }
@@ -591,22 +669,18 @@ class LZ_encoder : public LZ_encoder_base
   int price_rep0_len( const int len, const State state, const int pos_state ) const
     {
     return price_rep( 0, state, pos_state ) +
-           rep_len_encoder.price( len, pos_state );
-    }
-
-  int price_dis( const int dis, const int len_state ) const
-    {
-    if( dis < modeled_distances )
-      return dis_prices[len_state][dis];
-    else
-      return dis_slot_prices[len_state][get_slot( dis )] +
-             align_prices[dis & (dis_align_size - 1)];
+           rep_len_prices.price( len, pos_state );
     }
 
   int price_pair( const int dis, const int len, const int pos_state ) const
     {
-    return match_len_encoder.price( len, pos_state ) +
-           price_dis( dis, get_len_state( len ) );
+    const int price = match_len_prices.price( len, pos_state );
+    const int len_state = get_len_state( len );
+    if( dis < modeled_distances )
+      return price + dis_prices[len_state][dis];
+    else
+      return price + dis_slot_prices[len_state][get_slot( dis )] +
+             align_prices[dis & (dis_align_size - 1)];
     }
 
   int read_match_distances()
@@ -627,11 +701,11 @@ class LZ_encoder : public LZ_encoder_base
 
   void move_pos( int n )
     {
-    if( --n >= 0 ) matchfinder.move_pos();
-    while( --n >= 0 )
+    while( true )
       {
-      matchfinder.get_match_pairs();
       matchfinder.move_pos();
+      if( --n <= 0 ) break;
+      matchfinder.get_match_pairs();
       }
     }
 
@@ -651,7 +725,7 @@ class LZ_encoder : public LZ_encoder_base
         if( trials[cur].prev_index2 >= 0 )
           {
           Trial & prev_trial2 = trials[prev_index-1];
-          prev_trial2.dis = trials[cur].dis2;
+          prev_trial2.dis = dis; dis = 0;
           prev_trial2.prev_index = trials[cur].prev_index2;
           prev_trial2.prev_index2 = single_step_trial;
           }
@@ -668,10 +742,12 @@ class LZ_encoder : public LZ_encoder_base
 public:
   LZ_encoder( Matchfinder & mf, const File_header & header, const int outfd )
     :
-    LZ_encoder_base( header, mf.dictionary_size(), mf.match_len_limit(), outfd ),
+    LZ_encoder_base( header, outfd ),
     matchfinder( mf ),
+    match_len_prices( match_len_model, mf.match_len_limit() ),
+    rep_len_prices( rep_len_model, mf.match_len_limit() ),
     pending_num_pairs( 0 ),
-    align_price_count( 0 )
+    num_dis_slots( 2 * real_bits( mf.dictionary_size() - 1 ) )
     {}
 
   bool encode_member( const unsigned long long member_size );

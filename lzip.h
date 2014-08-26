@@ -1,9 +1,9 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
+    Copyright (C) 2008-2014 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
+    the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -40,7 +40,7 @@ public:
 
 enum {
   min_dictionary_bits = 12,
-  min_dictionary_size = 1 << min_dictionary_bits,
+  min_dictionary_size = 1 << min_dictionary_bits,	// >= modeled_distances
   max_dictionary_bits = 29,
   max_dictionary_size = 1 << max_dictionary_bits,
   literal_context_bits = 3,
@@ -240,9 +240,7 @@ struct File_trailer
     }
 
   void data_size( unsigned long long sz )
-    {
-    for( int i = 4; i <= 11; ++i ) { data[i] = (uint8_t)sz; sz >>= 8; }
-    }
+    { for( int i = 4; i <= 11; ++i ) { data[i] = (uint8_t)sz; sz >>= 8; } }
 
   unsigned long long member_size() const
     {
@@ -252,9 +250,7 @@ struct File_trailer
     }
 
   void member_size( unsigned long long sz )
-    {
-    for( int i = 12; i <= 19; ++i ) { data[i] = (uint8_t)sz; sz >>= 8; }
-    }
+    { for( int i = 12; i <= 19; ++i ) { data[i] = (uint8_t)sz; sz >>= 8; } }
   };
 
 
@@ -278,4 +274,4 @@ class Matchfinder_base;
 void show_progress( const unsigned long long partial_size = 0,
                     const Matchfinder_base * const m = 0,
                     const Pretty_print * const p = 0,
-                    const struct stat * const in_statsp = 0 );
+                    const unsigned long long cfile_size = 0 );

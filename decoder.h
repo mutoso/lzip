@@ -1,9 +1,9 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008, 2009, 2010, 2011, 2012, 2013 Antonio Diaz Diaz.
+    Copyright (C) 2008-2014 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
+    the Free Software Foundation, either version 2 of the License, or
     (at your option) any later version.
 
     This program is distributed in the hope that it will be useful,
@@ -76,6 +76,7 @@ public:
     code = 0;
     for( int i = 0; i < 5; ++i ) code = (code << 8) | get_byte();
     range = 0xFFFFFFFFU;
+    code &= range;		// make sure that first byte is discarded
     }
 
   void normalize()
@@ -120,12 +121,13 @@ public:
       }
     }
 
-  int decode_tree( Bit_model bm[], const int num_bits )
+  int decode_tree3( Bit_model bm[] )
     {
     int symbol = 1;
-    for( int i = num_bits; i > 0; --i )
-      symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
-    return symbol - (1 << num_bits);
+    symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    return symbol & 7;
     }
 
   int decode_tree6( Bit_model bm[] )
@@ -137,7 +139,15 @@ public:
     symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
     symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
     symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
-    return symbol - (1 << 6);
+    return symbol & 0x3F;
+    }
+
+  int decode_tree8( Bit_model bm[] )
+    {
+    int symbol = 1;
+    while( symbol < 0x100 )
+      symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
+    return symbol & 0xFF;
     }
 
   int decode_tree_reversed( Bit_model bm[], const int num_bits )
@@ -156,10 +166,9 @@ public:
   int decode_tree_reversed4( Bit_model bm[] )
     {
     int model = 1;
-    int symbol = 0;
+    int symbol = decode_bit( bm[model] );
+    model = (model << 1) + symbol;
     int bit = decode_bit( bm[model] );
-    model = (model << 1) + bit; symbol |= bit;
-    bit = decode_bit( bm[model] );
     model = (model << 1) + bit; symbol |= (bit << 1);
     bit = decode_bit( bm[model] );
     model = (model << 1) + bit; symbol |= (bit << 2);
@@ -171,7 +180,7 @@ public:
     {
     Bit_model * const bm1 = bm + 0x100;
     int symbol = 1;
-    for( int i = 7; i >= 0; --i )
+    while( symbol < 0x100 )
       {
       match_byte <<= 1;
       const int match_bit = match_byte & 0x100;
@@ -184,18 +193,16 @@ public:
         break;
         }
       }
-    return symbol - 0x100;
+    return symbol & 0xFF;
     }
 
   int decode_len( Len_model & lm, const int pos_state )
     {
     if( decode_bit( lm.choice1 ) == 0 )
-      return decode_tree( lm.bm_low[pos_state], len_low_bits );
+      return decode_tree3( lm.bm_low[pos_state] );
     if( decode_bit( lm.choice2 ) == 0 )
-      return len_low_symbols +
-             decode_tree( lm.bm_mid[pos_state], len_mid_bits );
-    return len_low_symbols + len_mid_symbols +
-           decode_tree( lm.bm_high, len_high_bits );
+      return len_low_symbols + decode_tree3( lm.bm_mid[pos_state] );
+    return len_low_symbols + len_mid_symbols + decode_tree8( lm.bm_high );
     }
   };
 
@@ -204,7 +211,7 @@ class LZ_decoder
   {
   unsigned long long partial_data_pos;
   Range_decoder & rdec;
-  const int dictionary_size;
+  const unsigned dictionary_size;
   const int buffer_size;
   uint8_t * const buffer;	// output buffer
   int pos;			// current pos in buffer
@@ -261,14 +268,14 @@ public:
     partial_data_pos( 0 ),
     rdec( rde ),
     dictionary_size( header.dictionary_size() ),
-    buffer_size( std::max( 65536, dictionary_size ) ),
+    buffer_size( std::max( 65536U, dictionary_size ) ),
     buffer( new uint8_t[buffer_size] ),
     pos( 0 ),
     stream_pos( 0 ),
     crc_( 0xFFFFFFFFU ),
     outfd( ofd ),
     member_version( header.version() )
-    { buffer[buffer_size-1] = 0; }	// prev_byte of first_byte
+    { buffer[buffer_size-1] = 0; }		// prev_byte of first byte
 
   ~LZ_decoder() { delete[] buffer; }
 
