@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2014 Antonio Diaz Diaz.
+    Copyright (C) 2008-2015 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -82,7 +82,10 @@ enum { bit_model_move_bits = 5,
 struct Bit_model
   {
   int probability;
-  Bit_model() : probability( bit_model_total / 2 ) {}
+  void reset() { probability = bit_model_total / 2; }
+  void reset( const int size )
+    { for( int i = 0; i < size; ++i ) this[i].reset(); }
+  Bit_model() { reset(); }
   };
 
 struct Len_model
@@ -92,6 +95,15 @@ struct Len_model
   Bit_model bm_low[pos_states][len_low_symbols];
   Bit_model bm_mid[pos_states][len_mid_symbols];
   Bit_model bm_high[len_high_symbols];
+
+  void reset()
+    {
+    choice1.reset();
+    choice2.reset();
+    bm_low[0][0].reset( pos_states * len_low_symbols );
+    bm_mid[0][0].reset( pos_states * len_mid_symbols );
+    bm_high[0].reset( len_high_symbols );
+    }
   };
 
 
@@ -201,9 +213,9 @@ struct File_header
       if( sz > min_dictionary_size )
         {
         const unsigned base_size = 1 << data[5];
-        const unsigned wedge = base_size / 16;
+        const unsigned fraction = base_size / 16;
         for( int i = 7; i >= 1; --i )
-          if( base_size - ( i * wedge ) >= sz )
+          if( base_size - ( i * fraction ) >= sz )
             { data[5] |= ( i << 5 ); break; }
         }
       return true;

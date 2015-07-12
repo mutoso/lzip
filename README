@@ -3,10 +3,11 @@ Description
 Lzip is a lossless data compressor with a user interface similar to the
 one of gzip or bzip2. Lzip is about as fast as gzip, compresses most
 files more than bzip2, and is better than both from a data recovery
-perspective. Lzip is a clean implementation of the LZMA "algorithm".
+perspective.
 
-The lzip file format is designed for long-term data archiving, taking
-into account both data integrity and decoder availability:
+The lzip file format is designed for data sharing and long-term
+archiving, taking into account both data integrity and decoder
+availability:
 
    * The lzip format provides very safe integrity checking and some data
      recovery means. The lziprecover program can repair bit-flip errors
@@ -21,8 +22,8 @@ into account both data integrity and decoder availability:
      extract the data from a lzip file long after quantum computers
      eventually render LZMA obsolete.
 
-   * Additionally lzip is copylefted, which guarantees that it will
-     remain free forever.
+   * Additionally the lzip reference implementation is copylefted, which
+     guarantees that it will remain free forever.
 
 A nice feature of the lzip format is that a corrupt byte is easier to
 repair the nearer it is from the beginning of the file. Therefore, with
@@ -38,6 +39,13 @@ Lzip will automatically use the smallest possible dictionary size for
 each file without exceeding the given limit. Keep in mind that the
 decompression memory requirement is affected at compression time by the
 choice of dictionary size limit.
+
+The amount of memory required for compression is about 1 or 2 times the
+dictionary size limit (1 if input file size is less than dictionary size
+limit, else 2) plus 9 times the dictionary size really used. The option
+'-0' is special and only requires about 1.5 MiB at most. The amount of
+memory required for decompression is about 46 kB larger than the
+dictionary size really used.
 
 When compressing, lzip replaces every file given in the command line
 with a compressed version of itself, with the name "original_name.lz".
@@ -68,25 +76,26 @@ corresponding uncompressed files. Integrity testing of concatenated
 compressed files is also supported.
 
 Lzip can produce multi-member files and safely recover, with
-lziprecover, the undamaged members in case of file damage. Lzip can also
-split the compressed output in volumes of a given size, even when
+lziprecover, the undamaged members in case of file damage. Lzip can
+also split the compressed output in volumes of a given size, even when
 reading from standard input. This allows the direct creation of
 multivolume compressed tar archives.
 
 Lzip is able to compress and decompress streams of unlimited size by
 automatically creating multi-member output. The members so created are
-large, about 64 PiB each.
+large, about 2 PiB each.
 
-There is no such thing as a "LZMA algorithm"; it is more like a "LZMA
-coding scheme". For example, the option '-0' of lzip uses the scheme in
-almost the simplest way possible; issuing the longest match it can find,
-or a literal byte if it can't find a match. Inversely, a much more
-elaborated way of finding coding sequences of minimum price than the one
-currently used by lzip could be developed, and the resulting sequence
-could also be coded using the LZMA coding scheme.
+In spite of its name (Lempel-Ziv-Markov chain-Algorithm), LZMA is not a
+concrete algorithm; it is more like "any algorithm using the LZMA coding
+scheme". For example, the option '-0' of lzip uses the scheme in almost
+the simplest way possible; issuing the longest match it can find, or a
+literal byte if it can't find a match. Inversely, a much more elaborated
+way of finding coding sequences of minimum size than the one currently
+used by lzip could be developed, and the resulting sequence could also
+be coded using the LZMA coding scheme.
 
-Lzip currently implements two variants of the LZMA algorithm; fast (used
-by option -0) and normal (used by all other compression levels).
+Lzip currently implements two variants of the LZMA algorithm; fast
+(used by option '-0') and normal (used by all other compression levels).
 
 The high compression of LZMA comes from combining two basic, well-proven
 compression ideas: sliding dictionaries (LZ77/78) and markov models (the
@@ -101,7 +110,7 @@ range encoding), Igor Pavlov (for putting all the above together in
 LZMA), and Julian Seward (for bzip2's CLI).
 
 
-Copyright (C) 2008-2014 Antonio Diaz Diaz.
+Copyright (C) 2008-2015 Antonio Diaz Diaz.
 
 This file is free documentation: you have unlimited permission to copy,
 distribute and modify it.

@@ -1,17 +1,10 @@
-Changes in version 1.16:
+Changes in version 1.17:
 
-Compression ratio of option -9 has been slightly increased.
+The compression code has been reorganized to ease the porting of the
+fast encoder to clzip and lzlib.
 
-Compression time has been reduced by 4%.
+The new chapter "Quality assurance" has been added to the manual.
 
-"lzip -0" is now comparable in compression speed and ratio to "gzip -6".
-
-Copying of file dates, permissions, and ownership now behaves like "cp -p".
-(If the user ID or the group ID can't be duplicated, the file permission
-bits S_ISUID and S_ISGID are cleared).
-
-Some minor improvements have been made.
-
-"lzip.texinfo" has been renamed to "lzip.texi".
-
-The license has been changed to GPL version 2 or later.
+The targets "install-compress", "install-strip-compress",
+"install-info-compress" and "install-man-compress" have been added to
+the Makefile.

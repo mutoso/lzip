@@ -1,3 +1,10 @@
+2015-07-12  Antonio Diaz Diaz  <antonio@gnu.org>
+
+	* Version 1.17 released.
+	* Reorganization of the compression code.
+	* lzip.texi: Added chapter 'Quality assurance'.
+	* Makefile.in: Added new targets 'install*-compress'.
+
 2014-08-26  Antonio Diaz Diaz  <antonio@gnu.org>
 
 	* Version 1.16 released.
@@ -16,8 +23,8 @@
 	* main.cc (show_header): Do not show header version.
 	* Ignore option '-n, --threads' for compatibility with plzip.
 	* configure: Options now accept a separate argument.
-	* Added chapter 'Stream format' and appendix 'Reference source code'
-	  to the manual.
+	* lzip.texinfo: Added chapter 'Stream format' and appendix
+	  'Reference source code'.
 
 2013-02-17  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -96,7 +103,7 @@
 	* main.cc: Fixed warning about fchown's return value being ignored.
 	* decoder.cc: '-tvvvv' now also shows compression ratio.
 	* main.cc: Set stdin/stdout in binary mode on MSVC and OS2.
-	* New examples have been added to the manual.
+	* lzip.texinfo: Added new examples.
 	* testsuite: 'test1' renamed to 'test.txt'. Added new tests.
 	* Matchfinder types HC4 (4 bytes hash-chain) and HT4 (4 bytes
 	  hash-table) have been tested and found no better than the
@@ -160,7 +167,7 @@
 	* 'member_size' and 'volume_size' are now accurate limits.
 	* Compression speed has been improved.
 	* Implemented bt4 type matchfinder.
-	* Added chapter 'Algorithm' to the manual.
+	* lzip.texinfo: Added chapter 'Algorithm'.
 	* Lzdiff and lzgrep now accept '-h' for '--help' and
 	  '-V' for '--version'.
 	* Makefile.in: Man page is now installed by default.
@@ -241,7 +248,7 @@
 	* Version 0.1 released.
 
 
-Copyright (C) 2008-2014 Antonio Diaz Diaz.
+Copyright (C) 2008-2015 Antonio Diaz Diaz.
 
 This file is a collection of facts, and thus it is not copyrightable,
 but just in case, you have unlimited permission to copy, distribute and

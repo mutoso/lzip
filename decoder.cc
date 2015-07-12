@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2014 Antonio Diaz Diaz.
+    Copyright (C) 2008-2015 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -43,7 +43,7 @@ void Pretty_print::operator()( const char * const msg ) const
       first_post = false;
       std::fprintf( stderr, "  %s: ", name_.c_str() );
       for( unsigned i = 0; i < longest_name - name_.size(); ++i )
-        std::fprintf( stderr, " " );
+        std::fputc( ' ', stderr );
       if( !msg ) std::fflush( stderr );
       }
     if( msg ) std::fprintf( stderr, "%s\n", msg );
@@ -149,7 +149,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     if( verbosity >= 0 )
       {
       pp();
-      std::fprintf( stderr, "CRC mismatch; trailer says %08X, data CRC is %08X.\n",
+      std::fprintf( stderr, "CRC mismatch; trailer says %08X, data CRC is %08X\n",
                     trailer.data_crc(), crc() );
       }
     }
@@ -159,7 +159,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     if( verbosity >= 0 )
       {
       pp();
-      std::fprintf( stderr, "Data size mismatch; trailer says %llu, data size is %llu (0x%llX).\n",
+      std::fprintf( stderr, "Data size mismatch; trailer says %llu, data size is %llu (0x%llX)\n",
                     trailer.data_size(), data_position(), data_position() );
       }
     }
@@ -169,7 +169,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     if( verbosity >= 0 )
       {
       pp();
-      std::fprintf( stderr, "Member size mismatch; trailer says %llu, member size is %llu (0x%llX).\n",
+      std::fprintf( stderr, "Member size mismatch; trailer says %llu, member size is %llu (0x%llX)\n",
                     trailer.member_size(), member_size, member_size );
       }
     }
@@ -213,7 +213,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
     const int pos_state = data_position() & pos_state_mask;
     if( rdec.decode_bit( bm_match[state()][pos_state] ) == 0 )	// 1st bit
       {
-      const uint8_t prev_byte = get_prev_byte();
+      const uint8_t prev_byte = peek_prev();
       if( state.is_char() )
         {
         state.set_char1();
@@ -223,10 +223,10 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
         {
         state.set_char2();
         put_byte( rdec.decode_matched( bm_literal[get_lit_state(prev_byte)],
-                                       get_byte( rep0 ) ) );
+                                       peek( rep0 ) ) );
         }
       }
-    else
+    else					// match or repeated match
       {
       int len;
       if( rdec.decode_bit( bm_rep[state()] ) != 0 )		// 2nd bit
@@ -250,12 +250,12 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
         else
           {
           if( rdec.decode_bit( bm_len[state()][pos_state] ) == 0 ) // 4th bit
-            { state.set_short_rep(); put_byte( get_byte( rep0 ) ); continue; }
+            { state.set_short_rep(); put_byte( peek( rep0 ) ); continue; }
           }
         state.set_rep();
         len = min_match_len + rdec.decode_len( rep_len_model, pos_state );
         }
-      else
+      else					// match
         {
         const unsigned rep0_saved = rep0;
         len = min_match_len + rdec.decode_len( match_len_model, pos_state );
@@ -272,7 +272,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
             {
             rep0 += rdec.decode( direct_bits - dis_align_bits ) << dis_align_bits;
             rep0 += rdec.decode_tree_reversed4( bm_align );
-            if( rep0 == 0xFFFFFFFFU )		// Marker found
+            if( rep0 == 0xFFFFFFFFU )		// marker found
               {
               rep0 = rep0_saved;
               rdec.normalize();
@@ -288,7 +288,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
               if( verbosity >= 0 )
                 {
                 pp();
-                std::fprintf( stderr, "Unsupported marker code '%d'.\n", len );
+                std::fprintf( stderr, "Unsupported marker code '%d'\n", len );
                 }
               return 4;
               }

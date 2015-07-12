@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2014 Antonio Diaz Diaz.
+    Copyright (C) 2008-2015 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -15,16 +15,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-class Fmatchfinder : public Matchfinder_base
+class FLZ_encoder : public LZ_encoder_base
   {
-  enum { before_size = max_match_len + 1,
-         dict_size = 65536,
-         // bytes to keep in buffer after pos
-         after_size = max_match_len,
-         dict_factor = 16,
-         num_prev_positions23 = 0,
-         pos_array_factor = 1 };
-
   int key4;			// key made from latest 4 bytes
 
   void reset_key4()
@@ -34,15 +26,6 @@ class Fmatchfinder : public Matchfinder_base
       key4 = ( key4 << 4 ) ^ buffer[i];
     }
 
-public:
-  explicit Fmatchfinder( const int ifd )
-    :
-    Matchfinder_base( before_size, dict_size, after_size, dict_factor,
-                      num_prev_positions23, pos_array_factor, ifd )
-    { reset_key4(); }
-
-  enum { len_limit = 16 };
-  void reset() { Matchfinder_base::reset(); reset_key4(); }
   int longest_match_len( int * const distance );
 
   void update_and_move( int n )
@@ -59,18 +42,20 @@ public:
       move_pos();
       }
     }
-  };
 
-
-class FLZ_encoder : public LZ_encoder_base
-  {
-  Fmatchfinder & fmatchfinder;
+  enum { before = 0,
+         dict_size = 65536,
+         // bytes to keep in buffer after pos
+         after_size = max_match_len,
+         dict_factor = 16,
+         num_prev_positions23 = 0,
+         pos_array_factor = 1 };
 
 public:
-  FLZ_encoder( Fmatchfinder & mf, const File_header & header, const int outfd )
+  FLZ_encoder( const int ifd, const int outfd )
     :
-    LZ_encoder_base( header, outfd ),
-    fmatchfinder( mf )
+    LZ_encoder_base( before, dict_size, after_size, dict_factor,
+                     num_prev_positions23, pos_array_factor, ifd, outfd )
     {}
 
   bool encode_member( const unsigned long long member_size );
