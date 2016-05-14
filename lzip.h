@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2015 Antonio Diaz Diaz.
+    Copyright (C) 2008-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -44,6 +44,7 @@ enum {
   max_dictionary_bits = 29,
   max_dictionary_size = 1 << max_dictionary_bits,
   literal_context_bits = 3,
+  literal_pos_state_bits = 0,				// not used
   pos_state_bits = 2,
   pos_states = 1 << pos_state_bits,
   pos_state_mask = pos_states - 1,
@@ -115,9 +116,11 @@ class Pretty_print
   mutable bool first_post;
 
 public:
-  explicit Pretty_print( const std::vector< std::string > & filenames )
+  Pretty_print( const std::vector< std::string > & filenames,
+                const int verbosity )
     : stdin_name( "(stdin)" ), longest_name( 0 ), first_post( false )
     {
+    if( verbosity <= 0 ) return;
     const unsigned stdin_name_len = std::strlen( stdin_name );
     for( unsigned i = 0; i < filenames.size(); ++i )
       {
@@ -173,6 +176,11 @@ public:
 extern const CRC32 crc32;
 
 
+inline bool isvalid_ds( const unsigned dictionary_size )
+  { return ( dictionary_size >= min_dictionary_size &&
+             dictionary_size <= max_dictionary_size ); }
+
+
 inline int real_bits( unsigned value )
   {
   int bits = 0;
@@ -193,9 +201,15 @@ struct File_header
   void set_magic() { std::memcpy( data, magic_string, 4 ); data[4] = 1; }
   bool verify_magic() const
     { return ( std::memcmp( data, magic_string, 4 ) == 0 ); }
+  bool verify_prefix( const int size ) const	// detect truncated header
+    {
+    for( int i = 0; i < size && i < 4; ++i )
+      if( data[i] != magic_string[i] ) return false;
+    return ( size > 0 );
+    }
 
   uint8_t version() const { return data[4]; }
-  bool verify_version() const { return ( data[4] <= 1 ); }
+  bool verify_version() const { return ( data[4] == 1 ); }
 
   unsigned dictionary_size() const
     {
@@ -207,20 +221,17 @@ struct File_header
 
   bool dictionary_size( const unsigned sz )
     {
-    if( sz >= min_dictionary_size && sz <= max_dictionary_size )
+    if( !isvalid_ds( sz ) ) return false;
+    data[5] = real_bits( sz - 1 );
+    if( sz > min_dictionary_size )
       {
-      data[5] = real_bits( sz - 1 );
-      if( sz > min_dictionary_size )
-        {
-        const unsigned base_size = 1 << data[5];
-        const unsigned fraction = base_size / 16;
-        for( int i = 7; i >= 1; --i )
-          if( base_size - ( i * fraction ) >= sz )
-            { data[5] |= ( i << 5 ); break; }
-        }
-      return true;
+      const unsigned base_size = 1 << data[5];
+      const unsigned fraction = base_size / 16;
+      for( int i = 7; i >= 1; --i )
+        if( base_size - ( i * fraction ) >= sz )
+          { data[5] |= ( i << 5 ); break; }
       }
-    return false;
+    return true;
     }
   };
 
@@ -231,8 +242,7 @@ struct File_trailer
 			//  4-11 size of the uncompressed data
 			// 12-19 member size including header and trailer
 
-  static int size( const int version = 1 )
-    { return ( ( version >= 1 ) ? 20 : 12 ); }
+  enum { size = 20 };
 
   unsigned data_crc() const
     {

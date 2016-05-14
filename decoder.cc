@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2015 Antonio Diaz Diaz.
+    Copyright (C) 2008-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -31,9 +31,6 @@
 #include "decoder.h"
 
 
-const CRC32 crc32;
-
-
 void Pretty_print::operator()( const char * const msg ) const
   {
   if( verbosity >= 0 )
@@ -42,7 +39,7 @@ void Pretty_print::operator()( const char * const msg ) const
       {
       first_post = false;
       std::fprintf( stderr, "  %s: ", name_.c_str() );
-      for( unsigned i = 0; i < longest_name - name_.size(); ++i )
+      for( unsigned i = name_.size(); i < longest_name; ++i )
         std::fputc( ' ', stderr );
       if( !msg ) std::fflush( stderr );
       }
@@ -110,7 +107,8 @@ void LZ_decoder::flush_data()
     crc32.update_buf( crc_, buffer + stream_pos, size );
     if( outfd >= 0 && writeblock( outfd, buffer + stream_pos, size ) != size )
       throw Error( "Write error" );
-    if( pos >= buffer_size ) { partial_data_pos += pos; pos = 0; }
+    if( pos >= dictionary_size )
+      { partial_data_pos += pos; pos = 0; pos_wrapped = true; }
     stream_pos = pos;
     }
   }
@@ -119,12 +117,12 @@ void LZ_decoder::flush_data()
 bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   {
   File_trailer trailer;
-  const int trailer_size = File_trailer::size( member_version );
-  const unsigned long long member_size = rdec.member_position() + trailer_size;
+  int size = rdec.read_data( trailer.data, File_trailer::size );
+  const unsigned long long data_size = data_position();
+  const unsigned long long member_size = rdec.member_position();
   bool error = false;
 
-  int size = rdec.read_data( trailer.data, trailer_size );
-  if( size < trailer_size )
+  if( size < File_trailer::size )
     {
     error = true;
     if( verbosity >= 0 )
@@ -133,16 +131,9 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
       std::fprintf( stderr, "Trailer truncated at trailer position %d;"
                             " some checks may fail.\n", size );
       }
-    while( size < trailer_size ) trailer.data[size++] = 0;
+    while( size < File_trailer::size ) trailer.data[size++] = 0;
     }
 
-  if( member_version == 0 ) trailer.member_size( member_size );
-
-  if( !rdec.code_is_zero() )
-    {
-    error = true;
-    pp( "Range decoder final code is not zero." );
-    }
   if( trailer.data_crc() != crc() )
     {
     error = true;
@@ -153,14 +144,14 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
                     trailer.data_crc(), crc() );
       }
     }
-  if( trailer.data_size() != data_position() )
+  if( trailer.data_size() != data_size )
     {
     error = true;
     if( verbosity >= 0 )
       {
       pp();
       std::fprintf( stderr, "Data size mismatch; trailer says %llu, data size is %llu (0x%llX)\n",
-                    trailer.data_size(), data_position(), data_position() );
+                    trailer.data_size(), data_size, data_size );
       }
     }
   if( trailer.member_size() != member_size )
@@ -173,14 +164,14 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
                     trailer.member_size(), member_size, member_size );
       }
     }
-  if( !error && verbosity >= 2 && data_position() > 0 && member_size > 0 )
+  if( !error && verbosity >= 2 && data_size > 0 && member_size > 0 )
     std::fprintf( stderr, "%6.3f:1, %6.3f bits/byte, %5.2f%% saved.  ",
-                  (double)data_position() / member_size,
-                  ( 8.0 * member_size ) / data_position(),
-                  100.0 * ( 1.0 - ( (double)member_size / data_position() ) ) );
+                  (double)data_size / member_size,
+                  ( 8.0 * member_size ) / data_size,
+                  100.0 * ( 1.0 - ( (double)member_size / data_size ) ) );
   if( !error && verbosity >= 4 )
     std::fprintf( stderr, "data CRC %08X, data size %9llu, member size %8llu.  ",
-                  trailer.data_crc(), trailer.data_size(), trailer.member_size() );
+                  crc(), data_size, member_size );
   return !error;
   }
 
@@ -296,7 +287,7 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
           }
         rep3 = rep2; rep2 = rep1; rep1 = rep0_saved;
         state.set_match();
-        if( rep0 >= dictionary_size || rep0 >= data_position() )
+        if( rep0 >= dictionary_size || ( rep0 >= pos && !pos_wrapped ) )
           { flush_data(); return 1; }
         }
       copy_block( rep0, len );

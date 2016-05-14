@@ -1,3 +1,18 @@
+2016-05-14  Antonio Diaz Diaz  <antonio@gnu.org>
+
+	* Version 1.18 released.
+	* main.cc: Added new option '-a, --trailing-error'.
+	* Decompression time has been reduced by 2%.
+	* decoder.cc (verify_trailer): Removed test of final code.
+	* main.cc (main): Delete '--output' file if infd is a terminal.
+	* main.cc (main): Don't use stdin more than once.
+	* Removed decompression support for version 0 files.
+	* lzip.texi: Added chapter 'Trailing data'.
+	* configure: Avoid warning on some shells when testing for g++.
+	* Makefile.in: Detect the existence of install-info.
+	* testsuite/check.sh: A POSIX shell is required to run the tests.
+	* testsuite/check.sh: Don't check error messages.
+
 2015-07-12  Antonio Diaz Diaz  <antonio@gnu.org>
 
 	* Version 1.17 released.
@@ -20,7 +35,7 @@
 
 	* Version 1.15 released.
 	* Show progress of compression at verbosity level 2 (-vv).
-	* main.cc (show_header): Do not show header version.
+	* main.cc (show_header): Don't show header version.
 	* Ignore option '-n, --threads' for compatibility with plzip.
 	* configure: Options now accept a separate argument.
 	* lzip.texinfo: Added chapter 'Stream format' and appendix
@@ -63,10 +78,10 @@
 	  by up to 6%.
 	* Compression time of option '-0' has been reduced by 2%.
 	* main.cc (decompress): Print only one status line for each
-	  multi-member file when only one '-v' is specified.
-	* main.cc (decompress): Print up to 6 bytes of trailing garbage
+	  multimember file when only one '-v' is specified.
+	* main.cc (decompress): Print up to 6 bytes of trailing data
 	  when '-vvvv' is specified.
-	* main.cc (open_instream): Do not show the message
+	* main.cc (open_instream): Don't show the message
 	  " and '--stdout' was not specified" for directories, etc.
 	* lziprecover.cc: If '-v' is not specified show errors only.
 	* testsuite/unzcrash.cc: Use Arg_parser.
@@ -97,7 +112,7 @@
 	* lziprecover.cc: Added new option '-f, --force'.
 	* lziprecover.cc: Added new option '-o, --output'.
 	* lziprecover.cc: Added new option '-s, --split' to select the
-	  until now only operation of splitting multi-member files.
+	  until now only operation of splitting multimember files.
 	* lziprecover.cc: If no operation is specified, warn the user
 	  and do nothing.
 	* main.cc: Fixed warning about fchown's return value being ignored.
@@ -248,7 +263,7 @@
 	* Version 0.1 released.
 
 
-Copyright (C) 2008-2015 Antonio Diaz Diaz.
+Copyright (C) 2008-2016 Antonio Diaz Diaz.
 
 This file is a collection of facts, and thus it is not copyrightable,
 but just in case, you have unlimited permission to copy, distribute and

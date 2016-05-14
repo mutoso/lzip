@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2015 Antonio Diaz Diaz.
+    Copyright (C) 2008-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -47,14 +47,14 @@ public:
 
   ~Range_decoder() { delete[] buffer; }
 
-  bool code_is_zero() const { return ( code == 0 ); }
   bool finished() { return pos >= stream_pos && !read_block(); }
   unsigned long long member_position() const { return partial_member_pos + pos; }
   void reset_member_position() { partial_member_pos = -pos; }
 
   uint8_t get_byte()
     {
-    if( finished() ) return 0xAA;		// make code != 0
+    // 0xFF avoids decoder error if member is truncated at EOS marker
+    if( finished() ) return 0xFF;
     return buffer[pos++];
     }
 
@@ -212,50 +212,54 @@ class LZ_decoder
   unsigned long long partial_data_pos;
   Range_decoder & rdec;
   const unsigned dictionary_size;
-  const int buffer_size;
   uint8_t * const buffer;	// output buffer
-  int pos;			// current pos in buffer
-  int stream_pos;		// first byte not yet written to file
+  unsigned pos;			// current pos in buffer
+  unsigned stream_pos;		// first byte not yet written to file
   uint32_t crc_;
   const int outfd;		// output file descriptor
-  const int member_version;
+  bool pos_wrapped;
 
   void flush_data();
   bool verify_trailer( const Pretty_print & pp ) const;
 
   uint8_t peek_prev() const
     {
-    const int i = ( ( pos > 0 ) ? pos : buffer_size ) - 1;
+    const unsigned i = ( ( pos > 0 ) ? pos : dictionary_size ) - 1;
     return buffer[i];
     }
 
-  uint8_t peek( const int distance ) const
+  uint8_t peek( const unsigned distance ) const
     {
-    int i = pos - distance - 1;
-    if( i < 0 ) i += buffer_size;
+    unsigned i = pos - distance - 1;
+    if( pos <= distance ) i += dictionary_size;
     return buffer[i];
     }
 
   void put_byte( const uint8_t b )
     {
     buffer[pos] = b;
-    if( ++pos >= buffer_size ) flush_data();
+    if( ++pos >= dictionary_size ) flush_data();
     }
 
-  void copy_block( const int distance, int len )
+  void copy_block( const unsigned distance, unsigned len )
     {
-    int i = pos - distance - 1;
-    if( i < 0 ) i += buffer_size;
-    if( len < buffer_size - std::max( pos, i ) && len <= std::abs( pos - i ) )
+    unsigned i = pos - distance - 1;
+    bool fast;
+    if( pos <= distance )
+      { i += dictionary_size;
+        fast = ( len <= dictionary_size - i && len <= i - pos ); }
+    else
+      fast = ( len < dictionary_size - pos && len <= pos - i );
+    if( fast )					// no wrap, no overlap
       {
-      std::memcpy( buffer + pos, buffer + i, len );	// no wrap, no overlap
+      std::memcpy( buffer + pos, buffer + i, len );
       pos += len;
       }
     else for( ; len > 0; --len )
       {
       buffer[pos] = buffer[i];
-      if( ++pos >= buffer_size ) flush_data();
-      if( ++i >= buffer_size ) i = 0;
+      if( ++pos >= dictionary_size ) flush_data();
+      if( ++i >= dictionary_size ) i = 0;
       }
     }
 
@@ -263,19 +267,18 @@ class LZ_decoder
   void operator=( const LZ_decoder & );		// declared as private
 
 public:
-  LZ_decoder( const File_header & header, Range_decoder & rde, const int ofd )
+  LZ_decoder( Range_decoder & rde, const unsigned dict_size, const int ofd )
     :
     partial_data_pos( 0 ),
     rdec( rde ),
-    dictionary_size( header.dictionary_size() ),
-    buffer_size( std::max( 65536U, dictionary_size ) ),
-    buffer( new uint8_t[buffer_size] ),
+    dictionary_size( dict_size ),
+    buffer( new uint8_t[dictionary_size] ),
     pos( 0 ),
     stream_pos( 0 ),
     crc_( 0xFFFFFFFFU ),
     outfd( ofd ),
-    member_version( header.version() )
-    { buffer[buffer_size-1] = 0; }		// prev_byte of first byte
+    pos_wrapped( false )
+    { buffer[dictionary_size-1] = 0; }		// prev_byte of first byte
 
   ~LZ_decoder() { delete[] buffer; }
 

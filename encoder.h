@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2015 Antonio Diaz Diaz.
+    Copyright (C) 2008-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -275,7 +275,10 @@ public:
     rep_len_prices( rep_len_model, match_len_limit ),
     pending_num_pairs( 0 ),
     num_dis_slots( 2 * real_bits( dictionary_size - 1 ) )
-    {}
+    {
+    trials[1].prev_index = 0;
+    trials[1].prev_index2 = single_step_trial;
+    }
 
   void reset()
     {

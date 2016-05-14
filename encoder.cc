@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2015 Antonio Diaz Diaz.
+    Copyright (C) 2008-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -28,6 +28,9 @@
 #include "lzip.h"
 #include "encoder_base.h"
 #include "encoder.h"
+
+
+const CRC32 crc32;
 
 
 int LZ_encoder::get_match_pairs( Pair * pairs )
@@ -194,16 +197,16 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
     }
   if( replens[rep_index] >= match_len_limit )
     {
-    trials[0].dis = rep_index;
     trials[0].price = replens[rep_index];
+    trials[0].dis = rep_index;
     move_and_update( replens[rep_index] );
     return replens[rep_index];
     }
 
   if( main_len >= match_len_limit )
     {
-    trials[0].dis = pairs[num_pairs-1].dis + num_rep_distances;
     trials[0].price = main_len;
+    trials[0].dis = pairs[num_pairs-1].dis + num_rep_distances;
     move_and_update( main_len );
     return main_len;
     }
@@ -213,13 +216,12 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
   const uint8_t cur_byte = peek( 0 );
   const uint8_t match_byte = peek( reps[0] + 1 );
 
-  trials[0].state = state;
-  trials[1].dis = -1;					// literal
   trials[1].price = price0( bm_match[state()][pos_state] );
   if( state.is_char() )
     trials[1].price += price_literal( prev_byte, cur_byte );
   else
     trials[1].price += price_matched( prev_byte, cur_byte, match_byte );
+  trials[1].dis = -1;					// literal
 
   const int match_price = price1( bm_match[state()][pos_state] );
   const int rep_match_price = match_price + price1( bm_rep[state()] );
@@ -231,16 +233,15 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
 
   if( num_trials < min_match_len )
     {
-    trials[0].dis = trials[1].dis;
     trials[0].price = 1;
+    trials[0].dis = trials[1].dis;
     move_pos();
     return 1;
     }
 
+  trials[0].state = state;
   for( int i = 0; i < num_rep_distances; ++i )
     trials[0].reps[i] = reps[i];
-  trials[1].prev_index = 0;
-  trials[1].prev_index2 = single_step_trial;
 
   for( int len = min_match_len; len <= num_trials; ++len )
     trials[len].price = infinite_price;
@@ -487,7 +488,7 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
 bool LZ_encoder::encode_member( const unsigned long long member_size )
   {
   const unsigned long long member_size_limit =
-    member_size - File_trailer::size() - max_marker_size;
+    member_size - File_trailer::size - max_marker_size;
   const bool best = ( match_len_limit > 12 );
   const int dis_price_count = best ? 1 : 512;
   const int align_price_count = best ? 1 : dis_align_size;
@@ -537,8 +538,8 @@ bool LZ_encoder::encode_member( const unsigned long long member_size )
     for( int i = 0; ahead > 0; )
       {
       const int pos_state = ( data_position() - ahead ) & pos_state_mask;
-      const int dis = trials[i].dis;
       const int len = trials[i].price;
+      const int dis = trials[i].dis;
 
       bool bit = ( dis < 0 );
       renc.encode_bit( bm_match[state()][pos_state], !bit );

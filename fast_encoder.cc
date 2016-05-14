@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2015 Antonio Diaz Diaz.
+    Copyright (C) 2008-2016 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -81,7 +81,7 @@ int FLZ_encoder::longest_match_len( int * const distance )
 bool FLZ_encoder::encode_member( const unsigned long long member_size )
   {
   const unsigned long long member_size_limit =
-    member_size - File_trailer::size() - max_marker_size;
+    member_size - File_trailer::size - max_marker_size;
   int rep = 0;
   int reps[num_rep_distances];
   State state;
