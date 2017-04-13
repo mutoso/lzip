@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2016 Antonio Diaz Diaz.
+    Copyright (C) 2008-2017 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -30,8 +30,12 @@ public:
     static const int next[states] = { 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 4, 5 };
     st = next[st];
     }
-  void set_char1()     { st -= ( st < 4 ) ? st : 3; }	// for st < 7
-  void set_char2()     { st -= ( st < 10 ) ? 3 : 6; }	// for st >= 7
+  bool is_char_set_char()
+    {
+    if( st < 7 ) { st -= ( st < 4 ) ? st : 3; return true; }
+    else { st -= ( st < 10 ) ? 3 : 6; return false; }
+    }
+  void set_char_rep()  { st = 8; }
   void set_match()     { st = ( st < 7 ) ? 7 : 10; }
   void set_rep()       { st = ( st < 7 ) ? 8 : 11; }
   void set_short_rep() { st = ( st < 7 ) ? 9 : 11; }
@@ -43,6 +47,7 @@ enum {
   min_dictionary_size = 1 << min_dictionary_bits,	// >= modeled_distances
   max_dictionary_bits = 29,
   max_dictionary_size = 1 << max_dictionary_bits,
+  min_member_size = 36,
   literal_context_bits = 3,
   literal_pos_state_bits = 0,				// not used
   pos_state_bits = 2,
@@ -168,8 +173,10 @@ public:
   void update_buf( uint32_t & crc, const uint8_t * const buffer,
                    const int size ) const
     {
+    uint32_t c = crc;
     for( int i = 0; i < size; ++i )
-      crc = data[(crc^buffer[i])&0xFF] ^ ( crc >> 8 );
+      c = data[(c^buffer[i])&0xFF] ^ ( c >> 8 );
+    crc = c;
     }
   };
 
@@ -227,7 +234,7 @@ struct File_header
       {
       const unsigned base_size = 1 << data[5];
       const unsigned fraction = base_size / 16;
-      for( int i = 7; i >= 1; --i )
+      for( unsigned i = 7; i >= 1; --i )
         if( base_size - ( i * fraction ) >= sz )
           { data[5] |= ( i << 5 ); break; }
       }
@@ -283,14 +290,29 @@ struct Error
   };
 
 
+const char * const bad_magic_msg = "Bad magic number (file not in lzip format).";
+const char * const bad_dict_msg = "Invalid dictionary size in member header.";
+const char * const trailing_msg = "Trailing data not allowed.";
+
 // defined in decoder.cc
 int readblock( const int fd, uint8_t * const buf, const int size );
 int writeblock( const int fd, const uint8_t * const buf, const int size );
 
+// defined in list.cc
+int list_files( const std::vector< std::string > & filenames,
+                const bool ignore_trailing );
+
 // defined in main.cc
 extern int verbosity;
+struct stat;
+const char * bad_version( const unsigned version );
+const char * format_ds( const unsigned dictionary_size );
+int open_instream( const char * const name, struct stat * const in_statsp,
+                   const bool no_ofile, const bool reg_only = false );
 void show_error( const char * const msg, const int errcode = 0,
                  const bool help = false );
+void show_file_error( const char * const filename, const char * const msg,
+                      const int errcode = 0 );
 void internal_error( const char * const msg );
 class Matchfinder_base;
 void show_progress( const unsigned long long partial_size = 0,

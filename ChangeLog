@@ -1,3 +1,16 @@
+2017-04-13  Antonio Diaz Diaz  <antonio@gnu.org>
+
+	* Version 1.19 released.
+	* The option '-l, --list' has been ported from lziprecover.
+	* Don't allow mixing different operations (-d, -l or -t).
+	* Compression time of option '-0' has been slightly reduced.
+	* Decompression time has been reduced by 2%.
+	* main.cc: Continue testing if any input file is a terminal.
+	* main.cc: Show trailing data in both hexadecimal and ASCII.
+	* encoder.cc (Matchfinder_base): Verify size passed to new.
+	* file_index.cc: Improve detection of bad dict and trailing data.
+	* lzip.h: Unified messages for bad magic, trailing data, etc.
+
 2016-05-14  Antonio Diaz Diaz  <antonio@gnu.org>
 
 	* Version 1.18 released.
@@ -263,7 +276,7 @@
 	* Version 0.1 released.
 
 
-Copyright (C) 2008-2016 Antonio Diaz Diaz.
+Copyright (C) 2008-2017 Antonio Diaz Diaz.
 
 This file is a collection of facts, and thus it is not copyrightable,
 but just in case, you have unlimited permission to copy, distribute and

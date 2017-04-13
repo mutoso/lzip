@@ -7,7 +7,8 @@ INSTALL_DIR = $(INSTALL) -d -m 755
 SHELL = /bin/sh
 CAN_RUN_INSTALLINFO = $(SHELL) -c "install-info --version" > /dev/null 2>&1
 
-objs = arg_parser.o encoder_base.o encoder.o fast_encoder.o decoder.o main.o
+objs = arg_parser.o file_index.o list.o encoder_base.o encoder.o \
+       fast_encoder.o decoder.o main.o
 
 
 .PHONY : all install install-bin install-info install-man \
@@ -33,6 +34,8 @@ decoder.o      : lzip.h decoder.h
 encoder_base.o : lzip.h encoder_base.h
 encoder.o      : lzip.h encoder_base.h encoder.h
 fast_encoder.o : lzip.h encoder_base.h fast_encoder.h
+file_index.o   : lzip.h file_index.h
+list.o         : lzip.h file_index.h
 main.o         : arg_parser.h lzip.h decoder.h encoder_base.h encoder.h fast_encoder.h
 
 
@@ -113,11 +116,11 @@ dist : doc
 	  $(DISTNAME)/doc/$(progname).1 \
 	  $(DISTNAME)/doc/$(pkgname).info \
 	  $(DISTNAME)/doc/$(pkgname).texi \
+	  $(DISTNAME)/*.h \
+	  $(DISTNAME)/*.cc \
 	  $(DISTNAME)/testsuite/check.sh \
 	  $(DISTNAME)/testsuite/test.txt \
-	  $(DISTNAME)/testsuite/test.txt.lz \
-	  $(DISTNAME)/*.h \
-	  $(DISTNAME)/*.cc
+	  $(DISTNAME)/testsuite/test.txt.lz
 	rm -f $(DISTNAME)
 	lzip -v -9 $(DISTNAME).tar
 

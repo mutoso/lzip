@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2016 Antonio Diaz Diaz.
+    Copyright (C) 2008-2017 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -33,23 +33,22 @@
 int FLZ_encoder::longest_match_len( int * const distance )
   {
   enum { len_limit = 16 };
-  if( len_limit > available_bytes() ) return 0;
+  const int available = std::min( available_bytes(), (int)max_match_len );
+  if( available < len_limit ) return 0;
 
   const uint8_t * const data = ptr_to_current_pos();
   key4 = ( ( key4 << 4 ) ^ data[3] ) & key4_mask;
-
   const int pos1 = pos + 1;
-  int newpos = prev_positions[key4];
+  int newpos1 = prev_positions[key4];
   prev_positions[key4] = pos1;
-
   int32_t * ptr0 = pos_array + cyclic_pos;
   int maxlen = 0;
 
   for( int count = 4; ; )
     {
-    if( --count < 0 || newpos <= 0 ) { *ptr0 = 0; break; }
-    const int delta = pos1 - newpos;
-    if( delta > dictionary_size ) { *ptr0 = 0; break; }
+    int delta;
+    if( newpos1 <= 0 || --count < 0 ||
+        ( delta = pos1 - newpos1 ) > dictionary_size ) { *ptr0 = 0; break; }
     int32_t * const newptr = pos_array +
       ( cyclic_pos - delta +
           ( ( cyclic_pos >= delta ) ? 0 : dictionary_size + 1 ) );
@@ -57,22 +56,15 @@ int FLZ_encoder::longest_match_len( int * const distance )
     if( data[maxlen-delta] == data[maxlen] )
       {
       int len = 0;
-      while( len < len_limit && data[len-delta] == data[len] ) ++len;
-      if( maxlen < len ) { maxlen = len; *distance = delta - 1; }
+      while( len < available && data[len-delta] == data[len] ) ++len;
+      if( maxlen < len )
+        { maxlen = len; *distance = delta - 1;
+          if( maxlen >= len_limit ) { *ptr0 = *newptr; break; } }
       }
 
-    if( maxlen < len_limit )
-      {
-      *ptr0 = newpos;
-      ptr0 = newptr;
-      newpos = *ptr0;
-      }
-    else
-      {
-      *ptr0 = *newptr;
-      maxlen += true_match_len( maxlen, *distance + 1, max_match_len - maxlen );
-      break;
-      }
+    *ptr0 = newpos1;
+    ptr0 = newptr;
+    newpos1 = *ptr0;
     }
   return maxlen;
   }
@@ -110,7 +102,7 @@ bool FLZ_encoder::encode_member( const unsigned long long member_size )
 
     for( int i = 0; i < num_rep_distances; ++i )
       {
-      const int tlen = true_match_len( 0, reps[i] + 1, max_match_len );
+      const int tlen = true_match_len( 0, reps[i] + 1 );
       if( tlen > len ) { len = tlen; rep = i; }
       }
     if( len > min_match_len && len + 3 > main_len )
@@ -181,11 +173,10 @@ bool FLZ_encoder::encode_member( const unsigned long long member_size )
 
     // literal byte
     renc.encode_bit( bm_match[state()][pos_state], 0 );
-    if( state.is_char() )
+    if( state.is_char_set_char() )
       encode_literal( prev_byte, cur_byte );
     else
       encode_matched( prev_byte, cur_byte, match_byte );
-    state.set_char();
     }
 
   full_flush( state );

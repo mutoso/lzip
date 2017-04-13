@@ -1,9 +1,10 @@
 Description
 
 Lzip is a lossless data compressor with a user interface similar to the
-one of gzip or bzip2. Lzip is about as fast as gzip, compresses most
-files more than bzip2, and is better than both from a data recovery
-perspective.
+one of gzip or bzip2. Lzip can compress about as fast as gzip (lzip -0),
+or compress most files more than bzip2 (lzip -9). Decompression speed is
+intermediate between gzip and bzip2. Lzip is better than gzip and bzip2
+from a data recovery perspective.
 
 The lzip file format is designed for data sharing and long-term
 archiving, taking into account both data integrity and decoder
@@ -16,11 +17,11 @@ availability:
      merging of damaged copies of a file.
 
    * The lzip format is as simple as possible (but not simpler). The
-     lzip manual provides the code of a simple decompressor along with a
-     detailed explanation of how it works, so that with the only help of
-     the lzip manual it would be possible for a digital archaeologist to
-     extract the data from a lzip file long after quantum computers
-     eventually render LZMA obsolete.
+     lzip manual provides the source code of a simple decompressor along
+     with a detailed explanation of how it works, so that with the only
+     help of the lzip manual it would be possible for a digital
+     archaeologist to extract the data from a lzip file long after
+     quantum computers eventually render LZMA obsolete.
 
    * Additionally the lzip reference implementation is copylefted, which
      guarantees that it will remain free forever.
@@ -75,11 +76,11 @@ or more compressed files. The result is the concatenation of the
 corresponding uncompressed files. Integrity testing of concatenated
 compressed files is also supported.
 
-Lzip can produce multimember files and safely recover, with
-lziprecover, the undamaged members in case of file damage. Lzip can
-also split the compressed output in volumes of a given size, even when
-reading from standard input. This allows the direct creation of
-multivolume compressed tar archives.
+Lzip can produce multimember files, and lziprecover can safely recover
+the undamaged members in case of file damage. Lzip can also split the
+compressed output in volumes of a given size, even when reading from
+standard input. This allows the direct creation of multivolume
+compressed tar archives.
 
 Lzip is able to compress and decompress streams of unlimited size by
 automatically creating multimember output. The members so created are
@@ -110,7 +111,7 @@ range encoding), Igor Pavlov (for putting all the above together in
 LZMA), and Julian Seward (for bzip2's CLI).
 
 
-Copyright (C) 2008-2016 Antonio Diaz Diaz.
+Copyright (C) 2008-2017 Antonio Diaz Diaz.
 
 This file is free documentation: you have unlimited permission to copy,
 distribute and modify it.

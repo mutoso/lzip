@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2016 Antonio Diaz Diaz.
+    Copyright (C) 2008-2017 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -85,13 +85,13 @@ inline int price0( const Bit_model bm )
 inline int price1( const Bit_model bm )
   { return prob_prices[bit_model_total - bm.probability]; }
 
-inline int price_bit( const Bit_model bm, const int bit )
-  { if( bit ) return price1( bm ); else return price0( bm ); }
+inline int price_bit( const Bit_model bm, const bool bit )
+  { return ( bit ? price1( bm ) : price0( bm ) ); }
 
 
 inline int price_symbol3( const Bit_model bm[], int symbol )
   {
-  int bit = symbol & 1;
+  bool bit = symbol & 1;
   symbol |= 8; symbol >>= 1;
   int price = price_bit( bm[symbol], bit );
   bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
@@ -99,9 +99,9 @@ inline int price_symbol3( const Bit_model bm[], int symbol )
   }
 
 
-inline int price_symbol6( const Bit_model bm[], int symbol )
+inline int price_symbol6( const Bit_model bm[], unsigned symbol )
   {
-  int bit = symbol & 1;
+  bool bit = symbol & 1;
   symbol |= 64; symbol >>= 1;
   int price = price_bit( bm[symbol], bit );
   bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
@@ -114,7 +114,7 @@ inline int price_symbol6( const Bit_model bm[], int symbol )
 
 inline int price_symbol8( const Bit_model bm[], int symbol )
   {
-  int bit = symbol & 1;
+  bool bit = symbol & 1;
   symbol |= 0x100; symbol >>= 1;
   int price = price_bit( bm[symbol], bit );
   bit = symbol & 1; symbol >>= 1; price += price_bit( bm[symbol], bit );
@@ -134,31 +134,29 @@ inline int price_symbol_reversed( const Bit_model bm[], int symbol,
   int model = 1;
   for( int i = num_bits; i > 0; --i )
     {
-    const int bit = symbol & 1;
+    const bool bit = symbol & 1;
+    symbol >>= 1;
     price += price_bit( bm[model], bit );
     model = ( model << 1 ) | bit;
-    symbol >>= 1;
     }
   return price;
   }
 
 
-inline int price_matched( const Bit_model bm[], int symbol, int match_byte )
+inline int price_matched( const Bit_model bm[], unsigned symbol,
+                          unsigned match_byte )
   {
   int price = 0;
-  int mask = 0x100;
+  unsigned mask = 0x100;
   symbol |= mask;
-
-  do {
-    match_byte <<= 1;
-    const int match_bit = match_byte & mask;
-    symbol <<= 1;
-    const int bit = symbol & 0x100;
-    price += price_bit( bm[match_bit+(symbol>>9)+mask], bit );
-    mask &= ~(match_byte ^ symbol);	// if( match_bit != bit ) mask = 0;
+  while( true )
+    {
+    const unsigned match_bit = ( match_byte <<= 1 ) & mask;
+    const bool bit = ( symbol <<= 1 ) & 0x100;
+    price += price_bit( bm[(symbol>>9)+match_bit+mask], bit );
+    if( symbol >= 0x10000 ) return price;
+    mask &= ~(match_bit ^ symbol);	// if( match_bit != bit ) mask = 0;
     }
-  while( symbol < 0x10000 );
-  return price;
   }
 
 
@@ -203,12 +201,11 @@ public:
   bool data_finished() const { return at_stream_end && pos >= stream_pos; }
   const uint8_t * ptr_to_current_pos() const { return buffer + pos; }
 
-  int true_match_len( const int index, const int distance, int len_limit ) const
+  int true_match_len( const int index, const int distance ) const
     {
-    const uint8_t * const data = buffer + pos + index;
-    int i = 0;
-    if( index + len_limit > available_bytes() )
-      len_limit = available_bytes() - index;
+    const uint8_t * const data = buffer + pos;
+    int i = index;
+    const int len_limit = std::min( available_bytes(), (int)max_match_len );
     while( i < len_limit && data[i-distance] == data[i] ) ++i;
     return i;
     }
@@ -238,9 +235,9 @@ class Range_encoder
 
   void shift_low()
     {
-    const bool carry = ( low > 0xFFFFFFFFU );
-    if( carry || low < 0xFF000000U )
+    if( low >> 24 != 0xFF )
       {
+      const bool carry = ( low > 0xFFFFFFFFU );
       put_byte( cache + carry );
       for( ; ff_count > 0; --ff_count ) put_byte( 0xFF + carry );
       cache = low >> 24;
@@ -291,15 +288,15 @@ public:
 
   void encode( const int symbol, const int num_bits )
     {
-    for( int i = num_bits - 1; i >= 0; --i )
+    for( unsigned mask = 1 << ( num_bits - 1 ); mask > 0; mask >>= 1 )
       {
       range >>= 1;
-      if( (symbol >> i) & 1 ) low += range;
+      if( symbol & mask ) low += range;
       if( range <= 0x00FFFFFFU ) { range <<= 8; shift_low(); }
       }
     }
 
-  void encode_bit( Bit_model & bm, const int bit )
+  void encode_bit( Bit_model & bm, const bool bit )
     {
     const uint32_t bound = ( range >> bit_model_total_bits ) * bm.probability;
     if( !bit )
@@ -319,17 +316,17 @@ public:
   void encode_tree3( Bit_model bm[], const int symbol )
     {
     int model = 1;
-    int bit = ( symbol >> 2 ) & 1;
+    bool bit = ( symbol >> 2 ) & 1;
     encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
     bit = ( symbol >> 1 ) & 1;
     encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
     encode_bit( bm[model], symbol & 1 );
     }
 
-  void encode_tree6( Bit_model bm[], const int symbol )
+  void encode_tree6( Bit_model bm[], const unsigned symbol )
     {
     int model = 1;
-    int bit = ( symbol >> 5 ) & 1;
+    bool bit = ( symbol >> 5 ) & 1;
     encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
     bit = ( symbol >> 4 ) & 1;
     encode_bit( bm[model], bit ); model = ( model << 1 ) | bit;
@@ -345,13 +342,12 @@ public:
   void encode_tree8( Bit_model bm[], const int symbol )
     {
     int model = 1;
-    int mask = ( 1 << 7 );
-    do {
-      const int bit = ( symbol & mask );
+    for( int i = 7; i >= 0; --i )
+      {
+      const bool bit = ( symbol >> i ) & 1;
       encode_bit( bm[model], bit );
-      model <<= 1; if( bit ) ++model;
+      model = ( model << 1 ) | bit;
       }
-    while( mask >>= 1 );
     }
 
   void encode_tree_reversed( Bit_model bm[], int symbol, const int num_bits )
@@ -359,44 +355,41 @@ public:
     int model = 1;
     for( int i = num_bits; i > 0; --i )
       {
-      const int bit = symbol & 1;
+      const bool bit = symbol & 1;
+      symbol >>= 1;
       encode_bit( bm[model], bit );
       model = ( model << 1 ) | bit;
-      symbol >>= 1;
       }
     }
 
-  void encode_matched( Bit_model bm[], int symbol, int match_byte )
+  void encode_matched( Bit_model bm[], unsigned symbol, unsigned match_byte )
     {
-    int mask = 0x100;
+    unsigned mask = 0x100;
     symbol |= mask;
-
-    do {
-      match_byte <<= 1;
-      const int match_bit = match_byte & mask;
-      symbol <<= 1;
-      const int bit = symbol & 0x100;
-      encode_bit( bm[match_bit+(symbol>>9)+mask], bit );
-      mask &= ~(match_byte ^ symbol);	// if( match_bit != bit ) mask = 0;
+    while( true )
+      {
+      const unsigned match_bit = ( match_byte <<= 1 ) & mask;
+      const bool bit = ( symbol <<= 1 ) & 0x100;
+      encode_bit( bm[(symbol>>9)+match_bit+mask], bit );
+      if( symbol >= 0x10000 ) break;
+      mask &= ~(match_bit ^ symbol);	// if( match_bit != bit ) mask = 0;
       }
-    while( symbol < 0x10000 );
     }
 
   void encode_len( Len_model & lm, int symbol, const int pos_state )
     {
-    symbol -= min_match_len;
-    bool bit = ( symbol >= len_low_symbols );
+    bool bit = ( ( symbol -= min_match_len ) >= len_low_symbols );
     encode_bit( lm.choice1, bit );
     if( !bit )
       encode_tree3( lm.bm_low[pos_state], symbol );
     else
       {
-      bit = ( symbol >= len_low_symbols + len_mid_symbols );
+      bit = ( ( symbol -= len_low_symbols ) >= len_mid_symbols );
       encode_bit( lm.choice2, bit );
       if( !bit )
-        encode_tree3( lm.bm_mid[pos_state], symbol - len_low_symbols );
+        encode_tree3( lm.bm_mid[pos_state], symbol );
       else
-        encode_tree8( lm.bm_high, symbol - len_low_symbols - len_mid_symbols );
+        encode_tree8( lm.bm_high, symbol - len_mid_symbols );
       }
     }
   };
@@ -418,15 +411,17 @@ protected:
   Bit_model bm_rep2[State::states];
   Bit_model bm_len[State::states][pos_states];
   Bit_model bm_dis_slot[len_states][1<<dis_slot_bits];
-  Bit_model bm_dis[modeled_distances-end_dis_model];
+  Bit_model bm_dis[modeled_distances-end_dis_model+1];
   Bit_model bm_align[dis_align_size];
   Len_model match_len_model;
   Len_model rep_len_model;
   Range_encoder renc;
 
-  LZ_encoder_base( const int before, const int dict_size, const int after_size,
-                   const int dict_factor, const int num_prev_positions23,
-                   const int pos_array_factor, const int ifd, const int outfd )
+  LZ_encoder_base( const int before, const int dict_size,
+                   const int after_size, const int dict_factor,
+                   const int num_prev_positions23,
+                   const int pos_array_factor,
+                   const int ifd, const int outfd )
     :
     Matchfinder_base( before, dict_size, after_size, dict_factor,
                       num_prev_positions23, pos_array_factor, ifd ),
@@ -455,7 +450,7 @@ protected:
   void encode_pair( const unsigned dis, const int len, const int pos_state )
     {
     renc.encode_len( match_len_model, len, pos_state );
-    const int dis_slot = get_slot( dis );
+    const unsigned dis_slot = get_slot( dis );
     renc.encode_tree6( bm_dis_slot[get_len_state(len)], dis_slot );
 
     if( dis_slot >= start_dis_model )
@@ -465,7 +460,7 @@ protected:
       const unsigned direct_dis = dis - base;
 
       if( dis_slot < end_dis_model )
-        renc.encode_tree_reversed( bm_dis + base - dis_slot - 1, direct_dis,
+        renc.encode_tree_reversed( bm_dis + ( base - dis_slot ), direct_dis,
                                    direct_bits );
       else
         {

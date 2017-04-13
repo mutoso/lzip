@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2016 Antonio Diaz Diaz.
+    Copyright (C) 2008-2017 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,11 +21,10 @@ class Len_prices
   const int len_symbols;
   const int count;
   int prices[pos_states][max_len_symbols];
-  int counters[pos_states];
+  int counters[pos_states];			// may decrement below 0
 
   void update_low_mid_prices( const int pos_state )
     {
-    counters[pos_state] = count;
     int * const pps = prices[pos_state];
     int tmp = price0( lm.choice1 );
     int len = 0;
@@ -64,13 +63,14 @@ public:
     bool high_pending = false;
     for( int pos_state = 0; pos_state < pos_states; ++pos_state )
       if( counters[pos_state] <= 0 )
-        { update_low_mid_prices( pos_state ); high_pending = true; }
+        { counters[pos_state] = count;
+          update_low_mid_prices( pos_state ); high_pending = true; }
     if( high_pending && len_symbols > len_low_symbols + len_mid_symbols )
       update_high_prices();
     }
 
-  int price( const int symbol, const int pos_state ) const
-    { return prices[pos_state][symbol - min_match_len]; }
+  int price( const int len, const int pos_state ) const
+    { return prices[pos_state][len - min_match_len]; }
   };
 
 
@@ -91,32 +91,33 @@ class LZ_encoder : public LZ_encoder_base
     {
     State state;
     int price;		// dual use var; cumulative price, match length
-    int dis;		// rep index or match distance. (-1 for literal)
+    int dis4;		// -1 for literal, or rep, or match distance + 4
     int prev_index;	// index of prev trial in trials[]
     int prev_index2;	//   -2  trial is single step
 			//   -1  literal + rep0
 			// >= 0  ( rep or match ) + literal + rep0
     int reps[num_rep_distances];
 
-    void update( const int pr, const int distance, const int p_i )
+    void update( const int pr, const int distance4, const int p_i )
       {
       if( pr < price )
-        { price = pr; dis = distance; prev_index = p_i;
+        { price = pr; dis4 = distance4; prev_index = p_i;
           prev_index2 = single_step_trial; }
       }
 
     void update2( const int pr, const int p_i )
       {
       if( pr < price )
-        { price = pr; dis = 0; prev_index = p_i;
+        { price = pr; dis4 = 0; prev_index = p_i;
           prev_index2 = dual_step_trial; }
       }
 
-    void update3( const int pr, const int distance, const int p_i,
+    void update3( const int pr, const int distance4, const int p_i,
                   const int p_i2 )
       {
       if( pr < price )
-        { price = pr; dis = distance; prev_index = p_i; prev_index2 = p_i2; }
+        { price = pr; dis4 = distance4; prev_index = p_i;
+          prev_index2 = p_i2; }
       }
     };
 
@@ -137,26 +138,26 @@ class LZ_encoder : public LZ_encoder_base
     {
     if( ahead < 0 || pos < ahead ) return false;
     pos -= ahead;
+    if( cyclic_pos < ahead ) cyclic_pos += dictionary_size + 1;
     cyclic_pos -= ahead;
-    if( cyclic_pos < 0 ) cyclic_pos += dictionary_size + 1;
     return true;
     }
 
   int get_match_pairs( Pair * pairs = 0 );
   void update_distance_prices();
 
-       // move-to-front dis in/into reps if( dis > 0 )
-  static void mtf_reps( const int dis, int reps[num_rep_distances] )
+       // move-to-front dis in/into reps; do nothing if( dis4 <= 0 )
+  static void mtf_reps( const int dis4, int reps[num_rep_distances] )
     {
-    if( dis >= num_rep_distances )
+    if( dis4 >= num_rep_distances )			// match
       {
-      for( int i = num_rep_distances - 1; i > 0; --i ) reps[i] = reps[i-1];
-      reps[0] = dis - num_rep_distances;
+      reps[3] = reps[2]; reps[2] = reps[1]; reps[1] = reps[0];
+      reps[0] = dis4 - num_rep_distances;
       }
-    else if( dis > 0 )
+    else if( dis4 > 0 )				// repeated match
       {
-      const int distance = reps[dis];
-      for( int i = dis; i > 0; --i ) reps[i] = reps[i-1];
+      const int distance = reps[dis4];
+      for( int i = dis4; i > 0; --i ) reps[i] = reps[i-1];
       reps[0] = distance;
       }
     }
@@ -203,13 +204,10 @@ class LZ_encoder : public LZ_encoder_base
     const int num_pairs = get_match_pairs( pairs );
     if( num_pairs > 0 )
       {
-      int len = pairs[num_pairs-1].len;
+      const int len = pairs[num_pairs-1].len;
       if( len == match_len_limit && len < max_match_len )
-        {
-        len += true_match_len( len, pairs[num_pairs-1].dis + 1,
-                               max_match_len - len );
-        pairs[num_pairs-1].len = len;
-        }
+        pairs[num_pairs-1].len =
+          true_match_len( len, pairs[num_pairs-1].dis + 1 );
       }
     return num_pairs;
     }
@@ -226,7 +224,7 @@ class LZ_encoder : public LZ_encoder_base
 
   void backward( int cur )
     {
-    int & dis = trials[cur].dis;
+    int dis4 = trials[cur].dis4;
     while( cur > 0 )
       {
       const int prev_index = trials[cur].prev_index;
@@ -234,19 +232,19 @@ class LZ_encoder : public LZ_encoder_base
 
       if( trials[cur].prev_index2 != single_step_trial )
         {
-        prev_trial.dis = -1;
+        prev_trial.dis4 = -1;					// literal
         prev_trial.prev_index = prev_index - 1;
         prev_trial.prev_index2 = single_step_trial;
         if( trials[cur].prev_index2 >= 0 )
           {
           Trial & prev_trial2 = trials[prev_index-1];
-          prev_trial2.dis = dis; dis = 0;
+          prev_trial2.dis4 = dis4; dis4 = 0;			// rep0
           prev_trial2.prev_index = trials[cur].prev_index2;
           prev_trial2.prev_index2 = single_step_trial;
           }
         }
       prev_trial.price = cur - prev_index;			// len
-      cur = dis; dis = prev_trial.dis; prev_trial.dis = cur;
+      cur = dis4; dis4 = prev_trial.dis4; prev_trial.dis4 = cur;
       cur = prev_index;
       }
     }
@@ -254,7 +252,7 @@ class LZ_encoder : public LZ_encoder_base
   int sequence_optimizer( const int reps[num_rep_distances],
                           const State state );
 
-  enum { before = max_num_trials + 1,
+  enum { before = max_num_trials,
          // bytes to keep in buffer after pos
          after_size = ( 2 * max_match_len ) + 1,
          dict_factor = 2,

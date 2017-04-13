@@ -1,22 +1,16 @@
-Changes in version 1.18:
+Changes in version 1.19:
 
-The option "-a, --trailing-error", which makes lzip exit with error
-status 2 if any remaining input is detected after decompressing the last
-member, has been added.
+The option '-l, --list' has been ported from lziprecover.
+
+It is now an error to specify two or more different operations in the
+command line (--decompress, --list or --test).
+
+Compression time of option '-0' has been slightly reduced.
 
 Decompression time has been reduced by 2%.
 
-The test of the value remaining in the range decoder has been removed.
-(After extensive testing it has been found useless to detect corruption
-in the decompressed data. Eliminating it reduces the number of false
-positives for corruption and makes error detection more accurate).
+In test mode, lzip now continues checking the rest of the files if any
+input file is a terminal.
 
-When decompressing, the file specified with the '--output' option is now
-deleted if the input is a terminal.
-
-Decompression support for version 0 files has been removed.
-
-The new chapter "Trailing data" has been added to the manual.
-
-A harmless check failure on Windows, caused by the failed comparison of
-a message in text mode, has been fixed.
+Trailing data are now shown both in hexadecimal and as a string of
+printable ASCII characters.

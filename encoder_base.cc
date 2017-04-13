@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2016 Antonio Diaz Diaz.
+    Copyright (C) 2008-2017 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -53,11 +53,11 @@ void Matchfinder_base::normalize_pos()
     internal_error( "pos > stream_pos in Matchfinder_base::normalize_pos." );
   if( !at_stream_end )
     {
-    const int offset = pos - dictionary_size - before_size;
+    const int offset = pos - before_size - dictionary_size;
     const int size = stream_pos - offset;
     std::memmove( buffer, buffer + offset, size );
     partial_data_pos += offset;
-    pos -= offset;
+    pos -= offset;		// pos = before_size + dictionary_size
     stream_pos -= offset;
     for( int i = 0; i < num_prev_positions; ++i )
       prev_positions[i] -= std::min( prev_positions[i], offset );
@@ -109,7 +109,8 @@ Matchfinder_base::Matchfinder_base( const int before, const int dict_size,
   num_prev_positions = size;
   pos_array_size = pos_array_factor * ( dictionary_size + 1 );
   size += pos_array_size;
-  prev_positions = new( std::nothrow ) int32_t[size];
+  if( size * sizeof prev_positions[0] <= size ) prev_positions = 0;
+  else prev_positions = new( std::nothrow ) int32_t[size];
   if( !prev_positions ) { std::free( buffer ); throw std::bad_alloc(); }
   pos_array = prev_positions + num_prev_positions;
   for( int i = 0; i < num_prev_positions; ++i ) prev_positions[i] = 0;
@@ -172,7 +173,7 @@ void LZ_encoder_base::reset()
   bm_rep2[0].reset( State::states );
   bm_len[0][0].reset( State::states * pos_states );
   bm_dis_slot[0][0].reset( len_states * (1 << dis_slot_bits ) );
-  bm_dis[0].reset( modeled_distances - end_dis_model );
+  bm_dis[0].reset( modeled_distances - end_dis_model + 1 );
   bm_align[0].reset( dis_align_size );
   match_len_model.reset();
   rep_len_model.reset();

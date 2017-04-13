@@ -11,7 +11,7 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip Manual
 ***********
 
-This manual is for Lzip (version 1.18, 14 May 2016).
+This manual is for Lzip (version 1.19, 13 April 2017).
 
 * Menu:
 
@@ -28,7 +28,7 @@ This manual is for Lzip (version 1.18, 14 May 2016).
 * Concept index::          Index of concepts
 
 
-   Copyright (C) 2008-2016 Antonio Diaz Diaz.
+   Copyright (C) 2008-2017 Antonio Diaz Diaz.
 
    This manual is free documentation: you have unlimited permission to
 copy, distribute and modify it.
@@ -40,9 +40,10 @@ File: lzip.info,  Node: Introduction,  Next: Invoking lzip,  Prev: Top,  Up: Top
 **************
 
 Lzip is a lossless data compressor with a user interface similar to the
-one of gzip or bzip2. Lzip is about as fast as gzip, compresses most
-files more than bzip2, and is better than both from a data recovery
-perspective.
+one of gzip or bzip2. Lzip can compress about as fast as gzip
+(lzip -0), or compress most files more than bzip2 (lzip -9).
+Decompression speed is intermediate between gzip and bzip2. Lzip is
+better than gzip and bzip2 from a data recovery perspective.
 
    The lzip file format is designed for data sharing and long-term
 archiving, taking into account both data integrity and decoder
@@ -56,11 +57,11 @@ availability:
      (lziprecover)Data safety.
 
    * The lzip format is as simple as possible (but not simpler). The
-     lzip manual provides the code of a simple decompressor along with
-     a detailed explanation of how it works, so that with the only help
-     of the lzip manual it would be possible for a digital
-     archaeologist to extract the data from a lzip file long after
-     quantum computers eventually render LZMA obsolete.
+     lzip manual provides the source code of a simple decompressor
+     along with a detailed explanation of how it works, so that with
+     the only help of the lzip manual it would be possible for a
+     digital archaeologist to extract the data from a lzip file long
+     after quantum computers eventually render LZMA obsolete.
 
    * Additionally the lzip reference implementation is copylefted, which
      guarantees that it will remain free forever.
@@ -126,15 +127,19 @@ two or more compressed files. The result is the concatenation of the
 corresponding uncompressed files. Integrity testing of concatenated
 compressed files is also supported.
 
-   Lzip can produce multimember files and safely recover, with
-lziprecover, the undamaged members in case of file damage. Lzip can
-also split the compressed output in volumes of a given size, even when
+   Lzip can produce multimember files, and lziprecover can safely
+recover the undamaged members in case of file damage. Lzip can also
+split the compressed output in volumes of a given size, even when
 reading from standard input. This allows the direct creation of
 multivolume compressed tar archives.
 
    Lzip is able to compress and decompress streams of unlimited size by
 automatically creating multimember output. The members so created are
 large, about 2 PiB each.
+
+   LANGUAGE NOTE: Uncompressed = not compressed = plain data; it may
+never have been compressed. Decompressed is used to refer to data which
+have undergone the process of decompression.
 
 
 File: lzip.info,  Node: Invoking lzip,  Next: Quality assurance,  Prev: Introduction,  Up: Top
@@ -203,6 +208,21 @@ command line.
      Keep (don't delete) input files during compression or
      decompression.
 
+'-l'
+'--list'
+     Print the uncompressed size, compressed size and percentage saved
+     of the specified file(s). Trailing data are ignored. The values
+     produced are correct even for multimember files. If more than one
+     file is given, a final line containing the cumulative sizes is
+     printed. With '-v', the dictionary size, the number of members in
+     the file, and the amount of trailing data (if any) are also
+     printed. With '-vv', the positions and sizes of each member in
+     multimember files are also printed. '-lq' can be used to verify
+     quickly (without decompressing) the structural integrity of the
+     specified files. (Use '--test' to verify the data integrity).
+     '-alq' additionally verifies that none of the specified files
+     contain trailing data.
+
 '-m BYTES'
 '--match-length=BYTES'
      Set the match length limit in bytes. After a match this long is
@@ -252,8 +272,9 @@ command line.
      Check integrity of the specified file(s), but don't decompress
      them.  This really performs a trial decompression and throws away
      the result.  Use it together with '-v' to see information about
-     the file(s). If a file fails the test, lzip continues checking the
-     rest of the files.
+     the file(s). If a file fails the test, does not exist, can't be
+     opened, or is a terminal, lzip continues checking the rest of the
+     files.
 
 '-v'
 '--verbose'
@@ -263,7 +284,8 @@ command line.
      When decompressing or testing, further -v's (up to 4) increase the
      verbosity level, showing status, compression ratio, dictionary
      size, trailer contents (CRC, data size, member size), and up to 6
-     bytes of trailing data (if any).
+     bytes of trailing data (if any) both in hexadecimal and as a
+     string of printable ASCII characters.
 
 '-0 .. -9'
      Set the compression parameters (dictionary size and match length
@@ -714,10 +736,10 @@ You may first send the position of the most significant bit that is set
 to 1, which you may find by making a bit scan from the left (from the
 MSB). A position of 0 means that the number is 0 (no bit is set), 1
 means the LSB is the first bit set (the number is 1), and 32 means the
-MSB is set (i.e., the number is >= 0x80000000). Lets call this bit
-position a "slot". Then, if slot is > 1, you send the remaining slot -
-1 bits. Lets call these bits "direct_bits" because they are coded
-directly by value instead of indirectly by position.
+MSB is set (i.e., the number is >= 0x80000000). Let's call this bit
+position a "slot". Then, if slot is > 1, you send the remaining
+slot - 1 bits. Let's call these bits "direct_bits" because they are
+coded directly by value instead of indirectly by position.
 
    The inconvenient of this simple method is that it needs 6 bits to
 code the slot, but it just uses 33 of the 64 possible values, wasting
@@ -729,14 +751,15 @@ same 6 bits that would take to encode the position alone. This seems to
 need 66 slots (2 * position + next_bit), but for slots 0 and 1 there is
 no next bit, so the number of needed slots is 64 (0 to 63).
 
-   The slot number is context-coded in 6 bits. 'direct_bits' is the
-amount of remaining bits (from 0 to 30) needed to form a complete
-distance, and is calculated as (slot >> 1) - 1. If a distance needs 6 or
-more direct_bits, the last 4 bits are coded separately. The last piece
-(all the direct_bits for distances 4 to 127 or the last 4 bits for
-distances >= 128) is context-coded in reverse order (from LSB to MSB).
-For distances >= 128, the 'direct_bits - 4' part is coded with fixed
-0.5 probability.
+   The 6 bits representing this "slot number" are then context-coded. If
+the distance is >= 4, the remaining bits are coded as follows.
+'direct_bits' is the amount of remaining bits (from 0 to 30) needed to
+form a complete distance, and is calculated as (slot >> 1) - 1.  If a
+distance needs 6 or more direct_bits, the last 4 bits are coded
+separately. The last piece (all the direct_bits for distances 4 to 127
+or the last 4 bits for distances >= 128) is context-coded in reverse
+order (from LSB to MSB). For distances >= 128, the 'direct_bits - 4'
+part is coded with fixed 0.5 probability.
 
 Bit sequence                         Description
 -------------------------------------------------------------------------- 
@@ -871,16 +894,21 @@ File: lzip.info,  Node: Trailing data,  Next: Examples,  Prev: Stream format,  U
 7 Extra data appended to the file
 *********************************
 
-Sometimes extra data is found appended to a lzip file after the last
+Sometimes extra data are found appended to a lzip file after the last
 member. Such trailing data may be:
 
    * Padding added to make the file size a multiple of some block size,
-     for example when writing to a tape.
-
-   * Garbage added by some not totally successful copy operation.
+     for example when writing to a tape. It is safe to append any
+     amount of padding zero bytes to a lzip file.
 
    * Useful data added by the user; a cryptographically secure hash, a
-     description of file contents, etc.
+     description of file contents, etc. It is safe to append any amount
+     of text to a lzip file as long as the text does not begin with the
+     string "LZIP", and does not contain any zero bytes (null
+     characters). Nonzero bytes and zero bytes can't be safely mixed in
+     trailing data.
+
+   * Garbage added by some not totally successful copy operation.
 
    * Malicious data added to the file in order to make its total size
      and hash value (for a chosen hash) coincide with those of another
@@ -893,8 +921,12 @@ member. Such trailing data may be:
      the corruption of the integrity information itself. Therefore it
      can be considered to be below the noise level.
 
+   Trailing data are in no way part of the lzip file format, but tools
+reading lzip files are expected to behave as correctly and usefully as
+possible in the presence of trailing data.
+
    Trailing data can be safely ignored in most cases. In some cases,
-like that of user-added data, it is expected to be ignored. In those
+like that of user-added data, they are expected to be ignored. In those
 cases where a file containing trailing data must be rejected, the option
 '--trailing-error' can be used. *Note --trailing-error::.
 
@@ -942,8 +974,8 @@ Example 5: Compress a whole device in /dev/sdc and send the output to
      lzip -c /dev/sdc > file.lz
 
 
-Example 6: The right way of concatenating compressed files.  *Note
-Trailing data::.
+Example 6: The right way of concatenating the decompressed output of two
+or more compressed files. *Note Trailing data::.
 
      Don't do this
        cat file1.lz file2.lz file3.lz | lzip -d
@@ -1002,7 +1034,7 @@ Appendix A Reference source code
 ********************************
 
 /*  Lzd - Educational decompressor for the lzip format
-    Copyright (C) 2013-2016 Antonio Diaz Diaz.
+    Copyright (C) 2013-2017 Antonio Diaz Diaz.
 
     This program is free software. Redistribution and use in source and
     binary forms, with or without modification, are permitted provided
@@ -1153,10 +1185,10 @@ public:
 
   uint8_t get_byte() { return std::getc( stdin ); }
 
-  int decode( const int num_bits )
+  unsigned decode( const int num_bits )
     {
-    int symbol = 0;
-    for( int i = 0; i < num_bits; ++i )
+    unsigned symbol = 0;
+    for( int i = num_bits; i > 0; --i )
       {
       range >>= 1;
       symbol <<= 1;
@@ -1167,9 +1199,9 @@ public:
     return symbol;
     }
 
-  int decode_bit( Bit_model & bm )
+  unsigned decode_bit( Bit_model & bm )
     {
-    int symbol;
+    unsigned symbol;
     const uint32_t bound = ( range >> bit_model_total_bits ) * bm.probability;
     if( code < bound )
       {
@@ -1189,18 +1221,18 @@ public:
     return symbol;
     }
 
-  int decode_tree( Bit_model bm[], const int num_bits )
+  unsigned decode_tree( Bit_model bm[], const int num_bits )
     {
-    int symbol = 1;
+    unsigned symbol = 1;
     for( int i = 0; i < num_bits; ++i )
       symbol = ( symbol << 1 ) | decode_bit( bm[symbol] );
     return symbol - (1 << num_bits);
     }
 
-  int decode_tree_reversed( Bit_model bm[], const int num_bits )
+  unsigned decode_tree_reversed( Bit_model bm[], const int num_bits )
     {
-    int symbol = decode_tree( bm, num_bits );
-    int reversed_symbol = 0;
+    unsigned symbol = decode_tree( bm, num_bits );
+    unsigned reversed_symbol = 0;
     for( int i = 0; i < num_bits; ++i )
       {
       reversed_symbol = ( reversed_symbol << 1 ) | ( symbol & 1 );
@@ -1209,14 +1241,13 @@ public:
     return reversed_symbol;
     }
 
-  int decode_matched( Bit_model bm[], const int match_byte )
+  unsigned decode_matched( Bit_model bm[], const unsigned match_byte )
     {
-    Bit_model * const bm1 = bm + 0x100;
-    int symbol = 1;
+    unsigned symbol = 1;
     for( int i = 7; i >= 0; --i )
       {
-      const int match_bit = ( match_byte >> i ) & 1;
-      const int bit = decode_bit( bm1[(match_bit<<8)+symbol] );
+      const unsigned match_bit = ( match_byte >> i ) & 1;
+      const unsigned bit = decode_bit( bm[symbol+(match_bit<<8)+0x100] );
       symbol = ( symbol << 1 ) | bit;
       if( match_bit != bit )
         {
@@ -1228,7 +1259,7 @@ public:
     return symbol & 0xFF;
     }
 
-  int decode_len( Len_model & lm, const int pos_state )
+  unsigned decode_len( Len_model & lm, const int pos_state )
     {
     if( decode_bit( lm.choice1 ) == 0 )
       return decode_tree( lm.bm_low[pos_state], len_low_bits );
@@ -1256,9 +1287,9 @@ class LZ_decoder
 
   uint8_t peek( const unsigned distance ) const
     {
-    unsigned i = pos - distance - 1;
-    if( pos <= distance ) i += dictionary_size;
-    return buffer[i];
+    if( pos > distance ) return buffer[pos - distance - 1];
+    if( pos_wrapped ) return buffer[dictionary_size + pos - distance - 1];
+    return 0;			// prev_byte of first byte
     }
 
   void put_byte( const uint8_t b )
@@ -1277,7 +1308,7 @@ public:
     stream_pos( 0 ),
     crc_( 0xFFFFFFFFU ),
     pos_wrapped( false )
-    { buffer[dictionary_size-1] = 0; }		// prev_byte of first byte
+    {}
 
   ~LZ_decoder() { delete[] buffer; }
 
@@ -1315,7 +1346,7 @@ bool LZ_decoder::decode_member()		// Returns false if error
   Bit_model bm_rep2[State::states];
   Bit_model bm_len[State::states][pos_states];
   Bit_model bm_dis_slot[len_states][1<<dis_slot_bits];
-  Bit_model bm_dis[modeled_distances-end_dis_model];
+  Bit_model bm_dis[modeled_distances-end_dis_model+1];
   Bit_model bm_align[dis_align_size];
   Len_model match_len_model;
   Len_model rep_len_model;
@@ -1344,7 +1375,12 @@ bool LZ_decoder::decode_member()		// Returns false if error
       int len;
       if( rdec.decode_bit( bm_rep[state()] ) != 0 )		// 2nd bit
         {
-        if( rdec.decode_bit( bm_rep0[state()] ) != 0 )		// 3rd bit
+        if( rdec.decode_bit( bm_rep0[state()] ) == 0 )		// 3rd bit
+          {
+          if( rdec.decode_bit( bm_len[state()][pos_state] ) == 0 ) // 4th bit
+            { state.set_short_rep(); put_byte( peek( rep0 ) ); continue; }
+          }
+        else
           {
           unsigned distance;
           if( rdec.decode_bit( bm_rep1[state()] ) == 0 )	// 4th bit
@@ -1360,11 +1396,6 @@ bool LZ_decoder::decode_member()		// Returns false if error
           rep1 = rep0;
           rep0 = distance;
           }
-        else
-          {
-          if( rdec.decode_bit( bm_len[state()][pos_state] ) == 0 ) // 4th bit
-            { state.set_short_rep(); put_byte( peek( rep0 ) ); continue; }
-          }
         state.set_rep();
         len = min_match_len + rdec.decode_len( rep_len_model, pos_state );
         }
@@ -1373,15 +1404,14 @@ bool LZ_decoder::decode_member()		// Returns false if error
         rep3 = rep2; rep2 = rep1; rep1 = rep0;
         len = min_match_len + rdec.decode_len( match_len_model, pos_state );
         const int len_state = std::min( len - min_match_len, len_states - 1 );
-        const int dis_slot =
-          rdec.decode_tree( bm_dis_slot[len_state], dis_slot_bits );
-        if( dis_slot < start_dis_model ) rep0 = dis_slot;
-        else
+        rep0 = rdec.decode_tree( bm_dis_slot[len_state], dis_slot_bits );
+        if( rep0 >= start_dis_model )
           {
+          const unsigned dis_slot = rep0;
           const int direct_bits = ( dis_slot >> 1 ) - 1;
           rep0 = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
           if( dis_slot < end_dis_model )
-            rep0 += rdec.decode_tree_reversed( bm_dis + rep0 - dis_slot - 1,
+            rep0 += rdec.decode_tree_reversed( bm_dis + ( rep0 - dis_slot ),
                                                direct_bits );
           else
             {
@@ -1417,7 +1447,7 @@ int main( const int argc, const char * const argv[] )
                  "It is not safe to use lzd for any real work.\n"
                  "\nUsage: %s < file.lz > file\n", argv[0] );
     std::printf( "Lzd decompresses from standard input to standard output.\n"
-                 "\nCopyright (C) 2016 Antonio Diaz Diaz.\n"
+                 "\nCopyright (C) 2017 Antonio Diaz Diaz.\n"
                  "This is free software: you are free to change and redistribute it.\n"
                  "There is NO WARRANTY, to the extent permitted by law.\n"
                  "Report bugs to lzip-bug@nongnu.org\n"
@@ -1432,7 +1462,7 @@ int main( const int argc, const char * const argv[] )
 
   for( bool first_member = true; ; first_member = false )
     {
-    File_header header;
+    File_header header;				// verify header
     for( int i = 0; i < 6; ++i ) header[i] = std::getc( stdin );
     if( std::feof( stdin ) || std::memcmp( header, "LZIP\x01", 5 ) != 0 )
       {
@@ -1447,11 +1477,11 @@ int main( const int argc, const char * const argv[] )
       { std::fputs( "Invalid dictionary size in member header.\n", stderr );
         return 2; }
 
-    LZ_decoder decoder( dict_size );
+    LZ_decoder decoder( dict_size );		// decode LZMA stream
     if( !decoder.decode_member() )
       { std::fputs( "Data error\n", stderr ); return 2; }
 
-    File_trailer trailer;
+    File_trailer trailer;			// verify trailer
     for( int i = 0; i < 20; ++i ) trailer[i] = std::getc( stdin );
     unsigned crc = 0;
     for( int i = 3; i >= 0; --i ) { crc <<= 8; crc += trailer[i]; }
@@ -1495,19 +1525,19 @@ Concept index
 
 Tag Table:
 Node: Top208
-Node: Introduction1145
-Node: Invoking lzip6071
-Ref: --trailing-error6635
-Node: Quality assurance12628
-Node: File format20782
-Node: Algorithm23186
-Node: Stream format26012
-Node: Trailing data36660
-Node: Examples38038
-Ref: concat-example39211
-Node: Problems40211
-Node: Reference source code40741
-Node: Concept index54957
+Node: Introduction1147
+Node: Invoking lzip6367
+Ref: --trailing-error6931
+Node: Quality assurance13849
+Node: File format22003
+Node: Algorithm24407
+Node: Stream format27233
+Node: Trailing data37973
+Node: Examples39874
+Ref: concat-example41047
+Node: Problems42085
+Node: Reference source code42615
+Node: Concept index56932
 
 End Tag Table
 

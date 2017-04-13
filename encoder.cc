@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2016 Antonio Diaz Diaz.
+    Copyright (C) 2008-2017 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -85,7 +85,7 @@ int LZ_encoder::get_match_pairs( Pair * pairs )
 
   prev_positions[key2] = pos1;
   prev_positions[key3] = pos1;
-  int newpos = prev_positions[key4];
+  int newpos1 = prev_positions[key4];
   prev_positions[key4] = pos1;
 
   int32_t * ptr0 = pos_array + ( cyclic_pos << 1 );
@@ -94,9 +94,9 @@ int LZ_encoder::get_match_pairs( Pair * pairs )
 
   for( int count = cycles; ; )
     {
-    if( newpos <= min_pos || --count < 0 ) { *ptr0 = *ptr1 = 0; break; }
+    if( newpos1 <= min_pos || --count < 0 ) { *ptr0 = *ptr1 = 0; break; }
 
-    const int delta = pos1 - newpos;
+    const int delta = pos1 - newpos1;
     int32_t * const newptr = pos_array +
       ( ( cyclic_pos - delta +
           ( ( cyclic_pos >= delta ) ? 0 : dictionary_size + 1 ) ) << 1 );
@@ -118,16 +118,16 @@ int LZ_encoder::get_match_pairs( Pair * pairs )
       }
     if( data[len-delta] < data[len] )
       {
-      *ptr0 = newpos;
+      *ptr0 = newpos1;
       ptr0 = newptr + 1;
-      newpos = *ptr0;
+      newpos1 = *ptr0;
       len0 = len; if( len1 < len ) len = len1;
       }
     else
       {
-      *ptr1 = newpos;
+      *ptr1 = newpos1;
       ptr1 = newptr;
-      newpos = *ptr1;
+      newpos1 = *ptr1;
       len1 = len; if( len0 < len ) len = len0;
       }
     }
@@ -142,7 +142,7 @@ void LZ_encoder::update_distance_prices()
     const int dis_slot = dis_slots[dis];
     const int direct_bits = ( dis_slot >> 1 ) - 1;
     const int base = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
-    const int price = price_symbol_reversed( bm_dis + base - dis_slot - 1,
+    const int price = price_symbol_reversed( bm_dis + ( base - dis_slot ),
                                              dis - base, direct_bits );
     for( int len_state = 0; len_state < len_states; ++len_state )
       dis_prices[len_state][dis] = price;
@@ -171,7 +171,7 @@ void LZ_encoder::update_distance_prices()
 
 /* Returns the number of bytes advanced (ahead).
    trials[0]..trials[ahead-1] contain the steps to encode.
-   ( trials[0].dis == -1 ) means literal.
+   ( trials[0].dis4 == -1 ) means literal.
    A match/rep longer or equal than match_len_limit finishes the sequence.
 */
 int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
@@ -192,13 +192,13 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
   int rep_index = 0;
   for( int i = 0; i < num_rep_distances; ++i )
     {
-    replens[i] = true_match_len( 0, reps[i] + 1, max_match_len );
+    replens[i] = true_match_len( 0, reps[i] + 1 );
     if( replens[i] > replens[rep_index] ) rep_index = i;
     }
   if( replens[rep_index] >= match_len_limit )
     {
     trials[0].price = replens[rep_index];
-    trials[0].dis = rep_index;
+    trials[0].dis4 = rep_index;
     move_and_update( replens[rep_index] );
     return replens[rep_index];
     }
@@ -206,7 +206,7 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
   if( main_len >= match_len_limit )
     {
     trials[0].price = main_len;
-    trials[0].dis = pairs[num_pairs-1].dis + num_rep_distances;
+    trials[0].dis4 = pairs[num_pairs-1].dis + num_rep_distances;
     move_and_update( main_len );
     return main_len;
     }
@@ -221,7 +221,7 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
     trials[1].price += price_literal( prev_byte, cur_byte );
   else
     trials[1].price += price_matched( prev_byte, cur_byte, match_byte );
-  trials[1].dis = -1;					// literal
+  trials[1].dis4 = -1;					// literal
 
   const int match_price = price1( bm_match[state()][pos_state] );
   const int rep_match_price = match_price + price1( bm_rep[state()] );
@@ -234,7 +234,7 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
   if( num_trials < min_match_len )
     {
     trials[0].price = 1;
-    trials[0].dis = trials[1].dis;
+    trials[0].dis4 = trials[1].dis4;
     move_pos();
     return 1;
     }
@@ -292,7 +292,7 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
     Trial & cur_trial = trials[cur];
     State cur_state;
     {
-    int dis = cur_trial.dis;
+    const int dis4 = cur_trial.dis4;
     int prev_index = cur_trial.prev_index;
     const int prev_index2 = cur_trial.prev_index2;
 
@@ -301,32 +301,24 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
       cur_state = trials[prev_index].state;
       if( prev_index + 1 == cur )			// len == 1
         {
-        if( dis == 0 ) cur_state.set_short_rep();
+        if( dis4 == 0 ) cur_state.set_short_rep();
         else cur_state.set_char();			// literal
         }
-      else if( dis < num_rep_distances ) cur_state.set_rep();
+      else if( dis4 < num_rep_distances ) cur_state.set_rep();
       else cur_state.set_match();
       }
-    else if( prev_index2 == dual_step_trial )		// dis == 0
+    else
       {
-      --prev_index;
-      cur_state = trials[prev_index].state;
-      cur_state.set_char();
-      cur_state.set_rep();
-      }
-    else	// if( prev_index2 >= 0 )
-      {
-      prev_index = prev_index2;
-      cur_state = trials[prev_index].state;
-      if( dis < num_rep_distances ) cur_state.set_rep();
-      else cur_state.set_match();
-      cur_state.set_char();
-      cur_state.set_rep();
+      if( prev_index2 == dual_step_trial )	// dis4 == 0 (rep0)
+        --prev_index;
+      else					// prev_index2 >= 0
+        prev_index = prev_index2;
+      cur_state.set_char_rep();
       }
     cur_trial.state = cur_state;
     for( int i = 0; i < num_rep_distances; ++i )
       cur_trial.reps[i] = trials[prev_index].reps[i];
-    mtf_reps( dis, cur_trial.reps );
+    mtf_reps( dis4, cur_trial.reps );		// literal is ignored
     }
 
     const int pos_state = data_position() & pos_state_mask;
@@ -349,14 +341,14 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
     const int match_price = cur_trial.price + price1( bm_match[cur_state()][pos_state] );
     const int rep_match_price = match_price + price1( bm_rep[cur_state()] );
 
-    if( match_byte == cur_byte && next_trial.dis != 0 &&
+    if( match_byte == cur_byte && next_trial.dis4 != 0 &&
         next_trial.prev_index2 == single_step_trial )
       {
       const int price = rep_match_price + price_shortrep( cur_state, pos_state );
       if( price <= next_trial.price )
         {
         next_trial.price = price;
-        next_trial.dis = 0;
+        next_trial.dis4 = 0;				// rep0
         next_trial.prev_index = cur;
         }
       }
@@ -380,9 +372,9 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
         const int pos_state2 = ( pos_state + 1 ) & pos_state_mask;
         State state2 = cur_state; state2.set_char();
         const int price = next_price +
-                  price1( bm_match[state2()][pos_state2] ) +
-                  price1( bm_rep[state2()] ) +
-                  price_rep0_len( len, state2, pos_state2 );
+                          price1( bm_match[state2()][pos_state2] ) +
+                          price1( bm_rep[state2()] ) +
+                          price_rep0_len( len, state2, pos_state2 );
         while( num_trials < cur + 1 + len )
           trials[++num_trials].price = infinite_price;
         trials[cur+1+len].update2( price, cur + 1 );
@@ -395,8 +387,8 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
     for( int rep = 0; rep < num_rep_distances; ++rep )
       {
       const uint8_t * const data = ptr_to_current_pos();
-      int len;
       const int dis = cur_trial.reps[rep] + 1;
+      int len;
 
       if( data[0-dis] != data[0] || data[1-dis] != data[1] ) continue;
       for( len = min_match_len; len < len_limit; ++len )
@@ -447,7 +439,6 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
       for( int len = start_len; ; ++len )
         {
         int price = normal_match_price + price_pair( dis, len, pos_state );
-
         trials[cur+len].update( price, dis + num_rep_distances, cur );
 
         // try match + literal + rep0
@@ -493,7 +484,7 @@ bool LZ_encoder::encode_member( const unsigned long long member_size )
   const int dis_price_count = best ? 1 : 512;
   const int align_price_count = best ? 1 : dis_align_size;
   const int price_count = ( match_len_limit > 36 ) ? 1013 : 4093;
-  int price_counter = 0;
+  int price_counter = 0;		// counters may decrement below 0
   int dis_price_counter = 0;
   int align_price_counter = 0;
   int reps[num_rep_distances];
@@ -532,14 +523,13 @@ bool LZ_encoder::encode_member( const unsigned long long member_size )
       }
 
     int ahead = sequence_optimizer( reps, state );
-    if( ahead <= 0 ) return false;		// can't happen
     price_counter -= ahead;
 
     for( int i = 0; ahead > 0; )
       {
       const int pos_state = ( data_position() - ahead ) & pos_state_mask;
       const int len = trials[i].price;
-      const int dis = trials[i].dis;
+      int dis = trials[i].dis4;
 
       bool bit = ( dis < 0 );
       renc.encode_bit( bm_match[state()][pos_state], !bit );
@@ -548,14 +538,13 @@ bool LZ_encoder::encode_member( const unsigned long long member_size )
         const uint8_t prev_byte = peek( ahead + 1 );
         const uint8_t cur_byte = peek( ahead );
         crc32.update_byte( crc_, cur_byte );
-        if( state.is_char() )
+        if( state.is_char_set_char() )
           encode_literal( prev_byte, cur_byte );
         else
           {
           const uint8_t match_byte = peek( ahead + reps[0] + 1 );
           encode_matched( prev_byte, cur_byte, match_byte );
           }
-        state.set_char();
         }
       else					// match or repeated match
         {
@@ -585,9 +574,9 @@ bool LZ_encoder::encode_member( const unsigned long long member_size )
           }
         else					// match
           {
-          encode_pair( dis - num_rep_distances, len, pos_state );
-          if( get_slot( dis - num_rep_distances ) >= end_dis_model )
-            --align_price_counter;
+          dis -= num_rep_distances;
+          encode_pair( dis, len, pos_state );
+          if( dis >= modeled_distances ) --align_price_counter;
           --dis_price_counter;
           match_len_prices.decrement_counter( pos_state );
           state.set_match();
