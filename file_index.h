@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2017 Antonio Diaz Diaz.
+    Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -55,10 +55,12 @@ class File_index
 
   void set_errno_error( const char * const msg );
   void set_num_error( const char * const msg, unsigned long long num );
-  bool skip_trailing_data( const int fd, long long & pos );
+  bool skip_trailing_data( const int fd, long long & pos,
+         const bool ignore_trailing, const bool loose_trailing );
 
 public:
-  File_index( const int infd, const bool ignore_trailing );
+  File_index( const int infd, const bool ignore_trailing,
+              const bool loose_trailing );
 
   long members() const { return member_vector.size(); }
   const std::string & error() const { return error_; }

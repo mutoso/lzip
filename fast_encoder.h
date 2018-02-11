@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2017 Antonio Diaz Diaz.
+    Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -42,7 +42,7 @@ class FLZ_encoder : public LZ_encoder_base
       }
     }
 
-  enum { before = 0,
+  enum { before_size = 0,
          dict_size = 65536,
          // bytes to keep in buffer after pos
          after_size = max_match_len,
@@ -53,7 +53,7 @@ class FLZ_encoder : public LZ_encoder_base
 public:
   FLZ_encoder( const int ifd, const int outfd )
     :
-    LZ_encoder_base( before, dict_size, after_size, dict_factor,
+    LZ_encoder_base( before_size, dict_size, after_size, dict_factor,
                      num_prev_positions23, pos_array_factor, ifd, outfd )
     {}
 

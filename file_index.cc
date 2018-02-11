@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2017 Antonio Diaz Diaz.
+    Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -59,7 +59,8 @@ void File_index::set_num_error( const char * const msg, unsigned long long num )
 
 
 // If successful, push last member and set pos to member header.
-bool File_index::skip_trailing_data( const int fd, long long & pos )
+bool File_index::skip_trailing_data( const int fd, long long & pos,
+                   const bool ignore_trailing, const bool loose_trailing )
   {
   enum { block_size = 16384,
          buffer_size = block_size + File_trailer::size - 1 + File_header::size };
@@ -94,10 +95,13 @@ bool File_index::skip_trailing_data( const int fd, long long & pos )
         if( !header.verify_magic() || !header.verify_version() ||
             !isvalid_ds( dictionary_size ) ) continue;
         if( (*(File_header *)( buffer + i )).verify_prefix( bsize - i ) )
-          {
-          error_ = "Last member in input file is truncated or corrupt.";
-          retval_ = 2; return false;
-          }
+          { error_ = "Last member in input file is truncated or corrupt.";
+            retval_ = 2; return false; }
+        if( !loose_trailing && bsize - i >= File_header::size &&
+            (*(File_header *)( buffer + i )).verify_corrupt() )
+          { error_ = corrupt_mm_msg; retval_ = 2; return false; }
+        if( !ignore_trailing )
+          { error_ = trailing_msg; retval_ = 2; return false; }
         pos = ipos + i - member_size;
         member_vector.push_back( Member( 0, trailer.data_size(), pos,
                                          member_size, dictionary_size ) );
@@ -115,7 +119,8 @@ bool File_index::skip_trailing_data( const int fd, long long & pos )
   }
 
 
-File_index::File_index( const int infd, const bool ignore_trailing )
+File_index::File_index( const int infd, const bool ignore_trailing,
+                        const bool loose_trailing )
   : isize( lseek( infd, 0, SEEK_END ) ), retval_( 0 )
   {
   if( isize < 0 )
@@ -146,11 +151,10 @@ File_index::File_index( const int infd, const bool ignore_trailing )
     const unsigned long long member_size = trailer.member_size();
     if( member_size < min_member_size || member_size > (unsigned long long)pos )
       {
-      if( !member_vector.empty() )
-        set_num_error( "Member size in trailer is corrupt at pos ", pos - 8 );
-      else if( skip_trailing_data( infd, pos ) )
-        { if( ignore_trailing ) continue;
-          error_ = trailing_msg; retval_ = 2; return; }
+      if( member_vector.empty() )
+        { if( skip_trailing_data( infd, pos, ignore_trailing, loose_trailing ) )
+            continue; else return; }
+      set_num_error( "Member size in trailer is corrupt at pos ", pos - 8 );
       break;
       }
     if( seek_read( infd, header.data, File_header::size,
@@ -160,11 +164,10 @@ File_index::File_index( const int infd, const bool ignore_trailing )
     if( !header.verify_magic() || !header.verify_version() ||
         !isvalid_ds( dictionary_size ) )
       {
-      if( !member_vector.empty() )
-        set_num_error( "Bad header at pos ", pos - member_size );
-      else if( skip_trailing_data( infd, pos ) )
-        { if( ignore_trailing ) continue;
-          error_ = trailing_msg; retval_ = 2; return; }
+      if( member_vector.empty() )
+        { if( skip_trailing_data( infd, pos, ignore_trailing, loose_trailing ) )
+            continue; else return; }
+      set_num_error( "Bad header at pos ", pos - member_size );
       break;
       }
     pos -= member_size;

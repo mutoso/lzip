@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2017 Antonio Diaz Diaz.
+    Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -37,7 +37,7 @@ void list_line( const unsigned long long uncomp_size,
   {
   if( uncomp_size > 0 )
     std::printf( "%15llu %15llu %6.2f%%  %s\n", uncomp_size, comp_size,
-                  100.0 * ( 1.0 - ( (double)comp_size / uncomp_size ) ),
+                  100.0 - ( ( 100.0 * comp_size ) / uncomp_size ),
                   input_filename );
   else
     std::printf( "%15llu %15llu   -INF%%  %s\n", uncomp_size, comp_size,
@@ -48,7 +48,7 @@ void list_line( const unsigned long long uncomp_size,
 
 
 int list_files( const std::vector< std::string > & filenames,
-                const bool ignore_trailing )
+                const bool ignore_trailing, const bool loose_trailing )
   {
   unsigned long long total_comp = 0, total_uncomp = 0;
   int files = 0, retval = 0;
@@ -65,7 +65,7 @@ int list_files( const std::vector< std::string > & filenames,
       open_instream( input_filename, &in_stats, true, true );
     if( infd < 0 ) { if( retval < 1 ) retval = 1; continue; }
 
-    const File_index file_index( infd, ignore_trailing );
+    const File_index file_index( infd, ignore_trailing, loose_trailing );
     close( infd );
     if( file_index.retval() != 0 )
       {

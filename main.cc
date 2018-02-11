@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2017 Antonio Diaz Diaz.
+    Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -75,7 +75,7 @@ namespace {
 
 const char * const Program_name = "Lzip";
 const char * const program_name = "lzip";
-const char * const program_year = "2017";
+const char * const program_year = "2018";
 const char * invocation_name = 0;
 
 const struct { const char * from; const char * to; } known_extensions[] = {
@@ -115,12 +115,13 @@ void show_help()
                "  -o, --output=<file>            if reading standard input, write to <file>\n"
                "  -q, --quiet                    suppress all messages\n"
                "  -s, --dictionary-size=<bytes>  set dictionary size limit in bytes [8 MiB]\n"
-               "  -S, --volume-size=<bytes>      set volume size limit in bytes\n"
+               "  -S, --volume-size=<bytes>      set volume size limit in bytes, implies -k\n"
                "  -t, --test                     test compressed file integrity\n"
                "  -v, --verbose                  be verbose (a 2nd -v gives more)\n"
                "  -0 .. -9                       set compression level [default 6]\n"
                "      --fast                     alias for -0\n"
                "      --best                     alias for -9\n"
+               "      --loose-trailing           allow trailing data seeming corrupt header\n"
                "If no file names are given, or if a file is '-', lzip compresses or\n"
                "decompresses from standard input to standard output.\n"
                "Numbers may be followed by a multiplier: k = kB = 10^3 = 1000,\n"
@@ -151,6 +152,21 @@ void show_version()
 
 } // end namespace
 
+void Pretty_print::operator()( const char * const msg ) const
+  {
+  if( verbosity >= 0 )
+    {
+    if( first_post )
+      {
+      first_post = false;
+      std::fputs( padded_name.c_str(), stderr );
+      if( !msg ) std::fflush( stderr );
+      }
+    if( msg ) std::fprintf( stderr, "%s\n", msg );
+    }
+  }
+
+
 const char * bad_version( const unsigned version )
   {
   static char buf[80];
@@ -178,14 +194,13 @@ const char * format_ds( const unsigned dictionary_size )
   return buf;
   }
 
-namespace {
 
 void show_header( const unsigned dictionary_size )
   {
-  if( verbosity >= 3 )
-    std::fprintf( stderr, "dictionary %s.  ", format_ds( dictionary_size ) );
+  std::fprintf( stderr, "dictionary %s, ", format_ds( dictionary_size ) );
   }
 
+namespace {
 
 unsigned long long getnum( const char * const ptr,
                            const unsigned long long llimit,
@@ -271,6 +286,35 @@ int extension_index( const std::string & name )
   return -1;
   }
 
+
+void set_c_outname( const std::string & name, const bool force_ext,
+                    const bool multifile )
+  {
+  output_filename = name;
+  if( multifile ) output_filename += "00001";
+  if( force_ext || multifile || extension_index( output_filename ) < 0 )
+    output_filename += known_extensions[0].from;
+  }
+
+
+void set_d_outname( const std::string & name, const int eindex )
+  {
+  if( eindex >= 0 )
+    {
+    const std::string from( known_extensions[eindex].from );
+    if( name.size() > from.size() )
+      {
+      output_filename.assign( name, 0, name.size() - from.size() );
+      output_filename += known_extensions[eindex].to;
+      return;
+      }
+    }
+  output_filename = name; output_filename += ".out";
+  if( verbosity >= 1 )
+    std::fprintf( stderr, "%s: Can't guess original name for '%s' -- using '%s'\n",
+                  program_name, name.c_str(), output_filename.c_str() );
+  }
+
 } // end namespace
 
 int open_instream( const char * const name, struct stat * const in_statsp,
@@ -315,33 +359,6 @@ int open_instream2( const char * const name, struct stat * const in_statsp,
     }
   const bool no_ofile = ( to_stdout || program_mode == m_test );
   return open_instream( name, in_statsp, no_ofile, false );
-  }
-
-
-void set_c_outname( const std::string & name, const bool multifile )
-  {
-  output_filename = name;
-  if( multifile ) output_filename += "00001";
-  output_filename += known_extensions[0].from;
-  }
-
-
-void set_d_outname( const std::string & name, const int eindex )
-  {
-  if( eindex >= 0 )
-    {
-    const std::string from( known_extensions[eindex].from );
-    if( name.size() > from.size() )
-      {
-      output_filename.assign( name, 0, name.size() - from.size() );
-      output_filename += known_extensions[eindex].to;
-      return;
-      }
-    }
-  output_filename = name; output_filename += ".out";
-  if( verbosity >= 1 )
-    std::fprintf( stderr, "%s: Can't guess original name for '%s' -- using '%s'\n",
-                  program_name, name.c_str(), output_filename.c_str() );
   }
 
 
@@ -451,13 +468,12 @@ bool next_filename()
   }
 
 
-int compress( const unsigned long long member_size,
+int compress( const unsigned long long cfile_size,
+              const unsigned long long member_size,
               const unsigned long long volume_size, const int infd,
               const Lzma_options & encoder_options, const Pretty_print & pp,
               const struct stat * const in_statsp, const bool zero )
   {
-  const unsigned long long cfile_size =
-    (in_statsp && S_ISREG( in_statsp->st_mode )) ? in_statsp->st_size / 100 : 0;
   int retval = 0;
   LZ_encoder_base * encoder = 0;		// polymorphic encoder
   if( verbosity >= 1 ) pp();
@@ -481,7 +497,7 @@ int compress( const unsigned long long member_size,
       {
       const unsigned long long size = ( volume_size > 0 ) ?
         std::min( member_size, volume_size - partial_volume_size ) : member_size;
-      show_progress( in_size, encoder, &pp, cfile_size );	// init
+      show_cprogress( cfile_size, in_size, encoder, &pp );	// init
       if( !encoder->encode_member( size ) )
         { pp( "Encoder error." ); retval = 1; break; }
       in_size += encoder->data_position();
@@ -510,11 +526,11 @@ int compress( const unsigned long long member_size,
       if( in_size == 0 || out_size == 0 )
         std::fputs( " no data compressed.\n", stderr );
       else
-        std::fprintf( stderr, "%6.3f:1, %6.3f bits/byte, "
-                              "%5.2f%% saved, %llu in, %llu out.\n",
+        std::fprintf( stderr, "%6.3f:1, %5.2f%% ratio, %5.2f%% saved, "
+                              "%llu in, %llu out.\n",
                       (double)in_size / out_size,
-                      ( 8.0 * out_size ) / in_size,
-                      100.0 * ( 1.0 - ( (double)out_size / in_size ) ),
+                      ( 100.0 * out_size ) / in_size,
+                      100.0 - ( ( 100.0 * out_size ) / in_size ),
                       in_size, out_size );
       }
     }
@@ -539,9 +555,9 @@ unsigned char xdigit( const unsigned value )
 
 bool show_trailing_data( const uint8_t * const data, const int size,
                          const Pretty_print & pp, const bool all,
-                         const bool ignore_trailing )
+                         const int ignore_trailing )	// -1 = show
   {
-  if( verbosity >= 4 || !ignore_trailing )
+  if( verbosity >= 4 || ignore_trailing <= 0 )
     {
     std::string msg;
     if( !all ) msg = "first bytes of ";
@@ -557,14 +573,15 @@ bool show_trailing_data( const uint8_t * const data, const int size,
       { if( std::isprint( data[i] ) ) msg += data[i]; else msg += '.'; }
     msg += '\'';
     pp( msg.c_str() );
-    if( !ignore_trailing ) show_file_error( pp.name(), trailing_msg );
+    if( ignore_trailing == 0 ) show_file_error( pp.name(), trailing_msg );
     }
-  return ignore_trailing;
+  return ( ignore_trailing > 0 );
   }
 
 
-int decompress( const int infd, const Pretty_print & pp,
-                const bool ignore_trailing, const bool testing )
+int decompress( const unsigned long long cfile_size, const int infd,
+                const Pretty_print & pp, const bool ignore_trailing,
+                const bool loose_trailing, const bool testing )
   {
   int retval = 0;
 
@@ -578,8 +595,13 @@ int decompress( const int infd, const Pretty_print & pp,
       const int size = rdec.read_data( header.data, File_header::size );
       if( rdec.finished() )			// End Of File
         {
-        if( first_member || header.verify_prefix( size ) )
-          { pp( "File ends unexpectedly at member header." ); retval = 2; }
+        if( first_member )
+          { show_file_error( pp.name(), "File ends unexpectedly at member header." );
+            retval = 2; }
+        else if( header.verify_prefix( size ) )
+          { pp( "Truncated header in multimember file." );
+            show_trailing_data( header.data, size, pp, true, -1 );
+            retval = 2; }
         else if( size > 0 && !show_trailing_data( header.data, size, pp,
                                                   true, ignore_trailing ) )
           retval = 2;
@@ -589,6 +611,10 @@ int decompress( const int infd, const Pretty_print & pp,
         {
         if( first_member )
           { show_file_error( pp.name(), bad_magic_msg ); retval = 2; }
+        else if( !loose_trailing && header.verify_corrupt() )
+          { pp( corrupt_mm_msg );
+            show_trailing_data( header.data, size, pp, false, -1 );
+            retval = 2; }
         else if( !show_trailing_data( header.data, size, pp, false, ignore_trailing ) )
           retval = 2;
         break;
@@ -599,10 +625,10 @@ int decompress( const int infd, const Pretty_print & pp,
       if( !isvalid_ds( dictionary_size ) )
         { pp( bad_dict_msg ); retval = 2; break; }
 
-      if( verbosity >= 2 || ( verbosity == 1 && first_member ) )
-        { pp(); show_header( dictionary_size ); }
+      if( verbosity >= 2 || ( verbosity == 1 && first_member ) ) pp();
 
       LZ_decoder decoder( rdec, dictionary_size, outfd );
+      show_dprogress( cfile_size, partial_file_pos, &rdec, &pp );	// init
       const int result = decoder.decode_member( pp );
       partial_file_pos += rdec.member_position();
       if( result != 0 )
@@ -678,25 +704,61 @@ void internal_error( const char * const msg )
   }
 
 
-void show_progress( const unsigned long long partial_size,
-                    const Matchfinder_base * const m,
-                    const Pretty_print * const p,
-                    const unsigned long long cfile_size )
+void show_cprogress( const unsigned long long cfile_size,
+                     const unsigned long long partial_size,
+                     const Matchfinder_base * const m,
+                     const Pretty_print * const p )
   {
   static unsigned long long csize = 0;		// file_size / 100
   static unsigned long long psize = 0;
   static const Matchfinder_base * mb = 0;
   static const Pretty_print * pp = 0;
+  static bool enabled = true;
 
-  if( verbosity < 2 ) return;
-  if( m )					// initialize static vars
-    { csize = cfile_size; psize = partial_size; mb = m; pp = p; }
+  if( !enabled ) return;
+  if( p )					// initialize static vars
+    {
+    if( verbosity < 2 || !isatty( STDERR_FILENO ) ) { enabled = false; return; }
+    csize = cfile_size; psize = partial_size; mb = m; pp = p;
+    }
   if( mb && pp )
     {
     const unsigned long long pos = psize + mb->data_position();
     if( csize > 0 )
-      std::fprintf( stderr, "%4llu%%", pos / csize );
-    std::fprintf( stderr, "  %.1f MB\r", pos / 1000000.0 );
+      std::fprintf( stderr, "%4llu%%  %.1f MB\r", pos / csize, pos / 1000000.0 );
+    else
+      std::fprintf( stderr, "  %.1f MB\r", pos / 1000000.0 );
+    pp->reset(); (*pp)();			// restore cursor position
+    }
+  }
+
+
+void show_dprogress( const unsigned long long cfile_size,
+                     const unsigned long long partial_size,
+                     const Range_decoder * const d,
+                     const Pretty_print * const p )
+  {
+  static unsigned long long csize = 0;		// file_size / 100
+  static unsigned long long psize = 0;
+  static const Range_decoder * rdec = 0;
+  static const Pretty_print * pp = 0;
+  static int counter = 0;
+  static bool enabled = true;
+
+  if( !enabled ) return;
+  if( p )					// initialize static vars
+    {
+    if( verbosity < 2 || !isatty( STDERR_FILENO ) ) { enabled = false; return; }
+    csize = cfile_size; psize = partial_size; rdec = d; pp = p; counter = 0;
+    }
+  if( rdec && pp && --counter <= 0 )
+    {
+    const unsigned long long pos = psize + rdec->member_position();
+    counter = 7;		// update display every 114688 bytes
+    if( csize > 0 )
+      std::fprintf( stderr, "%4llu%%  %.1f MB\r", pos / csize, pos / 1000000.0 );
+    else
+      std::fprintf( stderr, "  %.1f MB\r", pos / 1000000.0 );
     pp->reset(); (*pp)();			// restore cursor position
     }
   }
@@ -708,7 +770,7 @@ int main( const int argc, const char * const argv[] )
      to the corresponding LZMA compression modes. */
   const Lzma_options option_mapping[] =
     {
-    { 1 << 16,  16 },		// -0 entry values not used
+    { 1 << 16,  16 },		// -0
     { 1 << 20,   5 },		// -1
     { 3 << 19,   6 },		// -2
     { 1 << 21,   8 },		// -3
@@ -725,47 +787,49 @@ int main( const int argc, const char * const argv[] )
   unsigned long long volume_size = 0;
   std::string default_output_filename;
   std::vector< std::string > filenames;
-  int infd = -1;
   Mode program_mode = m_compress;
   bool force = false;
   bool ignore_trailing = true;
   bool keep_input_files = false;
+  bool loose_trailing = false;
   bool recompress = false;
   bool to_stdout = false;
   bool zero = false;
   invocation_name = argv[0];
 
+  enum { opt_lt = 256 };
   const Arg_parser::Option options[] =
     {
-    { '0', "fast",            Arg_parser::no  },
-    { '1',  0,                Arg_parser::no  },
-    { '2',  0,                Arg_parser::no  },
-    { '3',  0,                Arg_parser::no  },
-    { '4',  0,                Arg_parser::no  },
-    { '5',  0,                Arg_parser::no  },
-    { '6',  0,                Arg_parser::no  },
-    { '7',  0,                Arg_parser::no  },
-    { '8',  0,                Arg_parser::no  },
-    { '9', "best",            Arg_parser::no  },
-    { 'a', "trailing-error",  Arg_parser::no  },
-    { 'b', "member-size",     Arg_parser::yes },
-    { 'c', "stdout",          Arg_parser::no  },
-    { 'd', "decompress",      Arg_parser::no  },
-    { 'f', "force",           Arg_parser::no  },
-    { 'F', "recompress",      Arg_parser::no  },
-    { 'h', "help",            Arg_parser::no  },
-    { 'k', "keep",            Arg_parser::no  },
-    { 'l', "list",            Arg_parser::no  },
-    { 'm', "match-length",    Arg_parser::yes },
-    { 'n', "threads",         Arg_parser::yes },
-    { 'o', "output",          Arg_parser::yes },
-    { 'q', "quiet",           Arg_parser::no  },
-    { 's', "dictionary-size", Arg_parser::yes },
-    { 'S', "volume-size",     Arg_parser::yes },
-    { 't', "test",            Arg_parser::no  },
-    { 'v', "verbose",         Arg_parser::no  },
-    { 'V', "version",         Arg_parser::no  },
-    {  0 , 0,                 Arg_parser::no  } };
+    { '0', "fast",              Arg_parser::no  },
+    { '1',  0,                  Arg_parser::no  },
+    { '2',  0,                  Arg_parser::no  },
+    { '3',  0,                  Arg_parser::no  },
+    { '4',  0,                  Arg_parser::no  },
+    { '5',  0,                  Arg_parser::no  },
+    { '6',  0,                  Arg_parser::no  },
+    { '7',  0,                  Arg_parser::no  },
+    { '8',  0,                  Arg_parser::no  },
+    { '9', "best",              Arg_parser::no  },
+    { 'a', "trailing-error",    Arg_parser::no  },
+    { 'b', "member-size",       Arg_parser::yes },
+    { 'c', "stdout",            Arg_parser::no  },
+    { 'd', "decompress",        Arg_parser::no  },
+    { 'f', "force",             Arg_parser::no  },
+    { 'F', "recompress",        Arg_parser::no  },
+    { 'h', "help",              Arg_parser::no  },
+    { 'k', "keep",              Arg_parser::no  },
+    { 'l', "list",              Arg_parser::no  },
+    { 'm', "match-length",      Arg_parser::yes },
+    { 'n', "threads",           Arg_parser::yes },
+    { 'o', "output",            Arg_parser::yes },
+    { 'q', "quiet",             Arg_parser::no  },
+    { 's', "dictionary-size",   Arg_parser::yes },
+    { 'S', "volume-size",       Arg_parser::yes },
+    { 't', "test",              Arg_parser::no  },
+    { 'v', "verbose",           Arg_parser::no  },
+    { 'V', "version",           Arg_parser::no  },
+    { opt_lt, "loose-trailing", Arg_parser::no  },
+    {  0 , 0,                   Arg_parser::no  } };
 
   const Arg_parser parser( argc, argv, options );
   if( parser.error().size() )				// bad option
@@ -805,6 +869,7 @@ int main( const int argc, const char * const argv[] )
       case 't': set_mode( program_mode, m_test ); break;
       case 'v': if( verbosity < 4 ) ++verbosity; break;
       case 'V': show_version(); return 0;
+      case opt_lt: loose_trailing = true; break;
       default : internal_error( "uncaught option." );
       }
     } // end process options
@@ -823,7 +888,7 @@ int main( const int argc, const char * const argv[] )
   if( filenames.empty() ) filenames.push_back("-");
 
   if( program_mode == m_list )
-    return list_files( filenames, ignore_trailing );
+    return list_files( filenames, ignore_trailing, loose_trailing );
 
   if( program_mode == m_test )
     outfd = -1;
@@ -837,13 +902,15 @@ int main( const int argc, const char * const argv[] )
       ( filenames_given || default_output_filename.size() ) )
     set_signals();
 
-  Pretty_print pp( filenames, verbosity );
+  Pretty_print pp( filenames );
 
+  int failed_tests = 0;
   int retval = 0;
   bool stdin_used = false;
   for( unsigned i = 0; i < filenames.size(); ++i )
     {
     std::string input_filename;
+    int infd;
     struct stat in_stats;
     output_filename.clear();
 
@@ -858,12 +925,12 @@ int main( const int argc, const char * const argv[] )
         else
           {
           if( program_mode == m_compress )
-            set_c_outname( default_output_filename, volume_size > 0 );
+            set_c_outname( default_output_filename, false, volume_size > 0 );
           else output_filename = default_output_filename;
           if( !open_outstream( force, true ) )
             {
             if( retval < 1 ) retval = 1;
-            close( infd ); infd = -1;
+            close( infd );
             continue;
             }
           }
@@ -881,12 +948,12 @@ int main( const int argc, const char * const argv[] )
         else
           {
           if( program_mode == m_compress )
-            set_c_outname( input_filename, volume_size > 0 );
+            set_c_outname( input_filename, true, volume_size > 0 );
           else set_d_outname( input_filename, eindex );
           if( !open_outstream( force, false ) )
             {
             if( retval < 1 ) retval = 1;
-            close( infd ); infd = -1;
+            close( infd );
             continue;
             }
           }
@@ -897,33 +964,44 @@ int main( const int argc, const char * const argv[] )
     if( !check_tty( pp.name(), infd, program_mode ) )
       {
       if( retval < 1 ) retval = 1;
-      if( program_mode == m_test ) { close( infd ); infd = -1; continue; }
+      if( program_mode == m_test ) { close( infd ); continue; }
       cleanup_and_fail( retval );
       }
 
     const struct stat * const in_statsp = input_filename.size() ? &in_stats : 0;
+    const unsigned long long cfile_size =
+      ( in_statsp && S_ISREG( in_statsp->st_mode ) ) ?
+        ( in_statsp->st_size + 99 ) / 100 : 0;
     int tmp;
     if( program_mode == m_compress )
-      tmp = compress( member_size, volume_size, infd, encoder_options, pp,
-                      in_statsp, zero );
+      tmp = compress( cfile_size, member_size, volume_size, infd,
+                      encoder_options, pp, in_statsp, zero );
     else
-      tmp = decompress( infd, pp, ignore_trailing, program_mode == m_test );
+      tmp = decompress( cfile_size, infd, pp, ignore_trailing,
+                        loose_trailing, program_mode == m_test );
     if( tmp > retval ) retval = tmp;
-    if( tmp && program_mode != m_test ) cleanup_and_fail( retval );
+    if( tmp )
+      { if( program_mode != m_test ) cleanup_and_fail( retval );
+        else ++failed_tests; }
 
     if( delete_output_on_interrupt )
       close_and_set_permissions( in_statsp );
     if( input_filename.size() )
       {
-      close( infd ); infd = -1;
-      if( !keep_input_files && !to_stdout && program_mode != m_test )
+      close( infd );
+      if( !keep_input_files && !to_stdout && program_mode != m_test &&
+          ( program_mode != m_compress || volume_size == 0 ) )
         std::remove( input_filename.c_str() );
       }
     }
   if( outfd >= 0 && close( outfd ) != 0 )
     {
-    show_error( "Can't close stdout", errno );
+    show_error( "Error closing stdout", errno );
     if( retval < 1 ) retval = 1;
     }
+  if( failed_tests > 0 && verbosity >= 1 && filenames.size() > 1 )
+    std::fprintf( stderr, "%s: warning: %d %s failed the test.\n",
+                  program_name, failed_tests,
+                  ( failed_tests == 1 ) ? "file" : "files" );
   return retval;
   }

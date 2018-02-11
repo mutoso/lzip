@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2017 Antonio Diaz Diaz.
+    Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -29,23 +29,6 @@
 
 #include "lzip.h"
 #include "decoder.h"
-
-
-void Pretty_print::operator()( const char * const msg ) const
-  {
-  if( verbosity >= 0 )
-    {
-    if( first_post )
-      {
-      first_post = false;
-      std::fprintf( stderr, "  %s: ", name_.c_str() );
-      for( unsigned i = name_.size(); i < longest_name; ++i )
-        std::fputc( ' ', stderr );
-      if( !msg ) std::fflush( stderr );
-      }
-    if( msg ) std::fprintf( stderr, "%s\n", msg );
-    }
-  }
 
 
 /* Returns the number of bytes really read.
@@ -94,6 +77,7 @@ bool Range_decoder::read_block()
     at_stream_end = ( stream_pos < buffer_size );
     partial_member_pos += pos;
     pos = 0;
+    show_dprogress();
     }
   return pos < stream_pos;
   }
@@ -134,45 +118,56 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
     while( size < File_trailer::size ) trailer.data[size++] = 0;
     }
 
-  if( trailer.data_crc() != crc() )
+  const unsigned td_crc = trailer.data_crc();
+  if( td_crc != crc() )
     {
     error = true;
     if( verbosity >= 0 )
       {
       pp();
-      std::fprintf( stderr, "CRC mismatch; trailer says %08X, data CRC is %08X\n",
-                    trailer.data_crc(), crc() );
+      std::fprintf( stderr, "CRC mismatch; stored %08X, computed %08X\n",
+                    td_crc, crc() );
       }
     }
-  if( trailer.data_size() != data_size )
+  const unsigned long long td_size = trailer.data_size();
+  if( td_size != data_size )
     {
     error = true;
     if( verbosity >= 0 )
       {
       pp();
-      std::fprintf( stderr, "Data size mismatch; trailer says %llu, data size is %llu (0x%llX)\n",
-                    trailer.data_size(), data_size, data_size );
+      std::fprintf( stderr, "Data size mismatch; stored %llu (0x%llX), computed %llu (0x%llX)\n",
+                    td_size, td_size, data_size, data_size );
       }
     }
-  if( trailer.member_size() != member_size )
+  const unsigned long long tm_size = trailer.member_size();
+  if( tm_size != member_size )
     {
     error = true;
     if( verbosity >= 0 )
       {
       pp();
-      std::fprintf( stderr, "Member size mismatch; trailer says %llu, member size is %llu (0x%llX)\n",
-                    trailer.member_size(), member_size, member_size );
+      std::fprintf( stderr, "Member size mismatch; stored %llu (0x%llX), computed %llu (0x%llX)\n",
+                    tm_size, tm_size, member_size, member_size );
       }
     }
-  if( !error && verbosity >= 2 && data_size > 0 && member_size > 0 )
-    std::fprintf( stderr, "%6.3f:1, %6.3f bits/byte, %5.2f%% saved.  ",
-                  (double)data_size / member_size,
-                  ( 8.0 * member_size ) / data_size,
-                  100.0 * ( 1.0 - ( (double)member_size / data_size ) ) );
-  if( !error && verbosity >= 4 )
-    std::fprintf( stderr, "CRC %08X, decompressed %9llu, compressed %8llu.  ",
-                  crc(), data_size, member_size );
-  return !error;
+  if( error ) return false;
+  if( verbosity >= 2 )
+    {
+    if( verbosity >= 4 ) show_header( dictionary_size );
+    if( data_size == 0 || member_size == 0 )
+      std::fputs( "no data compressed.  ", stderr );
+    else
+      std::fprintf( stderr, "%6.3f:1, %5.2f%% ratio, %5.2f%% saved.  ",
+                    (double)data_size / member_size,
+                    ( 100.0 * member_size ) / data_size,
+                    100.0 - ( ( 100.0 * member_size ) / data_size ) );
+    if( verbosity >= 4 ) std::fprintf( stderr, "CRC %08X, ", td_crc );
+    if( verbosity >= 3 )
+      std::fprintf( stderr, "decompressed %9llu, compressed %8llu.  ",
+                    data_size, member_size );
+    }
+  return true;
   }
 
 

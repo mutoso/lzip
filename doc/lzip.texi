@@ -6,8 +6,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 13 April 2017
-@set VERSION 1.19
+@set UPDATED 11 February 2018
+@set VERSION 1.20
 
 @dircategory Data Compression
 @direntry
@@ -36,6 +36,7 @@ This manual is for Lzip (version @value{VERSION}, @value{UPDATED}).
 
 @menu
 * Introduction::           Purpose and features of lzip
+* Output::                 Meaning of lzip's output
 * Invoking lzip::          Command line interface
 * Quality assurance::      Design, development and testing of lzip
 * File format::            Detailed format of the compressed file
@@ -49,7 +50,7 @@ This manual is for Lzip (version @value{VERSION}, @value{UPDATED}).
 @end menu
 
 @sp 1
-Copyright @copyright{} 2008-2017 Antonio Diaz Diaz.
+Copyright @copyright{} 2008-2018 Antonio Diaz Diaz.
 
 This manual is free documentation: you have unlimited permission
 to copy, distribute and modify it.
@@ -74,7 +75,7 @@ availability:
 The lzip format provides very safe integrity checking and some data
 recovery means. The
 @uref{http://www.nongnu.org/lzip/manual/lziprecover_manual.html#Data-safety,,lziprecover}
-program can repair bit-flip errors (one of the most common forms of data
+program can repair bit flip errors (one of the most common forms of data
 corruption) in lzip files, and provides data recovery capabilities,
 including error-checked merging of damaged copies of a file.
 @ifnothtml
@@ -123,9 +124,9 @@ choice of dictionary size limit.
 The amount of memory required for compression is about 1 or 2 times the
 dictionary size limit (1 if input file size is less than dictionary size
 limit, else 2) plus 9 times the dictionary size really used. The option
-@samp{-0} is special and only requires about 1.5 MiB at most. The amount
-of memory required for decompression is about 46 kB larger than the
-dictionary size really used.
+@samp{-0} is special and only requires about @w{1.5 MiB} at most. The
+amount of memory required for decompression is about @w{46 kB} larger
+than the dictionary size really used.
 
 When compressing, lzip replaces every file given in the command line
 with a compressed version of itself, with the name "original_name.lz".
@@ -154,7 +155,7 @@ incomprehensible and therefore pointless.
 
 Lzip will correctly decompress a file which is the concatenation of two
 or more compressed files. The result is the concatenation of the
-corresponding uncompressed files. Integrity testing of concatenated
+corresponding decompressed files. Integrity testing of concatenated
 compressed files is also supported.
 
 Lzip can produce multimember files, and lziprecover can safely recover
@@ -165,7 +166,53 @@ compressed tar archives.
 
 Lzip is able to compress and decompress streams of unlimited size by
 automatically creating multimember output. The members so created are
-large, about 2 PiB each.
+large, about @w{2 PiB} each.
+
+
+@node Output
+@chapter Meaning of lzip's output
+@cindex output
+
+The output of lzip looks like this:
+
+@example
+lzip -v foo
+  foo:  6.676:1, 14.98% ratio, 85.02% saved, 450560 in, 67493 out.
+
+lzip -tvv foo.lz
+  foo.lz:  6.676:1, 14.98% ratio, 85.02% saved.  ok
+@end example
+
+The meaning of each field is as follows:
+
+@table @code
+@item N:1
+The compression ratio @w{(uncompressed_size / compressed_size)}, shown
+as N to 1.
+
+@item ratio
+The inverse compression ratio @w{(compressed_size / uncompressed_size)},
+shown as a percentage. A decimal ratio is easily obtained by moving the
+decimal point two places to the left; @w{14.98% = 0.1498}.
+
+@item saved
+The space saved by compression @w{(1 - ratio)}, shown as a percentage.
+
+@item in
+The size of the uncompressed data. When decompressing or testing, it is
+shown as @code{decompressed}. Note that lzip always prints the
+uncompressed size before the compressed size when compressing,
+decompressing, testing or listing.
+
+@item out
+The size of the compressed data. When decompressing or testing, it is
+shown as @code{compressed}.
+
+@end table
+
+When decompressing or testing at verbosity level 4 (-vvvv), the
+dictionary size used to compress the file and the CRC32 of the
+uncompressed data are also shown.
 
 LANGUAGE NOTE: Uncompressed = not compressed = plain data; it may never
 have been compressed. Decompressed is used to refer to data which have
@@ -190,7 +237,7 @@ lzip [@var{options}] [@var{files}]
 mixed with other @var{files} and is read just once, the first time it
 appears in the command line.
 
-Lzip supports the following options:
+lzip supports the following options:
 
 @table @code
 @item -h
@@ -210,24 +257,24 @@ garbage that can be safely ignored. @xref{concat-example}.
 
 @item -b @var{bytes}
 @itemx --member-size=@var{bytes}
-Set the member size limit to @var{bytes}. A small member size may
-degrade compression ratio, so use it only when needed. Valid values
-range from 100 kB to 2 PiB. Defaults to 2 PiB.
+When compressing, set the member size limit to @var{bytes}. A small
+member size may degrade compression ratio, so use it only when needed.
+Valid values range from @w{100 kB} to @w{2 PiB}. Defaults to @w{2 PiB}.
 
 @item -c
 @itemx --stdout
 Compress or decompress to standard output; keep input files unchanged.
 If compressing several files, each file is compressed independently.
 This option is needed when reading from a named pipe (fifo) or from a
-device. Use it also to recover as much of the uncompressed data as
+device. Use it also to recover as much of the decompressed data as
 possible when decompressing a corrupt file.
 
 @item -d
 @itemx --decompress
-Decompress the specified file(s). If a file does not exist or can't be
+Decompress the specified files. If a file does not exist or can't be
 opened, lzip continues decompressing the rest of the files. If a file
-fails to decompress, lzip exits immediately without decompressing the
-rest of the files.
+fails to decompress, or is a terminal, lzip exits immediately without
+decompressing the rest of the files.
 
 @item -f
 @itemx --force
@@ -235,8 +282,8 @@ Force overwrite of output files.
 
 @item -F
 @itemx --recompress
-Force re-compression of files whose name already has the @samp{.lz} or
-@samp{.tlz} suffix.
+When compressing, force re-compression of files whose name already has
+the @samp{.lz} or @samp{.tlz} suffix.
 
 @item -k
 @itemx --keep
@@ -245,7 +292,7 @@ Keep (don't delete) input files during compression or decompression.
 @item -l
 @itemx --list
 Print the uncompressed size, compressed size and percentage saved of the
-specified file(s). Trailing data are ignored. The values produced are
+specified files. Trailing data are ignored. The values produced are
 correct even for multimember files. If more than one file is given, a
 final line containing the cumulative sizes is printed. With @samp{-v},
 the dictionary size, the number of members in the file, and the amount
@@ -258,18 +305,21 @@ verifies that none of the specified files contain trailing data.
 
 @item -m @var{bytes}
 @itemx --match-length=@var{bytes}
-Set the match length limit in bytes. After a match this long is found,
-the search is finished. Valid values range from 5 to 273. Larger values
-usually give better compression ratios but longer compression times.
+When compressing, set the match length limit in bytes. After a match
+this long is found, the search is finished. Valid values range from 5 to
+273. Larger values usually give better compression ratios but longer
+compression times.
 
 @item -o @var{file}
 @itemx --output=@var{file}
 When reading from standard input and @samp{--stdout} has not been
 specified, use @samp{@var{file}} as the virtual name of the uncompressed
-file. This produces a file named @samp{@var{file}} when decompressing, a
-file named @samp{@var{file}.lz} when compressing, and several files
-named @samp{@var{file}00001.lz}, @samp{@var{file}00002.lz}, etc, when
-compressing and splitting the output in volumes.
+file. This produces a file named @samp{@var{file}} when decompressing,
+or a file named @samp{@var{file}.lz} when compressing. A second
+@samp{.lz} extension is not added if @samp{@var{file}} already ends in
+@samp{.lz} or @samp{.tlz}. When compressing and splitting the output in
+volumes, several files named @samp{@var{file}00001.lz},
+@samp{@var{file}00002.lz}, etc, are created.
 
 @item -q
 @itemx --quiet
@@ -277,12 +327,12 @@ Quiet operation. Suppress all messages.
 
 @item -s @var{bytes}
 @itemx --dictionary-size=@var{bytes}
-Set the dictionary size limit in bytes. Lzip will use the smallest
-possible dictionary size for each file without exceeding this limit.
-Valid values range from 4 KiB to 512 MiB. Values 12 to 29 are
-interpreted as powers of two, meaning 2^12 to 2^29 bytes. Note that
-dictionary sizes are quantized. If the specified size does not match one
-of the valid sizes, it will be rounded upwards by adding up to
+When compressing, set the dictionary size limit in bytes. Lzip will use
+the smallest possible dictionary size for each file without exceeding
+this limit. Valid values range from @w{4 KiB} to @w{512 MiB}. Values 12
+to 29 are interpreted as powers of two, meaning 2^12 to 2^29 bytes. Note
+that dictionary sizes are quantized. If the specified size does not
+match one of the valid sizes, it will be rounded upwards by adding up to
 @w{(@var{bytes} / 8)} to it.
 
 For maximum compression you should use a dictionary size limit as large
@@ -291,37 +341,40 @@ is affected at compression time by the choice of dictionary size limit.
 
 @item -S @var{bytes}
 @itemx --volume-size=@var{bytes}
-Split the compressed output into several volume files with names
-@samp{original_name00001.lz}, @samp{original_name00002.lz}, etc, and set
-the volume size limit to @var{bytes}. Each volume is a complete, maybe
-multimember, lzip file. A small volume size may degrade compression
-ratio, so use it only when needed. Valid values range from 100 kB to 4
-EiB.
+When compressing, split the compressed output into several volume files
+with names @samp{original_name00001.lz}, @samp{original_name00002.lz},
+etc, and set the volume size limit to @var{bytes}. Input files are kept
+unchanged. Each volume is a complete, maybe multimember, lzip file. A
+small volume size may degrade compression ratio, so use it only when
+needed. Valid values range from @w{100 kB} to @w{4 EiB}.
 
 @item -t
 @itemx --test
-Check integrity of the specified file(s), but don't decompress them.
-This really performs a trial decompression and throws away the result.
-Use it together with @samp{-v} to see information about the file(s). If
-a file fails the test, does not exist, can't be opened, or is a
-terminal, lzip continues checking the rest of the files.
+Check integrity of the specified files, but don't decompress them. This
+really performs a trial decompression and throws away the result. Use it
+together with @samp{-v} to see information about the files. If a file
+fails the test, does not exist, can't be opened, or is a terminal, lzip
+continues checking the rest of the files. A final diagnostic is shown at
+verbosity level 1 or higher if any file fails the test when testing
+multiple files.
 
 @item -v
 @itemx --verbose
 Verbose mode.@*
-When compressing, show the compression ratio for each file processed. A
-second @samp{-v} shows the progress of compression.@*
+When compressing, show the compression ratio and size for each file
+processed.@*
 When decompressing or testing, further -v's (up to 4) increase the
 verbosity level, showing status, compression ratio, dictionary size,
 trailer contents (CRC, data size, member size), and up to 6 bytes of
 trailing data (if any) both in hexadecimal and as a string of printable
-ASCII characters.
+ASCII characters.@*
+Two or more @samp{-v} options show the progress of (de)compression.
 
 @item -0 .. -9
 Set the compression parameters (dictionary size and match length limit)
 as shown in the table below. The default compression level is @samp{-6}.
 Note that @samp{-9} can be much slower than @samp{-0}. These options
-have no effect when decompressing.
+have no effect when decompressing, testing or listing.
 
 The bidimensional parameter space of LZMA can't be mapped to a linear
 scale optimal for all files. If your files are large, very repetitive,
@@ -345,6 +398,12 @@ etc, you may need to use the @samp{--dictionary-size} and
 @item --fast
 @itemx --best
 Aliases for GNU gzip compatibility.
+
+@item --loose-trailing
+When decompressing, testing or listing, allow trailing data whose first
+bytes are so similar to the magic bytes of a lzip header that they can
+be confused with a corrupt header. Use this option if a file triggers a
+"corrupt header" error and the cause is not indeed a corrupt header.
 
 @end table
 
@@ -405,7 +464,7 @@ of gzip.
 
 Probably the worst defect of the gzip format from the point of view of
 data safety is the variable size of its header. If the byte at offset 3
-(flags) of a gzip member gets corrupted, it may become very difficult to
+(flags) of a gzip member gets corrupted, it may become difficult to
 recover the data, even if the compressed blocks are intact, because it
 can't be known with certainty where the compressed blocks begin.
 
@@ -426,22 +485,21 @@ distance larger than the dictionary size acts as a forbidden symbol,
 allowing the decompressor to detect the approximate position of errors,
 and leaving very little work for the check sequence (CRC and data sizes)
 in the detection of errors. Lzip is usually able to detect all posible
-bit-flips in the compressed data without resorting to the check
-sequence. It would be very difficult to write an automatic recovery tool
-like lziprecover for the gzip format. And, as far as I know, it has
-never been written.
+bit flips in the compressed data without resorting to the check
+sequence. It would be difficult to write an automatic recovery tool like
+lziprecover for the gzip format. And, as far as I know, it has never
+been written.
 
 Lzip, like gzip and bzip2, uses a CRC32 to check the integrity of the
 decompressed data because it provides more accurate error detection than
-CRC64 up to a compressed size of about 16 GiB, a size larger than that
-of most files. In the case of lzip, the additional detection capability
-of the decompressor reduces the probability of undetected errors more
-than a million times, making CRC32 more accurate than CRC64 up to about
-20 PiB of compressed size.
+CRC64 up to a compressed size of about @w{16 GiB}, a size larger than
+that of most files. In the case of lzip, the additional detection
+capability of the decompressor reduces the probability of undetected
+errors more than a million times beyond what the CRC32 alone provides.
 
 The lzip format is designed for long-term archiving. Therefore it
 excludes any unneeded features that may interfere with the future
-extraction of the uncompressed data.
+extraction of the decompressed data.
 
 @sp 1
 @subsection Gzip format (mis)features not present in lzip
@@ -467,12 +525,20 @@ header CRC nor the compressed blocks.
 
 @item Optional CRC for the header
 
-Using an optional checksum for the header is not only a bad idea, it is
-an error; it may prevent the extraction of perfectly good data. For
-example, if the checksum is used and the bit enabling it is reset by a
-bit-flip, the header will appear to be intact (in spite of being
-corrupt) while the compressed blocks will appear to be totally
-unrecoverable (in spite of being intact). Very misleading indeed.
+Using an optional CRC for the header is not only a bad idea, it is an
+error; it circumvents the HD of the CRC and may prevent the extraction
+of perfectly good data. For example, if the CRC is used and the bit
+enabling it is reset by a bit flip, the header will appear to be intact
+(in spite of being corrupt) while the compressed blocks will appear to
+be totally unrecoverable (in spite of being intact). Very misleading
+indeed.
+
+@item Metadata
+
+The gzip format stores some metadata, like the modification time of the
+original file or the operating system on which compression took place.
+This complicates reproducible compression (obtaining identical
+compressed output from identical input).
 
 @end table
 
@@ -483,7 +549,7 @@ unrecoverable (in spite of being intact). Very misleading indeed.
 
 Probably the most frequently reported shortcoming of the gzip format is
 that it only stores the least significant 32 bits of the uncompressed
-size. The size of any file larger than 4 GiB gets truncated.
+size. The size of any file larger than @w{4 GiB} gets truncated.
 
 Bzip2 does not store the uncompressed size of the file.
 
@@ -960,9 +1026,10 @@ padding zero bytes to a lzip file.
 @item
 Useful data added by the user; a cryptographically secure hash, a
 description of file contents, etc. It is safe to append any amount of
-text to a lzip file as long as the text does not begin with the string
-"LZIP", and does not contain any zero bytes (null characters). Nonzero
-bytes and zero bytes can't be safely mixed in trailing data.
+text to a lzip file as long as none of the first four bytes of the text
+match the corresponding byte in the string "LZIP", and the text does not
+contain any zero bytes (null characters). Nonzero bytes and zero bytes
+can't be safely mixed in trailing data.
 
 @item
 Garbage added by some not totally successful copy operation.
@@ -972,12 +1039,16 @@ Malicious data added to the file in order to make its total size and
 hash value (for a chosen hash) coincide with those of another file.
 
 @item
-In very rare cases, trailing data could be the corrupt header of another
+In rare cases, trailing data could be the corrupt header of another
 member. In multimember or concatenated files the probability of
 corruption happening in the magic bytes is 5 times smaller than the
 probability of getting a false positive caused by the corruption of the
 integrity information itself. Therefore it can be considered to be below
-the noise level.
+the noise level. Additionally, the test used by lzip to discriminate
+trailing data from a corrupt header has a Hamming distance (HD) of 3,
+and the 3 bit flips must happen in different magic bytes for the test to
+fail. In any case, the option @samp{--trailing-error} guarantees that
+any corrupt header will be detected.
 @end itemize
 
 Trailing data are in no way part of the lzip file format, but tools
@@ -1013,7 +1084,7 @@ lzip -v file
 @sp 1
 @noindent
 Example 2: Like example 1 but the created @samp{file.lz} is multimember
-with a member size of 1 MiB. The compression ratio is not shown.
+with a member size of @w{1 MiB}. The compression ratio is not shown.
 
 @example
 lzip -b 1MiB file
@@ -1062,7 +1133,7 @@ Do this instead
 
 @sp 1
 @noindent
-Example 7: Decompress @samp{file.lz} partially until 10 KiB of
+Example 7: Decompress @samp{file.lz} partially until @w{10 KiB} of
 decompressed data are produced.
 
 @example
@@ -1081,7 +1152,7 @@ lzip -cd file.lz | dd bs=1000 skip=10 count=5
 @sp 1
 @noindent
 Example 9: Create a multivolume compressed tar archive with a volume
-size of 1440 KiB.
+size of @w{1440 KiB}.
 
 @example
 tar -c some_directory | lzip -S 1440KiB -o volume_name
@@ -1098,8 +1169,8 @@ lzip -cd volume_name*.lz | tar -xf -
 @sp 1
 @noindent
 Example 11: Create a multivolume compressed backup of a large database
-file with a volume size of 650 MB, where each volume is a multimember
-file with a member size of 32 MiB.
+file with a volume size of @w{650 MB}, where each volume is a
+multimember file with a member size of @w{32 MiB}.
 
 @example
 lzip -b 32MiB -S 650MB big_db
@@ -1127,7 +1198,7 @@ find by running @w{@code{lzip --version}}.
 
 @verbatim
 /*  Lzd - Educational decompressor for the lzip format
-    Copyright (C) 2013-2017 Antonio Diaz Diaz.
+    Copyright (C) 2013-2018 Antonio Diaz Diaz.
 
     This program is free software. Redistribution and use in source and
     binary forms, with or without modification, are permitted provided
@@ -1443,9 +1514,9 @@ bool LZ_decoder::decode_member()		// Returns false if error
   Bit_model bm_align[dis_align_size];
   Len_model match_len_model;
   Len_model rep_len_model;
-  unsigned rep0 = 0;			// rep[0-3] latest four distances
-  unsigned rep1 = 0;			// used for efficient coding of
-  unsigned rep2 = 0;			// repeated distances
+  unsigned rep0 = 0;		// rep[0-3] latest four distances
+  unsigned rep1 = 0;		// used for efficient coding of
+  unsigned rep2 = 0;		// repeated distances
   unsigned rep3 = 0;
   State state;
 
@@ -1540,7 +1611,7 @@ int main( const int argc, const char * const argv[] )
                  "It is not safe to use lzd for any real work.\n"
                  "\nUsage: %s < file.lz > file\n", argv[0] );
     std::printf( "Lzd decompresses from standard input to standard output.\n"
-                 "\nCopyright (C) 2017 Antonio Diaz Diaz.\n"
+                 "\nCopyright (C) 2018 Antonio Diaz Diaz.\n"
                  "This is free software: you are free to change and redistribute it.\n"
                  "There is NO WARRANTY, to the extent permitted by law.\n"
                  "Report bugs to lzip-bug@nongnu.org\n"
@@ -1585,7 +1656,7 @@ int main( const int argc, const char * const argv[] )
     }
 
   if( std::fclose( stdout ) != 0 )
-    { std::fprintf( stderr, "Can't close stdout: %s\n", std::strerror( errno ) );
+    { std::fprintf( stderr, "Error closing stdout: %s\n", std::strerror( errno ) );
       return 1; }
   return 0;
   }

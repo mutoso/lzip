@@ -1,3 +1,20 @@
+2018-02-11  Antonio Diaz Diaz  <antonio@gnu.org>
+
+	* Version 1.20 released.
+	* main.cc: Added new option '--loose-trailing'.
+	* Improved corrupt header detection to HD=3.
+	* main.cc: Show corrupt or truncated header in multimember file.
+	* main.cc (main): Option '-S, --volume-size' now keeps input files.
+	* encoder_base.*: Adjust dictionary size for each member.
+	* Replaced 'bits/byte' with inverse compression ratio in output.
+	* Show progress of decompression at verbosity level 2 (-vv).
+	* Show progress of (de)compression only if stderr is a terminal.
+	* main.cc: Show final diagnostic when testing multiple files.
+	* main.cc: Do not add a second .lz extension to the arg of -o.
+	* decoder.cc (verify_trailer): Show stored sizes also in hex.
+	  Show dictionary size at verbosity level 4 (-vvvv).
+	* lzip.texi: Added chapter 'Output'.
+
 2017-04-13  Antonio Diaz Diaz  <antonio@gnu.org>
 
 	* Version 1.19 released.
@@ -23,8 +40,8 @@
 	* lzip.texi: Added chapter 'Trailing data'.
 	* configure: Avoid warning on some shells when testing for g++.
 	* Makefile.in: Detect the existence of install-info.
-	* testsuite/check.sh: A POSIX shell is required to run the tests.
-	* testsuite/check.sh: Don't check error messages.
+	* check.sh: A POSIX shell is required to run the tests.
+	* check.sh: Don't check error messages.
 
 2015-07-12  Antonio Diaz Diaz  <antonio@gnu.org>
 
@@ -76,7 +93,7 @@
 	* Small change in '--help' output and man page.
 	* Changed quote characters in messages as advised by GNU Standards.
 	* configure: 'datadir' renamed to 'datarootdir'.
-	* 'testsuite/unzcrash.cc' has been moved to package 'lziprecover'.
+	* 'unzcrash.cc' has been moved to package 'lziprecover'.
 
 2011-04-30  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -97,10 +114,10 @@
 	* main.cc (open_instream): Don't show the message
 	  " and '--stdout' was not specified" for directories, etc.
 	* lziprecover.cc: If '-v' is not specified show errors only.
-	* testsuite/unzcrash.cc: Use Arg_parser.
-	* testsuite/unzcrash.cc: Added new option '-b, --bits'.
-	* testsuite/unzcrash.cc: Added new option '-p, --position'.
-	* testsuite/unzcrash.cc: Added new option '-s, --size'.
+	* unzcrash.cc: Use Arg_parser.
+	* unzcrash.cc: Added new option '-b, --bits'.
+	* unzcrash.cc: Added new option '-p, --position'.
+	* unzcrash.cc: Added new option '-s, --size'.
 
 2010-09-16  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -154,7 +171,7 @@
 	* Version 1.9 released.
 	* main.cc (main): Return at least 1 if closing stdout fails.
 	* Makefile.in: Added '--name' option to help2man invocation.
-	* testsuite/check.sh: Use 'test1' instead of 'COPYING' for testing.
+	* check.sh: Use 'test1' instead of 'COPYING' for testing.
 
 2009-09-02  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -179,12 +196,12 @@
 	  is smaller than dictionary size limit.
 	* decoder.cc: Added extra flush calls to improve partial
 	  decompression of corrupt files.
-	* '--test' no more needs '/dev/null'.
+	* '--test' no longer needs '/dev/null'.
 	* Removed some 'bashisms' from lzdiff and lzgrep.
 	* Dictionary size for options '-1' to '-4' has been changed.
 	* main.cc (signal_handler): Declared as 'extern "C"'.
 	* Makefile.in: Extra files are now installed by default.
-	* testsuite/check.sh: Test lziprecover.
+	* check.sh: Test lziprecover.
 	* Added 'export LC_ALL=C' to all scripts.
 
 2009-04-12  Antonio Diaz Diaz  <ant_diaz@teleline.es>
@@ -199,7 +216,7 @@
 	* Lzdiff and lzgrep now accept '-h' for '--help' and
 	  '-V' for '--version'.
 	* Makefile.in: Man page is now installed by default.
-	* testsuite/check.sh: Verify that files are open in binary mode.
+	* check.sh: Verify that files are opened in binary mode.
 
 2009-01-24  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -210,7 +227,7 @@
 	* Added new option '-o, --output'.
 	* main.cc: Read from non regular files if '--stdout' is specified.
 	* Added 'lziprecover', a member recoverer program.
-	* testsuite/unzcrash.cc: Test all 1-byte errors.
+	* unzcrash.cc: Test all 1-byte errors.
 
 2008-12-21  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -219,7 +236,7 @@
 	  dictionary size for each file during compression, saving
 	  memory during decompression.
 	* Implemented decompression of version 1 files.
-	* testsuite/check.sh: Replaced 'diff -q' with 'cmp'.
+	* check.sh: Replaced 'diff -q' with 'cmp'.
 
 2008-12-10  Antonio Diaz Diaz  <ant_diaz@teleline.es>
 
@@ -276,7 +293,7 @@
 	* Version 0.1 released.
 
 
-Copyright (C) 2008-2017 Antonio Diaz Diaz.
+Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
 This file is a collection of facts, and thus it is not copyrightable,
 but just in case, you have unlimited permission to copy, distribute and

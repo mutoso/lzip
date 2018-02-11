@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2017 Antonio Diaz Diaz.
+    Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -222,11 +222,7 @@ class LZ_decoder
   bool verify_trailer( const Pretty_print & pp ) const;
 
   uint8_t peek_prev() const
-    {
-    if( pos > 0 ) return buffer[pos-1];
-    if( pos_wrapped ) return buffer[dictionary_size-1];
-    return 0;			// prev_byte of first byte
-    }
+    { return buffer[((pos > 0) ? pos : dictionary_size)-1]; }
 
   uint8_t peek( const unsigned distance ) const
     {
@@ -287,7 +283,8 @@ public:
     crc_( 0xFFFFFFFFU ),
     outfd( ofd ),
     pos_wrapped( false )
-    {}
+    // prev_byte of first byte; also for peek( 0 ) on corrupt file
+    { buffer[dictionary_size-1] = 0; }
 
   ~LZ_decoder() { delete[] buffer; }
 

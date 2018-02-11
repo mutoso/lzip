@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2017 Antonio Diaz Diaz.
+    Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -113,16 +113,19 @@ struct Len_model
   };
 
 
-class Pretty_print
+// defined in main.cc
+extern int verbosity;
+
+class Pretty_print		// requires global var 'int verbosity'
   {
   std::string name_;
+  std::string padded_name;
   const char * const stdin_name;
   unsigned longest_name;
   mutable bool first_post;
 
 public:
-  Pretty_print( const std::vector< std::string > & filenames,
-                const int verbosity )
+  Pretty_print( const std::vector< std::string > & filenames )
     : stdin_name( "(stdin)" ), longest_name( 0 ), first_post( false )
     {
     if( verbosity <= 0 ) return;
@@ -140,6 +143,9 @@ public:
     {
     if( filename.size() && filename != "-" ) name_ = filename;
     else name_ = stdin_name;
+    padded_name = "  "; padded_name += name_; padded_name += ": ";
+    if( name_.size() < longest_name )
+      padded_name.append( longest_name - name_.size(), ' ' );
     first_post = true;
     }
 
@@ -208,11 +214,19 @@ struct File_header
   void set_magic() { std::memcpy( data, magic_string, 4 ); data[4] = 1; }
   bool verify_magic() const
     { return ( std::memcmp( data, magic_string, 4 ) == 0 ); }
-  bool verify_prefix( const int size ) const	// detect truncated header
+
+  bool verify_prefix( const int sz ) const	// detect (truncated) header
     {
-    for( int i = 0; i < size && i < 4; ++i )
+    for( int i = 0; i < sz && i < 4; ++i )
       if( data[i] != magic_string[i] ) return false;
-    return ( size > 0 );
+    return ( sz > 0 );
+    }
+  bool verify_corrupt() const			// detect corrupt header
+    {
+    int matches = 0;
+    for( int i = 0; i < 4; ++i )
+      if( data[i] == magic_string[i] ) ++matches;
+    return ( matches > 1 && matches < 4 );
     }
 
   uint8_t version() const { return data[4]; }
@@ -292,6 +306,7 @@ struct Error
 
 const char * const bad_magic_msg = "Bad magic number (file not in lzip format).";
 const char * const bad_dict_msg = "Invalid dictionary size in member header.";
+const char * const corrupt_mm_msg = "Corrupt header in multimember file.";
 const char * const trailing_msg = "Trailing data not allowed.";
 
 // defined in decoder.cc
@@ -300,13 +315,13 @@ int writeblock( const int fd, const uint8_t * const buf, const int size );
 
 // defined in list.cc
 int list_files( const std::vector< std::string > & filenames,
-                const bool ignore_trailing );
+                const bool ignore_trailing, const bool loose_trailing );
 
 // defined in main.cc
-extern int verbosity;
 struct stat;
 const char * bad_version( const unsigned version );
 const char * format_ds( const unsigned dictionary_size );
+void show_header( const unsigned dictionary_size );
 int open_instream( const char * const name, struct stat * const in_statsp,
                    const bool no_ofile, const bool reg_only = false );
 void show_error( const char * const msg, const int errcode = 0,
@@ -315,7 +330,12 @@ void show_file_error( const char * const filename, const char * const msg,
                       const int errcode = 0 );
 void internal_error( const char * const msg );
 class Matchfinder_base;
-void show_progress( const unsigned long long partial_size = 0,
-                    const Matchfinder_base * const m = 0,
-                    const Pretty_print * const p = 0,
-                    const unsigned long long cfile_size = 0 );
+void show_cprogress( const unsigned long long cfile_size = 0,
+                     const unsigned long long partial_size = 0,
+                     const Matchfinder_base * const m = 0,
+                     const Pretty_print * const p = 0 );
+class Range_decoder;
+void show_dprogress( const unsigned long long cfile_size = 0,
+                     const unsigned long long partial_size = 0,
+                     const Range_decoder * const d = 0,
+                     const Pretty_print * const p = 0 );

@@ -11,11 +11,12 @@ File: lzip.info,  Node: Top,  Next: Introduction,  Up: (dir)
 Lzip Manual
 ***********
 
-This manual is for Lzip (version 1.19, 13 April 2017).
+This manual is for Lzip (version 1.20, 11 February 2018).
 
 * Menu:
 
 * Introduction::           Purpose and features of lzip
+* Output::                 Meaning of lzip's output
 * Invoking lzip::          Command line interface
 * Quality assurance::      Design, development and testing of lzip
 * File format::            Detailed format of the compressed file
@@ -28,13 +29,13 @@ This manual is for Lzip (version 1.19, 13 April 2017).
 * Concept index::          Index of concepts
 
 
-   Copyright (C) 2008-2017 Antonio Diaz Diaz.
+   Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
    This manual is free documentation: you have unlimited permission to
 copy, distribute and modify it.
 
 
-File: lzip.info,  Node: Introduction,  Next: Invoking lzip,  Prev: Top,  Up: Top
+File: lzip.info,  Node: Introduction,  Next: Output,  Prev: Top,  Up: Top
 
 1 Introduction
 **************
@@ -50,7 +51,7 @@ archiving, taking into account both data integrity and decoder
 availability:
 
    * The lzip format provides very safe integrity checking and some data
-     recovery means. The lziprecover program can repair bit-flip errors
+     recovery means. The lziprecover program can repair bit flip errors
      (one of the most common forms of data corruption) in lzip files,
      and provides data recovery capabilities, including error-checked
      merging of damaged copies of a file.  *Note Data safety:
@@ -124,7 +125,7 @@ incomprehensible and therefore pointless.
 
    Lzip will correctly decompress a file which is the concatenation of
 two or more compressed files. The result is the concatenation of the
-corresponding uncompressed files. Integrity testing of concatenated
+corresponding decompressed files. Integrity testing of concatenated
 compressed files is also supported.
 
    Lzip can produce multimember files, and lziprecover can safely
@@ -137,14 +138,58 @@ multivolume compressed tar archives.
 automatically creating multimember output. The members so created are
 large, about 2 PiB each.
 
+
+File: lzip.info,  Node: Output,  Next: Invoking lzip,  Prev: Introduction,  Up: Top
+
+2 Meaning of lzip's output
+**************************
+
+The output of lzip looks like this:
+
+     lzip -v foo
+       foo:  6.676:1, 14.98% ratio, 85.02% saved, 450560 in, 67493 out.
+
+     lzip -tvv foo.lz
+       foo.lz:  6.676:1, 14.98% ratio, 85.02% saved.  ok
+
+   The meaning of each field is as follows:
+
+'N:1'
+     The compression ratio (uncompressed_size / compressed_size), shown
+     as N to 1.
+
+'ratio'
+     The inverse compression ratio
+     (compressed_size / uncompressed_size), shown as a percentage. A
+     decimal ratio is easily obtained by moving the decimal point two
+     places to the left; 14.98% = 0.1498.
+
+'saved'
+     The space saved by compression (1 - ratio), shown as a percentage.
+
+'in'
+     The size of the uncompressed data. When decompressing or testing,
+     it is shown as 'decompressed'. Note that lzip always prints the
+     uncompressed size before the compressed size when compressing,
+     decompressing, testing or listing.
+
+'out'
+     The size of the compressed data. When decompressing or testing, it
+     is shown as 'compressed'.
+
+
+   When decompressing or testing at verbosity level 4 (-vvvv), the
+dictionary size used to compress the file and the CRC32 of the
+uncompressed data are also shown.
+
    LANGUAGE NOTE: Uncompressed = not compressed = plain data; it may
 never have been compressed. Decompressed is used to refer to data which
 have undergone the process of decompression.
 
 
-File: lzip.info,  Node: Invoking lzip,  Next: Quality assurance,  Prev: Introduction,  Up: Top
+File: lzip.info,  Node: Invoking lzip,  Next: Quality assurance,  Prev: Output,  Up: Top
 
-2 Invoking lzip
+3 Invoking lzip
 ***************
 
 The format for running lzip is:
@@ -155,7 +200,7 @@ The format for running lzip is:
 other FILES and is read just once, the first time it appears in the
 command line.
 
-   Lzip supports the following options:
+   lzip supports the following options:
 
 '-h'
 '--help'
@@ -174,9 +219,10 @@ command line.
 
 '-b BYTES'
 '--member-size=BYTES'
-     Set the member size limit to BYTES. A small member size may
-     degrade compression ratio, so use it only when needed. Valid values
-     range from 100 kB to 2 PiB. Defaults to 2 PiB.
+     When compressing, set the member size limit to BYTES. A small
+     member size may degrade compression ratio, so use it only when
+     needed.  Valid values range from 100 kB to 2 PiB. Defaults to
+     2 PiB.
 
 '-c'
 '--stdout'
@@ -184,15 +230,15 @@ command line.
      unchanged.  If compressing several files, each file is compressed
      independently.  This option is needed when reading from a named
      pipe (fifo) or from a device. Use it also to recover as much of
-     the uncompressed data as possible when decompressing a corrupt
+     the decompressed data as possible when decompressing a corrupt
      file.
 
 '-d'
 '--decompress'
-     Decompress the specified file(s). If a file does not exist or
-     can't be opened, lzip continues decompressing the rest of the
-     files. If a file fails to decompress, lzip exits immediately
-     without decompressing the rest of the files.
+     Decompress the specified files. If a file does not exist or can't
+     be opened, lzip continues decompressing the rest of the files. If
+     a file fails to decompress, or is a terminal, lzip exits
+     immediately without decompressing the rest of the files.
 
 '-f'
 '--force'
@@ -200,8 +246,8 @@ command line.
 
 '-F'
 '--recompress'
-     Force re-compression of files whose name already has the '.lz' or
-     '.tlz' suffix.
+     When compressing, force re-compression of files whose name already
+     has the '.lz' or '.tlz' suffix.
 
 '-k'
 '--keep'
@@ -211,7 +257,7 @@ command line.
 '-l'
 '--list'
      Print the uncompressed size, compressed size and percentage saved
-     of the specified file(s). Trailing data are ignored. The values
+     of the specified files. Trailing data are ignored. The values
      produced are correct even for multimember files. If more than one
      file is given, a final line containing the cumulative sizes is
      printed. With '-v', the dictionary size, the number of members in
@@ -225,19 +271,20 @@ command line.
 
 '-m BYTES'
 '--match-length=BYTES'
-     Set the match length limit in bytes. After a match this long is
-     found, the search is finished. Valid values range from 5 to 273.
-     Larger values usually give better compression ratios but longer
-     compression times.
+     When compressing, set the match length limit in bytes. After a
+     match this long is found, the search is finished. Valid values
+     range from 5 to 273. Larger values usually give better compression
+     ratios but longer compression times.
 
 '-o FILE'
 '--output=FILE'
      When reading from standard input and '--stdout' has not been
      specified, use 'FILE' as the virtual name of the uncompressed
-     file. This produces a file named 'FILE' when decompressing, a file
-     named 'FILE.lz' when compressing, and several files named
-     'FILE00001.lz', 'FILE00002.lz', etc, when compressing and
-     splitting the output in volumes.
+     file. This produces a file named 'FILE' when decompressing, or a
+     file named 'FILE.lz' when compressing. A second '.lz' extension is
+     not added if 'FILE' already ends in '.lz' or '.tlz'. When
+     compressing and splitting the output in volumes, several files
+     named 'FILE00001.lz', 'FILE00002.lz', etc, are created.
 
 '-q'
 '--quiet'
@@ -245,13 +292,13 @@ command line.
 
 '-s BYTES'
 '--dictionary-size=BYTES'
-     Set the dictionary size limit in bytes. Lzip will use the smallest
-     possible dictionary size for each file without exceeding this
-     limit.  Valid values range from 4 KiB to 512 MiB. Values 12 to 29
-     are interpreted as powers of two, meaning 2^12 to 2^29 bytes. Note
-     that dictionary sizes are quantized. If the specified size does
-     not match one of the valid sizes, it will be rounded upwards by
-     adding up to (BYTES / 8) to it.
+     When compressing, set the dictionary size limit in bytes. Lzip
+     will use the smallest possible dictionary size for each file
+     without exceeding this limit. Valid values range from 4 KiB to
+     512 MiB. Values 12 to 29 are interpreted as powers of two, meaning
+     2^12 to 2^29 bytes. Note that dictionary sizes are quantized. If
+     the specified size does not match one of the valid sizes, it will
+     be rounded upwards by adding up to (BYTES / 8) to it.
 
      For maximum compression you should use a dictionary size limit as
      large as possible, but keep in mind that the decompression memory
@@ -260,38 +307,40 @@ command line.
 
 '-S BYTES'
 '--volume-size=BYTES'
-     Split the compressed output into several volume files with names
-     'original_name00001.lz', 'original_name00002.lz', etc, and set the
-     volume size limit to BYTES. Each volume is a complete, maybe
-     multimember, lzip file. A small volume size may degrade compression
-     ratio, so use it only when needed. Valid values range from 100 kB
-     to 4 EiB.
+     When compressing, split the compressed output into several volume
+     files with names 'original_name00001.lz', 'original_name00002.lz',
+     etc, and set the volume size limit to BYTES. Input files are kept
+     unchanged. Each volume is a complete, maybe multimember, lzip
+     file. A small volume size may degrade compression ratio, so use it
+     only when needed. Valid values range from 100 kB to 4 EiB.
 
 '-t'
 '--test'
-     Check integrity of the specified file(s), but don't decompress
-     them.  This really performs a trial decompression and throws away
-     the result.  Use it together with '-v' to see information about
-     the file(s). If a file fails the test, does not exist, can't be
-     opened, or is a terminal, lzip continues checking the rest of the
-     files.
+     Check integrity of the specified files, but don't decompress them.
+     This really performs a trial decompression and throws away the
+     result. Use it together with '-v' to see information about the
+     files. If a file fails the test, does not exist, can't be opened,
+     or is a terminal, lzip continues checking the rest of the files. A
+     final diagnostic is shown at verbosity level 1 or higher if any
+     file fails the test when testing multiple files.
 
 '-v'
 '--verbose'
      Verbose mode.
-     When compressing, show the compression ratio for each file
-     processed. A second '-v' shows the progress of compression.
+     When compressing, show the compression ratio and size for each file
+     processed.
      When decompressing or testing, further -v's (up to 4) increase the
      verbosity level, showing status, compression ratio, dictionary
      size, trailer contents (CRC, data size, member size), and up to 6
      bytes of trailing data (if any) both in hexadecimal and as a
      string of printable ASCII characters.
+     Two or more '-v' options show the progress of (de)compression.
 
 '-0 .. -9'
      Set the compression parameters (dictionary size and match length
      limit) as shown in the table below. The default compression level
      is '-6'.  Note that '-9' can be much slower than '-0'. These
-     options have no effect when decompressing.
+     options have no effect when decompressing, testing or listing.
 
      The bidimensional parameter space of LZMA can't be mapped to a
      linear scale optimal for all files. If your files are large, very
@@ -313,6 +362,13 @@ command line.
 '--fast'
 '--best'
      Aliases for GNU gzip compatibility.
+
+'--loose-trailing'
+     When decompressing, testing or listing, allow trailing data whose
+     first bytes are so similar to the magic bytes of a lzip header
+     that they can be confused with a corrupt header. Use this option
+     if a file triggers a "corrupt header" error and the cause is not
+     indeed a corrupt header.
 
 
    Numbers given as arguments to options may be followed by a multiplier
@@ -339,7 +395,7 @@ caused lzip to panic.
 
 File: lzip.info,  Node: Quality assurance,  Next: File format,  Prev: Invoking lzip,  Up: Top
 
-3 Design, development and testing of lzip
+4 Design, development and testing of lzip
 *****************************************
 
 There are two ways of constructing a software design: One way is to make
@@ -354,7 +410,7 @@ describes the lessons learned from previous compressors (gzip and
 bzip2), and their application to the design of lzip.
 
 
-3.1 Format design
+4.1 Format design
 =================
 
 When gzip was designed in 1992, computers and operating systems were
@@ -372,7 +428,7 @@ one of gzip.
 
    Probably the worst defect of the gzip format from the point of view
 of data safety is the variable size of its header. If the byte at
-offset 3 (flags) of a gzip member gets corrupted, it may become very
+offset 3 (flags) of a gzip member gets corrupted, it may become
 difficult to recover the data, even if the compressed blocks are
 intact, because it can't be known with certainty where the compressed
 blocks begin.
@@ -394,8 +450,8 @@ error detection. Any distance larger than the dictionary size acts as a
 forbidden symbol, allowing the decompressor to detect the approximate
 position of errors, and leaving very little work for the check sequence
 (CRC and data sizes) in the detection of errors. Lzip is usually able
-to detect all posible bit-flips in the compressed data without
-resorting to the check sequence. It would be very difficult to write an
+to detect all posible bit flips in the compressed data without
+resorting to the check sequence. It would be difficult to write an
 automatic recovery tool like lziprecover for the gzip format. And, as
 far as I know, it has never been written.
 
@@ -404,15 +460,14 @@ decompressed data because it provides more accurate error detection than
 CRC64 up to a compressed size of about 16 GiB, a size larger than that
 of most files. In the case of lzip, the additional detection capability
 of the decompressor reduces the probability of undetected errors more
-than a million times, making CRC32 more accurate than CRC64 up to about
-20 PiB of compressed size.
+than a million times beyond what the CRC32 alone provides.
 
    The lzip format is designed for long-term archiving. Therefore it
 excludes any unneeded features that may interfere with the future
-extraction of the uncompressed data.
+extraction of the decompressed data.
 
 
-3.1.1 Gzip format (mis)features not present in lzip
+4.1.1 Gzip format (mis)features not present in lzip
 ---------------------------------------------------
 
 'Multiple algorithms'
@@ -433,16 +488,22 @@ extraction of the uncompressed data.
      compressed blocks.
 
 'Optional CRC for the header'
-     Using an optional checksum for the header is not only a bad idea,
-     it is an error; it may prevent the extraction of perfectly good
-     data. For example, if the checksum is used and the bit enabling it
-     is reset by a bit-flip, the header will appear to be intact (in
-     spite of being corrupt) while the compressed blocks will appear to
-     be totally unrecoverable (in spite of being intact). Very
-     misleading indeed.
+     Using an optional CRC for the header is not only a bad idea, it is
+     an error; it circumvents the HD of the CRC and may prevent the
+     extraction of perfectly good data. For example, if the CRC is used
+     and the bit enabling it is reset by a bit flip, the header will
+     appear to be intact (in spite of being corrupt) while the
+     compressed blocks will appear to be totally unrecoverable (in
+     spite of being intact). Very misleading indeed.
+
+'Metadata'
+     The gzip format stores some metadata, like the modification time
+     of the original file or the operating system on which compression
+     took place.  This complicates reproducible compression (obtaining
+     identical compressed output from identical input).
 
 
-3.1.2 Lzip format improvements over gzip and bzip2
+4.1.2 Lzip format improvements over gzip and bzip2
 --------------------------------------------------
 
 '64-bit size field'
@@ -470,7 +531,7 @@ extraction of the uncompressed data.
      total uncompressed size.
 
 
-3.2 Quality of implementation
+4.2 Quality of implementation
 =============================
 
 'Accurate and robust error detection'
@@ -516,7 +577,7 @@ extraction of the uncompressed data.
 
 File: lzip.info,  Node: File format,  Next: Algorithm,  Prev: Quality assurance,  Up: Top
 
-4 File format
+5 File format
 *************
 
 Perfection is reached, not when there is no longer anything to add, but
@@ -587,7 +648,7 @@ additional information before, between, or after them.
 
 File: lzip.info,  Node: Algorithm,  Next: Stream format,  Prev: File format,  Up: Top
 
-5 Algorithm
+6 Algorithm
 ***********
 
 In spite of its name (Lempel-Ziv-Markov chain-Algorithm), LZMA is not a
@@ -653,7 +714,7 @@ LZMA), and Julian Seward (for bzip2's CLI).
 
 File: lzip.info,  Node: Stream format,  Next: Trailing data,  Prev: Algorithm,  Up: Top
 
-6 Format of the LZMA stream in lzip files
+7 Format of the LZMA stream in lzip files
 *****************************************
 
 The LZMA algorithm has three parameters, called "special LZMA
@@ -693,7 +754,7 @@ the lzip download directory. The source code of lzd is included in
 appendix A.  *Note Reference source code::.
 
 
-6.1 What is coded
+7.1 What is coded
 =================
 
 The LZMA stream includes literals, matches and repeated matches (matches
@@ -768,7 +829,7 @@ slot + direct_bits                   distances from 4 to 127
 slot + (direct_bits - 4) + 4 bits    distances from 128 to 2^32 - 1
 
 
-6.2 The coding contexts
+7.2 The coding contexts
 =======================
 
 These contexts ('Bit_model' in the source), are integers or arrays of
@@ -858,7 +919,7 @@ difference is found, the rest of the byte is decoded using the normal
 bit tree context. (See 'decode_matched' in the source).
 
 
-6.3 The range decoder
+7.3 The range decoder
 =====================
 
 The LZMA stream is consumed one byte at a time by the range decoder.
@@ -878,7 +939,7 @@ range decoder. This is done by shifting 5 bytes in the initialization of
 source).
 
 
-6.4 Decoding the LZMA stream
+7.4 Decoding the LZMA stream
 ============================
 
 After decoding the member header and obtaining the dictionary size, the
@@ -891,7 +952,7 @@ Stream" marker is decoded.
 
 File: lzip.info,  Node: Trailing data,  Next: Examples,  Prev: Stream format,  Up: Top
 
-7 Extra data appended to the file
+8 Extra data appended to the file
 *********************************
 
 Sometimes extra data are found appended to a lzip file after the last
@@ -903,10 +964,11 @@ member. Such trailing data may be:
 
    * Useful data added by the user; a cryptographically secure hash, a
      description of file contents, etc. It is safe to append any amount
-     of text to a lzip file as long as the text does not begin with the
-     string "LZIP", and does not contain any zero bytes (null
-     characters). Nonzero bytes and zero bytes can't be safely mixed in
-     trailing data.
+     of text to a lzip file as long as none of the first four bytes of
+     the text match the corresponding byte in the string "LZIP", and
+     the text does not contain any zero bytes (null characters).
+     Nonzero bytes and zero bytes can't be safely mixed in trailing
+     data.
 
    * Garbage added by some not totally successful copy operation.
 
@@ -914,12 +976,17 @@ member. Such trailing data may be:
      and hash value (for a chosen hash) coincide with those of another
      file.
 
-   * In very rare cases, trailing data could be the corrupt header of
-     another member. In multimember or concatenated files the
-     probability of corruption happening in the magic bytes is 5 times
-     smaller than the probability of getting a false positive caused by
-     the corruption of the integrity information itself. Therefore it
-     can be considered to be below the noise level.
+   * In rare cases, trailing data could be the corrupt header of another
+     member. In multimember or concatenated files the probability of
+     corruption happening in the magic bytes is 5 times smaller than the
+     probability of getting a false positive caused by the corruption
+     of the integrity information itself. Therefore it can be
+     considered to be below the noise level. Additionally, the test
+     used by lzip to discriminate trailing data from a corrupt header
+     has a Hamming distance (HD) of 3, and the 3 bit flips must happen
+     in different magic bytes for the test to fail. In any case, the
+     option '--trailing-error' guarantees that any corrupt header will
+     be detected.
 
    Trailing data are in no way part of the lzip file format, but tools
 reading lzip files are expected to behave as correctly and usefully as
@@ -933,7 +1000,7 @@ cases where a file containing trailing data must be rejected, the option
 
 File: lzip.info,  Node: Examples,  Next: Problems,  Prev: Trailing data,  Up: Top
 
-8 A small tutorial with examples
+9 A small tutorial with examples
 ********************************
 
 WARNING! Even if lzip is bug-free, other causes may result in a corrupt
@@ -1015,8 +1082,8 @@ file with a member size of 32 MiB.
 
 File: lzip.info,  Node: Problems,  Next: Reference source code,  Prev: Examples,  Up: Top
 
-9 Reporting bugs
-****************
+10 Reporting bugs
+*****************
 
 There are probably bugs in lzip. There are certainly errors and
 omissions in this manual. If you report them, they will get fixed. If
@@ -1034,7 +1101,7 @@ Appendix A Reference source code
 ********************************
 
 /*  Lzd - Educational decompressor for the lzip format
-    Copyright (C) 2013-2017 Antonio Diaz Diaz.
+    Copyright (C) 2013-2018 Antonio Diaz Diaz.
 
     This program is free software. Redistribution and use in source and
     binary forms, with or without modification, are permitted provided
@@ -1350,9 +1417,9 @@ bool LZ_decoder::decode_member()		// Returns false if error
   Bit_model bm_align[dis_align_size];
   Len_model match_len_model;
   Len_model rep_len_model;
-  unsigned rep0 = 0;			// rep[0-3] latest four distances
-  unsigned rep1 = 0;			// used for efficient coding of
-  unsigned rep2 = 0;			// repeated distances
+  unsigned rep0 = 0;		// rep[0-3] latest four distances
+  unsigned rep1 = 0;		// used for efficient coding of
+  unsigned rep2 = 0;		// repeated distances
   unsigned rep3 = 0;
   State state;
 
@@ -1447,7 +1514,7 @@ int main( const int argc, const char * const argv[] )
                  "It is not safe to use lzd for any real work.\n"
                  "\nUsage: %s < file.lz > file\n", argv[0] );
     std::printf( "Lzd decompresses from standard input to standard output.\n"
-                 "\nCopyright (C) 2017 Antonio Diaz Diaz.\n"
+                 "\nCopyright (C) 2018 Antonio Diaz Diaz.\n"
                  "This is free software: you are free to change and redistribute it.\n"
                  "There is NO WARRANTY, to the extent permitted by law.\n"
                  "Report bugs to lzip-bug@nongnu.org\n"
@@ -1492,7 +1559,7 @@ int main( const int argc, const char * const argv[] )
     }
 
   if( std::fclose( stdout ) != 0 )
-    { std::fprintf( stderr, "Can't close stdout: %s\n", std::strerror( errno ) );
+    { std::fprintf( stderr, "Error closing stdout: %s\n", std::strerror( errno ) );
       return 1; }
   return 0;
   }
@@ -1515,6 +1582,7 @@ Concept index
 * introduction:                          Introduction.          (line 6)
 * invoking:                              Invoking lzip.         (line 6)
 * options:                               Invoking lzip.         (line 6)
+* output:                                Output.                (line 6)
 * quality assurance:                     Quality assurance.     (line 6)
 * reference source code:                 Reference source code. (line 6)
 * trailing data:                         Trailing data.         (line 6)
@@ -1525,19 +1593,20 @@ Concept index
 
 Tag Table:
 Node: Top208
-Node: Introduction1147
-Node: Invoking lzip6367
-Ref: --trailing-error6931
-Node: Quality assurance13849
-Node: File format22003
-Node: Algorithm24407
-Node: Stream format27233
-Node: Trailing data37973
-Node: Examples39874
-Ref: concat-example41047
-Node: Problems42085
-Node: Reference source code42615
-Node: Concept index56932
+Node: Introduction1202
+Node: Output6228
+Node: Invoking lzip7740
+Ref: --trailing-error8298
+Node: Quality assurance15946
+Node: File format24354
+Node: Algorithm26758
+Node: Stream format29584
+Node: Trailing data40324
+Node: Examples42600
+Ref: concat-example43773
+Node: Problems44811
+Node: Reference source code45343
+Node: Concept index59659
 
 End Tag Table
 

@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2017 Antonio Diaz Diaz.
+    Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -181,14 +181,15 @@ protected:
   int stream_pos;		// first byte not yet read from file
   int pos_limit;		// when reached, a new block must be read
   int key4_mask;
+  const int num_prev_positions23;
   int num_prev_positions;	// size of prev_positions
   int pos_array_size;
   const int infd;		// input file descriptor
   bool at_stream_end;		// stream_pos shows real end of file
 
-  Matchfinder_base( const int before, const int dict_size,
-                    const int after_size, const int dict_factor,
-                    const int num_prev_positions23,
+  Matchfinder_base( const int before_size_,
+                    const int dict_size, const int after_size,
+                    const int dict_factor, const int num_prev_positions23_,
                     const int pos_array_factor, const int ifd );
 
   ~Matchfinder_base()
@@ -250,7 +251,7 @@ class Range_encoder
   void operator=( const Range_encoder & );	// declared as private
 
 public:
-  void reset()
+  void reset( const unsigned dictionary_size )
     {
     low = 0;
     partial_member_pos = 0;
@@ -258,18 +259,17 @@ public:
     range = 0xFFFFFFFFU;
     ff_count = 0;
     cache = 0;
+    header.dictionary_size( dictionary_size );
     for( int i = 0; i < File_header::size; ++i )
       put_byte( header.data[i] );
     }
 
   Range_encoder( const unsigned dictionary_size, const int ofd )
     :
-    buffer( new uint8_t[buffer_size] ),
-    outfd( ofd )
+    buffer( new uint8_t[buffer_size] ), outfd( ofd )
     {
     header.set_magic();
-    header.dictionary_size( dictionary_size );
-    reset();
+    reset( dictionary_size );
     }
 
   ~Range_encoder() { delete[] buffer; }
@@ -417,13 +417,13 @@ protected:
   Len_model rep_len_model;
   Range_encoder renc;
 
-  LZ_encoder_base( const int before, const int dict_size,
+  LZ_encoder_base( const int before_size, const int dict_size,
                    const int after_size, const int dict_factor,
                    const int num_prev_positions23,
                    const int pos_array_factor,
                    const int ifd, const int outfd )
     :
-    Matchfinder_base( before, dict_size, after_size, dict_factor,
+    Matchfinder_base( before_size, dict_size, after_size, dict_factor,
                       num_prev_positions23, pos_array_factor, ifd ),
     crc_( 0xFFFFFFFFU ),
     renc( dictionary_size, outfd )

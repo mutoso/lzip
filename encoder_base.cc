@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2017 Antonio Diaz Diaz.
+    Copyright (C) 2008-2018 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -68,16 +68,17 @@ void Matchfinder_base::normalize_pos()
   }
 
 
-Matchfinder_base::Matchfinder_base( const int before, const int dict_size,
-                    const int after_size, const int dict_factor,
-                    const int num_prev_positions23,
+Matchfinder_base::Matchfinder_base( const int before_size_,
+                    const int dict_size, const int after_size,
+                    const int dict_factor, const int num_prev_positions23_,
                     const int pos_array_factor, const int ifd )
   :
   partial_data_pos( 0 ),
-  before_size( before ),
+  before_size( before_size_ ),
   pos( 0 ),
   cyclic_pos( 0 ),
   stream_pos( 0 ),
+  num_prev_positions23( num_prev_positions23_ ),
   infd( ifd ),
   at_stream_end( false )
   {
@@ -105,8 +106,8 @@ Matchfinder_base::Matchfinder_base( const int before, const int dict_size,
     size >>= 1;
   key4_mask = size - 1;
   size += num_prev_positions23;
-
   num_prev_positions = size;
+
   pos_array_size = pos_array_factor * ( dictionary_size + 1 );
   size += pos_array_size;
   if( size * sizeof prev_positions[0] <= size ) prev_positions = 0;
@@ -125,8 +126,19 @@ void Matchfinder_base::reset()
   stream_pos -= pos;
   pos = 0;
   cyclic_pos = 0;
-  for( int i = 0; i < num_prev_positions; ++i ) prev_positions[i] = 0;
   read_block();
+  if( at_stream_end && stream_pos < dictionary_size )
+    {
+    dictionary_size = std::max( (int)min_dictionary_size, stream_pos );
+    int size = 1 << std::max( 16, real_bits( dictionary_size - 1 ) - 2 );
+    if( dictionary_size > 1 << 26 )		// 64 MiB
+      size >>= 1;
+    key4_mask = size - 1;
+    size += num_prev_positions23;
+    num_prev_positions = size;
+    pos_array = prev_positions + num_prev_positions;
+    }
+  for( int i = 0; i < num_prev_positions; ++i ) prev_positions[i] = 0;
   }
 
 
@@ -138,7 +150,7 @@ void Range_encoder::flush_data()
       throw Error( "Write error" );
     partial_member_pos += pos;
     pos = 0;
-    show_progress();
+    show_cprogress();
     }
   }
 
@@ -177,5 +189,5 @@ void LZ_encoder_base::reset()
   bm_align[0].reset( dis_align_size );
   match_len_model.reset();
   rep_len_model.reset();
-  renc.reset();
+  renc.reset( dictionary_size );
   }
