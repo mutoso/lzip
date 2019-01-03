@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2018 Antonio Diaz Diaz.
+    Copyright (C) 2008-2019 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -479,7 +479,7 @@ int LZ_encoder::sequence_optimizer( const int reps[num_rep_distances],
 bool LZ_encoder::encode_member( const unsigned long long member_size )
   {
   const unsigned long long member_size_limit =
-    member_size - File_trailer::size - max_marker_size;
+    member_size - Lzip_trailer::size - max_marker_size;
   const bool best = ( match_len_limit > 12 );
   const int dis_price_count = best ? 1 : 512;
   const int align_price_count = best ? 1 : dis_align_size;
@@ -491,7 +491,7 @@ bool LZ_encoder::encode_member( const unsigned long long member_size )
   State state;
   for( int i = 0; i < num_rep_distances; ++i ) reps[i] = 0;
 
-  if( data_position() != 0 || renc.member_position() != File_header::size )
+  if( data_position() != 0 || renc.member_position() != Lzip_header::size )
     return false;				// can be called only once
 
   if( !data_finished() )			// encode first byte

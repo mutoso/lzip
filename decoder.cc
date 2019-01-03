@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2018 Antonio Diaz Diaz.
+    Copyright (C) 2008-2019 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -100,13 +100,13 @@ void LZ_decoder::flush_data()
 
 bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
   {
-  File_trailer trailer;
-  int size = rdec.read_data( trailer.data, File_trailer::size );
+  Lzip_trailer trailer;
+  int size = rdec.read_data( trailer.data, Lzip_trailer::size );
   const unsigned long long data_size = data_position();
   const unsigned long long member_size = rdec.member_position();
   bool error = false;
 
-  if( size < File_trailer::size )
+  if( size < Lzip_trailer::size )
     {
     error = true;
     if( verbosity >= 0 )
@@ -115,7 +115,7 @@ bool LZ_decoder::verify_trailer( const Pretty_print & pp ) const
       std::fprintf( stderr, "Trailer truncated at trailer position %d;"
                             " some checks may fail.\n", size );
       }
-    while( size < File_trailer::size ) trailer.data[size++] = 0;
+    while( size < Lzip_trailer::size ) trailer.data[size++] = 0;
     }
 
   const unsigned td_crc = trailer.data_crc();
@@ -199,86 +199,86 @@ int LZ_decoder::decode_member( const Pretty_print & pp )
     const int pos_state = data_position() & pos_state_mask;
     if( rdec.decode_bit( bm_match[state()][pos_state] ) == 0 )	// 1st bit
       {
+      // literal byte
       Bit_model * const bm = bm_literal[get_lit_state(peek_prev())];
       if( state.is_char_set_char() )
         put_byte( rdec.decode_tree8( bm ) );
       else
         put_byte( rdec.decode_matched( bm, peek( rep0 ) ) );
+      continue;
       }
-    else					// match or repeated match
+    // match or repeated match
+    int len;
+    if( rdec.decode_bit( bm_rep[state()] ) != 0 )		// 2nd bit
       {
-      int len;
-      if( rdec.decode_bit( bm_rep[state()] ) != 0 )		// 2nd bit
+      if( rdec.decode_bit( bm_rep0[state()] ) == 0 )		// 3rd bit
         {
-        if( rdec.decode_bit( bm_rep0[state()] ) == 0 )		// 3rd bit
-          {
-          if( rdec.decode_bit( bm_len[state()][pos_state] ) == 0 ) // 4th bit
-            { state.set_short_rep(); put_byte( peek( rep0 ) ); continue; }
-          }
+        if( rdec.decode_bit( bm_len[state()][pos_state] ) == 0 ) // 4th bit
+          { state.set_short_rep(); put_byte( peek( rep0 ) ); continue; }
+        }
+      else
+        {
+        unsigned distance;
+        if( rdec.decode_bit( bm_rep1[state()] ) == 0 )		// 4th bit
+          distance = rep1;
         else
           {
-          unsigned distance;
-          if( rdec.decode_bit( bm_rep1[state()] ) == 0 )	// 4th bit
-            distance = rep1;
+          if( rdec.decode_bit( bm_rep2[state()] ) == 0 )	// 5th bit
+            distance = rep2;
           else
-            {
-            if( rdec.decode_bit( bm_rep2[state()] ) == 0 )	// 5th bit
-              distance = rep2;
-            else
-              { distance = rep3; rep3 = rep2; }
-            rep2 = rep1;
-            }
-          rep1 = rep0;
-          rep0 = distance;
+            { distance = rep3; rep3 = rep2; }
+          rep2 = rep1;
           }
-        state.set_rep();
-        len = min_match_len + rdec.decode_len( rep_len_model, pos_state );
+        rep1 = rep0;
+        rep0 = distance;
         }
-      else					// match
-        {
-        len = min_match_len + rdec.decode_len( match_len_model, pos_state );
-        unsigned distance = rdec.decode_tree6( bm_dis_slot[get_len_state(len)] );
-        if( distance >= start_dis_model )
-          {
-          const unsigned dis_slot = distance;
-          const int direct_bits = ( dis_slot >> 1 ) - 1;
-          distance = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
-          if( dis_slot < end_dis_model )
-            distance += rdec.decode_tree_reversed(
-                        bm_dis + ( distance - dis_slot ), direct_bits );
-          else
-            {
-            distance +=
-              rdec.decode( direct_bits - dis_align_bits ) << dis_align_bits;
-            distance += rdec.decode_tree_reversed4( bm_align );
-            if( distance == 0xFFFFFFFFU )		// marker found
-              {
-              rdec.normalize();
-              flush_data();
-              if( len == min_match_len )	// End Of Stream marker
-                {
-                if( verify_trailer( pp ) ) return 0; else return 3;
-                }
-              if( len == min_match_len + 1 )	// Sync Flush marker
-                {
-                rdec.load(); continue;
-                }
-              if( verbosity >= 0 )
-                {
-                pp();
-                std::fprintf( stderr, "Unsupported marker code '%d'\n", len );
-                }
-              return 4;
-              }
-            }
-          }
-        rep3 = rep2; rep2 = rep1; rep1 = rep0; rep0 = distance;
-        state.set_match();
-        if( rep0 >= dictionary_size || ( rep0 >= pos && !pos_wrapped ) )
-          { flush_data(); return 1; }
-        }
-      copy_block( rep0, len );
+      state.set_rep();
+      len = min_match_len + rdec.decode_len( rep_len_model, pos_state );
       }
+    else					// match
+      {
+      len = min_match_len + rdec.decode_len( match_len_model, pos_state );
+      unsigned distance = rdec.decode_tree6( bm_dis_slot[get_len_state(len)] );
+      if( distance >= start_dis_model )
+        {
+        const unsigned dis_slot = distance;
+        const int direct_bits = ( dis_slot >> 1 ) - 1;
+        distance = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
+        if( dis_slot < end_dis_model )
+          distance += rdec.decode_tree_reversed(
+                      bm_dis + ( distance - dis_slot ), direct_bits );
+        else
+          {
+          distance +=
+            rdec.decode( direct_bits - dis_align_bits ) << dis_align_bits;
+          distance += rdec.decode_tree_reversed4( bm_align );
+          if( distance == 0xFFFFFFFFU )		// marker found
+            {
+            rdec.normalize();
+            flush_data();
+            if( len == min_match_len )		// End Of Stream marker
+              {
+              if( verify_trailer( pp ) ) return 0; else return 3;
+              }
+            if( len == min_match_len + 1 )	// Sync Flush marker
+              {
+              rdec.load(); continue;
+              }
+            if( verbosity >= 0 )
+              {
+              pp();
+              std::fprintf( stderr, "Unsupported marker code '%d'\n", len );
+              }
+            return 4;
+            }
+          }
+        }
+      rep3 = rep2; rep2 = rep1; rep1 = rep0; rep0 = distance;
+      state.set_match();
+      if( rep0 >= dictionary_size || ( rep0 >= pos && !pos_wrapped ) )
+        { flush_data(); return 1; }
+      }
+    copy_block( rep0, len );
     }
   flush_data();
   return 2;

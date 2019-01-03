@@ -6,8 +6,8 @@
 @finalout
 @c %**end of header
 
-@set UPDATED 11 February 2018
-@set VERSION 1.20
+@set UPDATED 3 January 2019
+@set VERSION 1.21
 
 @dircategory Data Compression
 @direntry
@@ -50,7 +50,7 @@ This manual is for Lzip (version @value{VERSION}, @value{UPDATED}).
 @end menu
 
 @sp 1
-Copyright @copyright{} 2008-2018 Antonio Diaz Diaz.
+Copyright @copyright{} 2008-2019 Antonio Diaz Diaz.
 
 This manual is free documentation: you have unlimited permission
 to copy, distribute and modify it.
@@ -60,15 +60,15 @@ to copy, distribute and modify it.
 @chapter Introduction
 @cindex introduction
 
-Lzip is a lossless data compressor with a user interface similar to the
-one of gzip or bzip2. Lzip can compress about as fast as gzip
-@w{(lzip -0)}, or compress most files more than bzip2 @w{(lzip -9)}.
-Decompression speed is intermediate between gzip and bzip2. Lzip is
-better than gzip and bzip2 from a data recovery perspective.
+@uref{http://www.nongnu.org/lzip/lzip.html,,Lzip} is a lossless data
+compressor with a user interface similar to the one of gzip or bzip2. Lzip
+can compress about as fast as gzip @w{(lzip -0)} or compress most files more
+than bzip2 @w{(lzip -9)}. Decompression speed is intermediate between gzip
+and bzip2. Lzip is better than gzip and bzip2 from a data recovery
+perspective.
 
-The lzip file format is designed for data sharing and long-term
-archiving, taking into account both data integrity and decoder
-availability:
+The lzip file format is designed for data sharing and long-term archiving,
+taking into account both data integrity and decoder availability:
 
 @itemize @bullet
 @item
@@ -113,13 +113,12 @@ uncompressed data.
 
 Lzip uses the same well-defined exit status values used by bzip2, which
 makes it safer than compressors returning ambiguous warning values (like
-gzip) when it is used as a back end for other programs like tar or
-zutils.
+gzip) when it is used as a back end for other programs like tar or zutils.
 
-Lzip will automatically use the smallest possible dictionary size for
-each file without exceeding the given limit. Keep in mind that the
-decompression memory requirement is affected at compression time by the
-choice of dictionary size limit.
+Lzip will automatically use for each file the largest dictionary size
+that does not exceed neither the file size nor the limit given. Keep in
+mind that the decompression memory requirement is affected at
+compression time by the choice of dictionary size limit.
 
 The amount of memory required for compression is about 1 or 2 times the
 dictionary size limit (1 if input file size is less than dictionary size
@@ -141,7 +140,7 @@ file from that of the compressed file as follows:
 
 (De)compressing a file is much like copying or moving it; therefore lzip
 preserves the access and modification dates, permissions, and, when
-possible, ownership of the file just as "cp -p" does. (If the user ID or
+possible, ownership of the file just as @samp{cp -p} does. (If the user ID or
 the group ID can't be duplicated, the file permission bits S_ISUID and
 S_ISGID are cleared).
 
@@ -247,6 +246,7 @@ Print an informative help message describing the options and exit.
 @item -V
 @itemx --version
 Print the version number of lzip on the standard output and exit.
+This version number should be included in all bug reports.
 
 @anchor{--trailing-error}
 @item -a
@@ -328,12 +328,13 @@ Quiet operation. Suppress all messages.
 @item -s @var{bytes}
 @itemx --dictionary-size=@var{bytes}
 When compressing, set the dictionary size limit in bytes. Lzip will use
-the smallest possible dictionary size for each file without exceeding
-this limit. Valid values range from @w{4 KiB} to @w{512 MiB}. Values 12
-to 29 are interpreted as powers of two, meaning 2^12 to 2^29 bytes. Note
-that dictionary sizes are quantized. If the specified size does not
-match one of the valid sizes, it will be rounded upwards by adding up to
-@w{(@var{bytes} / 8)} to it.
+for each file the largest dictionary size that does not exceed neither
+the file size nor this limit. Valid values range from @w{4 KiB} to
+@w{512 MiB}. Values 12 to 29 are interpreted as powers of two, meaning
+2^12 to 2^29 bytes. Dictionary sizes are quantized so that they can be
+coded in just one byte (@pxref{coded-dict-size}). If the specified size
+does not match one of the valid sizes, it will be rounded upwards by
+adding up to @w{(@var{bytes} / 8)} to it.
 
 For maximum compression you should use a dictionary size limit as large
 as possible, but keep in mind that the decompression memory requirement
@@ -371,18 +372,23 @@ ASCII characters.@*
 Two or more @samp{-v} options show the progress of (de)compression.
 
 @item -0 .. -9
-Set the compression parameters (dictionary size and match length limit)
-as shown in the table below. The default compression level is @samp{-6}.
-Note that @samp{-9} can be much slower than @samp{-0}. These options
-have no effect when decompressing, testing or listing.
+Compression level. Set the compression parameters (dictionary size and
+match length limit) as shown in the table below. The default compression
+level is @samp{-6}, equivalent to @w{@samp{-s8MiB -m36}}. Note that
+@samp{-9} can be much slower than @samp{-0}. These options have no
+effect when decompressing, testing or listing.
 
 The bidimensional parameter space of LZMA can't be mapped to a linear
 scale optimal for all files. If your files are large, very repetitive,
 etc, you may need to use the @samp{--dictionary-size} and
 @samp{--match-length} options directly to achieve optimal performance.
 
-@multitable {Level} {Dictionary size} {Match length limit}
-@item Level @tab Dictionary size @tab Match length limit
+If several compression levels or @samp{-s} or @samp{-m} options are
+given, the last setting is used. For example @w{@samp{-9 -s64MiB}} is
+equivalent to @w{@samp{-s64MiB -m273}}
+
+@multitable {Level} {Dictionary size (-s)} {Match length limit (-m)}
+@item Level @tab Dictionary size (-s) @tab Match length limit (-m)
 @item -0 @tab 64 KiB @tab  16 bytes
 @item -1 @tab  1 MiB @tab   5 bytes
 @item -2 @tab  1.5 MiB @tab   6 bytes
@@ -441,10 +447,10 @@ is to make it so complicated that there are no obvious deficiencies. The
 first method is far more difficult.@*
 --- C.A.R. Hoare
 
-Lzip has been designed, written and tested with great care to be the
-standard general-purpose compressor for unix-like systems. This chapter
-describes the lessons learned from previous compressors (gzip and
-bzip2), and their application to the design of lzip.
+Lzip has been designed, written and tested with great care to replace
+gzip and bzip2 as the standard general-purpose compressed format for
+unix-like systems. This chapter describes the lessons learned from
+these previous formats, and their application to the design of lzip.
 
 @sp 1
 @section Format design
@@ -484,18 +490,21 @@ is extraordinarily safe. It provides embedded error detection. Any
 distance larger than the dictionary size acts as a forbidden symbol,
 allowing the decompressor to detect the approximate position of errors,
 and leaving very little work for the check sequence (CRC and data sizes)
-in the detection of errors. Lzip is usually able to detect all posible
+in the detection of errors. Lzip is usually able to detect all possible
 bit flips in the compressed data without resorting to the check
 sequence. It would be difficult to write an automatic recovery tool like
 lziprecover for the gzip format. And, as far as I know, it has never
 been written.
 
 Lzip, like gzip and bzip2, uses a CRC32 to check the integrity of the
-decompressed data because it provides more accurate error detection than
-CRC64 up to a compressed size of about @w{16 GiB}, a size larger than
-that of most files. In the case of lzip, the additional detection
+decompressed data because it provides optimal accuracy in the detection
+of errors up to a compressed size of about @w{16 GiB}, a size larger
+than that of most files. In the case of lzip, the additional detection
 capability of the decompressor reduces the probability of undetected
-errors more than a million times beyond what the CRC32 alone provides.
+errors about four million times more, resulting in a combined integrity
+checking optimally accurate for any member size produced by lzip.
+Preliminary results suggest that the lzip format is safe enough to be
+used in critical safety avionics systems.
 
 The lzip format is designed for long-term archiving. Therefore it
 excludes any unneeded features that may interfere with the future
@@ -554,7 +563,7 @@ size. The size of any file larger than @w{4 GiB} gets truncated.
 Bzip2 does not store the uncompressed size of the file.
 
 The lzip format provides a 64-bit field for the uncompressed size.
-Additionaly, lzip produces multimember output automatically when the
+Additionally, lzip produces multimember output automatically when the
 size is too large for a single member, allowing for an unlimited
 uncompressed size.
 
@@ -609,10 +618,10 @@ vulnerability or false negative.
 
 @item Dictionary size
 
-Lzip automatically uses the smallest possible dictionary size for each
-file. In addition to reducing the amount of memory required for
-decompression, this feature also minimizes the probability of being
-affected by RAM errors during compression.
+Lzip automatically adapts the dictionary size to the size of each file.
+In addition to reducing the amount of memory required for decompression,
+this feature also minimizes the probability of being affected by RAM
+errors during compression. @c key4_mask
 
 @item Exit status
 
@@ -669,12 +678,13 @@ A four byte string, identifying the lzip format, with the value "LZIP"
 @item VN (version number, 1 byte)
 Just in case something needs to be modified in the future. 1 for now.
 
+@anchor{coded-dict-size}
 @item DS (coded dictionary size, 1 byte)
 The dictionary size is calculated by taking a power of 2 (the base size)
-and substracting from it a fraction between 0/16 and 7/16 of the base
+and subtracting from it a fraction between 0/16 and 7/16 of the base
 size.@*
 Bits 4-0 contain the base 2 logarithm of the base size (12 to 29).@*
-Bits 7-5 contain the numerator of the fraction (0 to 7) to substract
+Bits 7-5 contain the numerator of the fraction (0 to 7) to subtract
 from the base size to obtain the dictionary size.@*
 Example: 0xD3 = 2^19 - 6 * 2^15 = 512 KiB - 6 * 32 KiB = 320 KiB@*
 Valid values for dictionary size range from 4 KiB to 512 MiB.
@@ -934,7 +944,7 @@ are:
 @sp 1
 The contexts for decoding the type of coding sequence are:
 
-@multitable @columnfractions .2 .4 .4
+@multitable @columnfractions .2 .35 .45
 @headitem Name @tab Indices @tab Used when
 @item bm_match @tab state, pos_state @tab sequence start
 @item bm_rep @tab state @tab after sequence 1
@@ -947,7 +957,7 @@ The contexts for decoding the type of coding sequence are:
 @sp 1
 The contexts for decoding distances are:
 
-@multitable @columnfractions .2 .4 .4
+@multitable @columnfractions .2 .3 .5
 @headitem Name @tab Indices @tab Used when
 @item bm_dis_slot @tab len_state, bit tree @tab distance start
 @item bm_dis @tab reverse bit tree @tab after slots 4 to 13
@@ -1068,9 +1078,12 @@ where a file containing trailing data must be rejected, the option
 WARNING! Even if lzip is bug-free, other causes may result in a corrupt
 compressed file (bugs in the system libraries, memory errors, etc).
 Therefore, if the data you are going to compress are important, give the
-@samp{--keep} option to lzip and don't remove the original file until
-you verify the compressed file with a command like
-@w{@samp{lzip -cd file.lz | cmp file -}}.
+@samp{--keep} option to lzip and don't remove the original file until you
+verify the compressed file with a command like
+@w{@samp{lzip -cd file.lz | cmp file -}}. Most RAM errors happening during
+compression can only be detected by comparing the compressed file with the
+original because the corruption happens before lzip compresses the RAM
+contents, resulting in a valid compressed file containing wrong data.
 
 @sp 1
 @noindent
@@ -1198,7 +1211,7 @@ find by running @w{@code{lzip --version}}.
 
 @verbatim
 /*  Lzd - Educational decompressor for the lzip format
-    Copyright (C) 2013-2018 Antonio Diaz Diaz.
+    Copyright (C) 2013-2019 Antonio Diaz Diaz.
 
     This program is free software. Redistribution and use in source and
     binary forms, with or without modification, are permitted provided
@@ -1228,7 +1241,7 @@ find by running @w{@code{lzip --version}}.
 #include <cstring>
 #include <stdint.h>
 #include <unistd.h>
-#if defined(__MSVCRT__) || defined(__OS2__) || defined(_MSC_VER)
+#if defined(__MSVCRT__) || defined(__OS2__) || defined(__DJGPP__)
 #include <fcntl.h>
 #include <io.h>
 #endif
@@ -1329,9 +1342,9 @@ public:
 const CRC32 crc32;
 
 
-typedef uint8_t File_header[6];	// 0-3 magic, 4 version, 5 coded_dict_size
+typedef uint8_t Lzip_header[6];	// 0-3 magic, 4 version, 5 coded_dict_size
 
-typedef uint8_t File_trailer[20];
+typedef uint8_t Lzip_trailer[20];
 			//  0-3  CRC32 of the uncompressed data
 			//  4-11 size of the uncompressed data
 			// 12-19 member size including header and trailer
@@ -1525,6 +1538,7 @@ bool LZ_decoder::decode_member()		// Returns false if error
     const int pos_state = data_position() & pos_state_mask;
     if( rdec.decode_bit( bm_match[state()][pos_state] ) == 0 )	// 1st bit
       {
+      // literal byte
       const uint8_t prev_byte = peek( 0 );
       const int literal_state = prev_byte >> ( 8 - literal_context_bits );
       Bit_model * const bm = bm_literal[literal_state];
@@ -1533,67 +1547,66 @@ bool LZ_decoder::decode_member()		// Returns false if error
       else
         put_byte( rdec.decode_matched( bm, peek( rep0 ) ) );
       state.set_char();
+      continue;
       }
-    else					// match or repeated match
+    // match or repeated match
+    int len;
+    if( rdec.decode_bit( bm_rep[state()] ) != 0 )		// 2nd bit
       {
-      int len;
-      if( rdec.decode_bit( bm_rep[state()] ) != 0 )		// 2nd bit
+      if( rdec.decode_bit( bm_rep0[state()] ) == 0 )		// 3rd bit
         {
-        if( rdec.decode_bit( bm_rep0[state()] ) == 0 )		// 3rd bit
-          {
-          if( rdec.decode_bit( bm_len[state()][pos_state] ) == 0 ) // 4th bit
-            { state.set_short_rep(); put_byte( peek( rep0 ) ); continue; }
-          }
+        if( rdec.decode_bit( bm_len[state()][pos_state] ) == 0 ) // 4th bit
+          { state.set_short_rep(); put_byte( peek( rep0 ) ); continue; }
+        }
+      else
+        {
+        unsigned distance;
+        if( rdec.decode_bit( bm_rep1[state()] ) == 0 )		// 4th bit
+          distance = rep1;
         else
           {
-          unsigned distance;
-          if( rdec.decode_bit( bm_rep1[state()] ) == 0 )	// 4th bit
-            distance = rep1;
+          if( rdec.decode_bit( bm_rep2[state()] ) == 0 )	// 5th bit
+            distance = rep2;
           else
-            {
-            if( rdec.decode_bit( bm_rep2[state()] ) == 0 )	// 5th bit
-              distance = rep2;
-            else
-              { distance = rep3; rep3 = rep2; }
-            rep2 = rep1;
-            }
-          rep1 = rep0;
-          rep0 = distance;
+            { distance = rep3; rep3 = rep2; }
+          rep2 = rep1;
           }
-        state.set_rep();
-        len = min_match_len + rdec.decode_len( rep_len_model, pos_state );
+        rep1 = rep0;
+        rep0 = distance;
         }
-      else					// match
-        {
-        rep3 = rep2; rep2 = rep1; rep1 = rep0;
-        len = min_match_len + rdec.decode_len( match_len_model, pos_state );
-        const int len_state = std::min( len - min_match_len, len_states - 1 );
-        rep0 = rdec.decode_tree( bm_dis_slot[len_state], dis_slot_bits );
-        if( rep0 >= start_dis_model )
-          {
-          const unsigned dis_slot = rep0;
-          const int direct_bits = ( dis_slot >> 1 ) - 1;
-          rep0 = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
-          if( dis_slot < end_dis_model )
-            rep0 += rdec.decode_tree_reversed( bm_dis + ( rep0 - dis_slot ),
-                                               direct_bits );
-          else
-            {
-            rep0 += rdec.decode( direct_bits - dis_align_bits ) << dis_align_bits;
-            rep0 += rdec.decode_tree_reversed( bm_align, dis_align_bits );
-            if( rep0 == 0xFFFFFFFFU )		// marker found
-              {
-              flush_data();
-              return ( len == min_match_len );	// End Of Stream marker
-              }
-            }
-          }
-        state.set_match();
-        if( rep0 >= dictionary_size || ( rep0 >= pos && !pos_wrapped ) )
-          { flush_data(); return false; }
-        }
-      for( int i = 0; i < len; ++i ) put_byte( peek( rep0 ) );
+      state.set_rep();
+      len = min_match_len + rdec.decode_len( rep_len_model, pos_state );
       }
+    else					// match
+      {
+      rep3 = rep2; rep2 = rep1; rep1 = rep0;
+      len = min_match_len + rdec.decode_len( match_len_model, pos_state );
+      const int len_state = std::min( len - min_match_len, len_states - 1 );
+      rep0 = rdec.decode_tree( bm_dis_slot[len_state], dis_slot_bits );
+      if( rep0 >= start_dis_model )
+        {
+        const unsigned dis_slot = rep0;
+        const int direct_bits = ( dis_slot >> 1 ) - 1;
+        rep0 = ( 2 | ( dis_slot & 1 ) ) << direct_bits;
+        if( dis_slot < end_dis_model )
+          rep0 += rdec.decode_tree_reversed( bm_dis + ( rep0 - dis_slot ),
+                                             direct_bits );
+        else
+          {
+          rep0 += rdec.decode( direct_bits - dis_align_bits ) << dis_align_bits;
+          rep0 += rdec.decode_tree_reversed( bm_align, dis_align_bits );
+          if( rep0 == 0xFFFFFFFFU )		// marker found
+            {
+            flush_data();
+            return ( len == min_match_len );	// End Of Stream marker
+            }
+          }
+        }
+      state.set_match();
+      if( rep0 >= dictionary_size || ( rep0 >= pos && !pos_wrapped ) )
+        { flush_data(); return false; }
+      }
+    for( int i = 0; i < len; ++i ) put_byte( peek( rep0 ) );
     }
   flush_data();
   return false;
@@ -1611,7 +1624,7 @@ int main( const int argc, const char * const argv[] )
                  "It is not safe to use lzd for any real work.\n"
                  "\nUsage: %s < file.lz > file\n", argv[0] );
     std::printf( "Lzd decompresses from standard input to standard output.\n"
-                 "\nCopyright (C) 2018 Antonio Diaz Diaz.\n"
+                 "\nCopyright (C) 2019 Antonio Diaz Diaz.\n"
                  "This is free software: you are free to change and redistribute it.\n"
                  "There is NO WARRANTY, to the extent permitted by law.\n"
                  "Report bugs to lzip-bug@nongnu.org\n"
@@ -1619,14 +1632,14 @@ int main( const int argc, const char * const argv[] )
     return 0;
     }
 
-#if defined(__MSVCRT__) || defined(__OS2__) || defined(_MSC_VER)
-  setmode( fileno( stdin ), O_BINARY );
-  setmode( fileno( stdout ), O_BINARY );
+#if defined(__MSVCRT__) || defined(__OS2__) || defined(__DJGPP__)
+  setmode( STDIN_FILENO, O_BINARY );
+  setmode( STDOUT_FILENO, O_BINARY );
 #endif
 
   for( bool first_member = true; ; first_member = false )
     {
-    File_header header;				// verify header
+    Lzip_header header;				// verify header
     for( int i = 0; i < 6; ++i ) header[i] = std::getc( stdin );
     if( std::feof( stdin ) || std::memcmp( header, "LZIP\x01", 5 ) != 0 )
       {
@@ -1645,7 +1658,7 @@ int main( const int argc, const char * const argv[] )
     if( !decoder.decode_member() )
       { std::fputs( "Data error\n", stderr ); return 2; }
 
-    File_trailer trailer;			// verify trailer
+    Lzip_trailer trailer;			// verify trailer
     for( int i = 0; i < 20; ++i ) trailer[i] = std::getc( stdin );
     unsigned crc = 0;
     for( int i = 3; i >= 0; --i ) { crc <<= 8; crc += trailer[i]; }

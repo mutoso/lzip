@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2018 Antonio Diaz Diaz.
+    Copyright (C) 2008-2019 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -26,7 +26,7 @@
 #include <sys/stat.h>
 
 #include "lzip.h"
-#include "file_index.h"
+#include "lzip_index.h"
 
 
 namespace {
@@ -65,18 +65,18 @@ int list_files( const std::vector< std::string > & filenames,
       open_instream( input_filename, &in_stats, true, true );
     if( infd < 0 ) { if( retval < 1 ) retval = 1; continue; }
 
-    const File_index file_index( infd, ignore_trailing, loose_trailing );
+    const Lzip_index lzip_index( infd, ignore_trailing, loose_trailing );
     close( infd );
-    if( file_index.retval() != 0 )
+    if( lzip_index.retval() != 0 )
       {
-      show_file_error( input_filename, file_index.error().c_str() );
-      if( retval < file_index.retval() ) retval = file_index.retval();
+      show_file_error( input_filename, lzip_index.error().c_str() );
+      if( retval < lzip_index.retval() ) retval = lzip_index.retval();
       continue;
       }
     if( verbosity >= 0 )
       {
-      const unsigned long long udata_size = file_index.udata_size();
-      const unsigned long long cdata_size = file_index.cdata_size();
+      const unsigned long long udata_size = lzip_index.udata_size();
+      const unsigned long long cdata_size = lzip_index.cdata_size();
       total_comp += cdata_size; total_uncomp += udata_size; ++files;
       if( first_post )
         {
@@ -87,22 +87,22 @@ int list_files( const std::vector< std::string > & filenames,
       if( verbosity >= 1 )
         {
         unsigned dictionary_size = 0;
-        for( long i = 0; i < file_index.members(); ++i )
+        for( long i = 0; i < lzip_index.members(); ++i )
           dictionary_size =
-            std::max( dictionary_size, file_index.dictionary_size( i ) );
-        const long long trailing_size = file_index.file_size() - cdata_size;
+            std::max( dictionary_size, lzip_index.dictionary_size( i ) );
+        const long long trailing_size = lzip_index.file_size() - cdata_size;
         std::printf( "%s %5ld %6lld ", format_ds( dictionary_size ),
-                     file_index.members(), trailing_size );
+                     lzip_index.members(), trailing_size );
         }
       list_line( udata_size, cdata_size, input_filename );
 
-      if( verbosity >= 2 && file_index.members() > 1 )
+      if( verbosity >= 2 && lzip_index.members() > 1 )
         {
         std::fputs( " member      data_pos       data_size      member_pos     member_size\n", stdout );
-        for( long i = 0; i < file_index.members(); ++i )
+        for( long i = 0; i < lzip_index.members(); ++i )
           {
-          const Block & db = file_index.dblock( i );
-          const Block & mb = file_index.mblock( i );
+          const Block & db = lzip_index.dblock( i );
+          const Block & mb = lzip_index.mblock( i );
           std::printf( "%5ld %15llu %15llu %15llu %15llu\n",
                        i + 1, db.pos(), db.size(), mb.pos(), mb.size() );
           }

@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2018 Antonio Diaz Diaz.
+    Copyright (C) 2008-2019 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -232,7 +232,7 @@ class Range_encoder
   unsigned ff_count;
   const int outfd;		// output file descriptor
   uint8_t cache;
-  File_header header;
+  Lzip_header header;
 
   void shift_low()
     {
@@ -260,7 +260,7 @@ public:
     ff_count = 0;
     cache = 0;
     header.dictionary_size( dictionary_size );
-    for( int i = 0; i < File_header::size; ++i )
+    for( int i = 0; i < Lzip_header::size; ++i )
       put_byte( header.data[i] );
     }
 

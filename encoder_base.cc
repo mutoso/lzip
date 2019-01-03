@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2018 Antonio Diaz Diaz.
+    Copyright (C) 2008-2019 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -50,10 +50,11 @@ bool Matchfinder_base::read_block()
 void Matchfinder_base::normalize_pos()
   {
   if( pos > stream_pos )
-    internal_error( "pos > stream_pos in Matchfinder_base::normalize_pos." );
+    internal_error( "pos > stream_pos in normalize_pos." );
   if( !at_stream_end )
     {
-    const int offset = pos - before_size - dictionary_size;
+    // offset is int32_t for the std::min below
+    const int32_t offset = pos - before_size - dictionary_size;
     const int size = stream_pos - offset;
     std::memmove( buffer, buffer + offset, size );
     partial_data_pos += offset;
@@ -104,7 +105,7 @@ Matchfinder_base::Matchfinder_base( const int before_size_,
   unsigned size = 1 << std::max( 16, real_bits( dictionary_size - 1 ) - 2 );
   if( dictionary_size > 1 << 26 )		// 64 MiB
     size >>= 1;
-  key4_mask = size - 1;
+  key4_mask = size - 1;			// increases with dictionary size
   size += num_prev_positions23;
   num_prev_positions = size;
 
@@ -163,11 +164,11 @@ void LZ_encoder_base::full_flush( const State state )
   renc.encode_bit( bm_rep[state()], 0 );
   encode_pair( 0xFFFFFFFFU, min_match_len, pos_state );
   renc.flush();
-  File_trailer trailer;
+  Lzip_trailer trailer;
   trailer.data_crc( crc() );
   trailer.data_size( data_position() );
-  trailer.member_size( renc.member_position() + File_trailer::size );
-  for( int i = 0; i < File_trailer::size; ++i )
+  trailer.member_size( renc.member_position() + Lzip_trailer::size );
+  for( int i = 0; i < Lzip_trailer::size; ++i )
     renc.put_byte( trailer.data[i] );
   renc.flush_data();
   }
@@ -177,14 +178,14 @@ void LZ_encoder_base::reset()
   {
   Matchfinder_base::reset();
   crc_ = 0xFFFFFFFFU;
-  bm_literal[0][0].reset( ( 1 << literal_context_bits ) * 0x300 );
+  bm_literal[0][0].reset( (1 << literal_context_bits) * 0x300 );
   bm_match[0][0].reset( State::states * pos_states );
   bm_rep[0].reset( State::states );
   bm_rep0[0].reset( State::states );
   bm_rep1[0].reset( State::states );
   bm_rep2[0].reset( State::states );
   bm_len[0][0].reset( State::states * pos_states );
-  bm_dis_slot[0][0].reset( len_states * (1 << dis_slot_bits ) );
+  bm_dis_slot[0][0].reset( len_states * (1 << dis_slot_bits) );
   bm_dis[0].reset( modeled_distances - end_dis_model + 1 );
   bm_align[0].reset( dis_align_size );
   match_len_model.reset();

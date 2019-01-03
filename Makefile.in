@@ -7,7 +7,7 @@ INSTALL_DIR = $(INSTALL) -d -m 755
 SHELL = /bin/sh
 CAN_RUN_INSTALLINFO = $(SHELL) -c "install-info --version" > /dev/null 2>&1
 
-objs = arg_parser.o file_index.o list.o encoder_base.o encoder.o \
+objs = arg_parser.o lzip_index.o list.o encoder_base.o encoder.o \
        fast_encoder.o decoder.o main.o
 
 
@@ -34,8 +34,8 @@ decoder.o      : lzip.h decoder.h
 encoder_base.o : lzip.h encoder_base.h
 encoder.o      : lzip.h encoder_base.h encoder.h
 fast_encoder.o : lzip.h encoder_base.h fast_encoder.h
-file_index.o   : lzip.h file_index.h
-list.o         : lzip.h file_index.h
+list.o         : lzip.h lzip_index.h
+lzip_index.o   : lzip.h lzip_index.h
 main.o         : arg_parser.h lzip.h decoder.h encoder_base.h encoder.h fast_encoder.h
 
 

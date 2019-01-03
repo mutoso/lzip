@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2018 Antonio Diaz Diaz.
+    Copyright (C) 2008-2019 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -38,20 +38,25 @@
 #include <unistd.h>
 #include <utime.h>
 #include <sys/stat.h>
-#if defined(__MSVCRT__)
+#if defined(__MSVCRT__) || defined(__OS2__) || defined(__DJGPP__)
 #include <io.h>
+#if defined(__MSVCRT__)
 #define fchmod(x,y) 0
 #define fchown(x,y,z) 0
 #define strtoull std::strtoul
 #define SIGHUP SIGTERM
 #define S_ISSOCK(x) 0
+#ifndef S_IRGRP
 #define S_IRGRP 0
 #define S_IWGRP 0
 #define S_IROTH 0
 #define S_IWOTH 0
 #endif
-#if defined(__OS2__)
-#include <io.h>
+#endif
+#if defined(__DJGPP__)
+#define S_ISSOCK(x) 0
+#define S_ISVTX 0
+#endif
 #endif
 
 #include "arg_parser.h"
@@ -73,9 +78,8 @@ int verbosity = 0;
 
 namespace {
 
-const char * const Program_name = "Lzip";
 const char * const program_name = "lzip";
-const char * const program_year = "2018";
+const char * const program_year = "2019";
 const char * invocation_name = 0;
 
 const struct { const char * from; const char * to; } known_extensions[] = {
@@ -91,6 +95,8 @@ struct Lzma_options
 
 enum Mode { m_compress, m_decompress, m_list, m_test };
 
+/* Variables used in signal handler context.
+   They are not declared volatile because the handler never returns. */
 std::string output_filename;
 int outfd = -1;
 bool delete_output_on_interrupt = false;
@@ -98,8 +104,14 @@ bool delete_output_on_interrupt = false;
 
 void show_help()
   {
-  std::printf( "%s - LZMA lossless data compressor.\n", Program_name );
-  std::printf( "\nUsage: %s [options] [files]\n", invocation_name );
+  std::printf( "Lzip is a lossless data compressor with a user interface similar to the\n"
+               "one of gzip or bzip2. Lzip can compress about as fast as gzip (lzip -0)\n"
+               "or compress most files more than bzip2 (lzip -9). Decompression speed is\n"
+               "intermediate between gzip and bzip2. Lzip is better than gzip and bzip2\n"
+               "from a data recovery perspective. Lzip has been designed, written and\n"
+               "tested with great care to replace gzip and bzip2 as the standard\n"
+               "general-purpose compressed format for unix-like systems.\n"
+               "\nUsage: %s [options] [files]\n", invocation_name );
   std::printf( "\nOptions:\n"
                "  -h, --help                     display this help and exit\n"
                "  -V, --version                  output version information and exit\n"
@@ -115,7 +127,7 @@ void show_help()
                "  -o, --output=<file>            if reading standard input, write to <file>\n"
                "  -q, --quiet                    suppress all messages\n"
                "  -s, --dictionary-size=<bytes>  set dictionary size limit in bytes [8 MiB]\n"
-               "  -S, --volume-size=<bytes>      set volume size limit in bytes, implies -k\n"
+               "  -S, --volume-size=<bytes>      set volume size limit in bytes\n"
                "  -t, --test                     test compressed file integrity\n"
                "  -v, --verbose                  be verbose (a 2nd -v gives more)\n"
                "  -0 .. -9                       set compression level [default 6]\n"
@@ -258,7 +270,7 @@ int get_dict_size( const char * const arg )
   const long bits = std::strtol( arg, &tail, 0 );
   if( bits >= min_dictionary_bits &&
       bits <= max_dictionary_bits && *tail == 0 )
-    return ( 1 << bits );
+    return 1 << bits;
   return getnum( arg, min_dictionary_size, max_dictionary_size );
   }
 
@@ -404,8 +416,17 @@ bool check_tty( const char * const input_filename, const int infd,
   }
 
 
+void set_signals( void (*action)(int) )
+  {
+  std::signal( SIGHUP, action );
+  std::signal( SIGINT, action );
+  std::signal( SIGTERM, action );
+  }
+
+
 void cleanup_and_fail( const int retval )
   {
+  set_signals( SIG_IGN );			// ignore signals
   if( delete_output_on_interrupt )
     {
     delete_output_on_interrupt = false;
@@ -417,6 +438,13 @@ void cleanup_and_fail( const int retval )
       show_error( "WARNING: deletion of output file (apparently) failed." );
     }
   std::exit( retval );
+  }
+
+
+extern "C" void signal_handler( int )
+  {
+  show_error( "Control-C or similar caught, quitting." );
+  cleanup_and_fail( 1 );
   }
 
 
@@ -483,7 +511,7 @@ int compress( const unsigned long long cfile_size,
       encoder = new FLZ_encoder( infd, outfd );
     else
       {
-      File_header header;
+      Lzip_header header;
       if( header.dictionary_size( encoder_options.dictionary_size ) &&
           encoder_options.match_len_limit >= min_match_len_limit &&
           encoder_options.match_len_limit <= max_match_len )
@@ -534,12 +562,12 @@ int compress( const unsigned long long cfile_size,
                       in_size, out_size );
       }
     }
-  catch( std::bad_alloc )
+  catch( std::bad_alloc & )
     {
     pp( "Not enough memory. Try a smaller dictionary size." );
     retval = 1;
     }
-  catch( Error e ) { pp(); show_error( e.msg, errno ); retval = 1; }
+  catch( Error & e ) { pp(); show_error( e.msg, errno ); retval = 1; }
   delete encoder;
   return retval;
   }
@@ -590,9 +618,9 @@ int decompress( const unsigned long long cfile_size, const int infd,
     Range_decoder rdec( infd );
     for( bool first_member = true; ; first_member = false )
       {
-      File_header header;
+      Lzip_header header;
       rdec.reset_member_position();
-      const int size = rdec.read_data( header.data, File_header::size );
+      const int size = rdec.read_data( header.data, Lzip_header::size );
       if( rdec.finished() )			// End Of File
         {
         if( first_member )
@@ -646,26 +674,11 @@ int decompress( const unsigned long long cfile_size, const int infd,
         { std::fputs( testing ? "ok\n" : "done\n", stderr ); pp.reset(); }
       }
     }
-  catch( std::bad_alloc ) { pp( "Not enough memory." ); retval = 1; }
-  catch( Error e ) { pp(); show_error( e.msg, errno ); retval = 1; }
+  catch( std::bad_alloc & ) { pp( "Not enough memory." ); retval = 1; }
+  catch( Error & e ) { pp(); show_error( e.msg, errno ); retval = 1; }
   if( verbosity == 1 && retval == 0 )
     std::fputs( testing ? "ok\n" : "done\n", stderr );
   return retval;
-  }
-
-
-extern "C" void signal_handler( int )
-  {
-  show_error( "Control-C or similar caught, quitting." );
-  cleanup_and_fail( 1 );
-  }
-
-
-void set_signals()
-  {
-  std::signal( SIGHUP, signal_handler );
-  std::signal( SIGINT, signal_handler );
-  std::signal( SIGTERM, signal_handler );
   }
 
 } // end namespace
@@ -675,11 +688,9 @@ void show_error( const char * const msg, const int errcode, const bool help )
   {
   if( verbosity < 0 ) return;
   if( msg && msg[0] )
-    {
-    std::fprintf( stderr, "%s: %s", program_name, msg );
-    if( errcode > 0 ) std::fprintf( stderr, ": %s", std::strerror( errcode ) );
-    std::fputc( '\n', stderr );
-    }
+    std::fprintf( stderr, "%s: %s%s%s\n", program_name, msg,
+                  ( errcode > 0 ) ? ": " : "",
+                  ( errcode > 0 ) ? std::strerror( errcode ) : "" );
   if( help )
     std::fprintf( stderr, "Try '%s --help' for more information.\n",
                   invocation_name );
@@ -689,10 +700,10 @@ void show_error( const char * const msg, const int errcode, const bool help )
 void show_file_error( const char * const filename, const char * const msg,
                       const int errcode )
   {
-  if( verbosity < 0 ) return;
-  std::fprintf( stderr, "%s: %s: %s", program_name, filename, msg );
-  if( errcode > 0 ) std::fprintf( stderr, ": %s", std::strerror( errcode ) );
-  std::fputc( '\n', stderr );
+  if( verbosity >= 0 )
+    std::fprintf( stderr, "%s: %s: %s%s%s\n", program_name, filename, msg,
+                  ( errcode > 0 ) ? ": " : "",
+                  ( errcode > 0 ) ? std::strerror( errcode ) : "" );
   }
 
 
@@ -874,7 +885,7 @@ int main( const int argc, const char * const argv[] )
       }
     } // end process options
 
-#if defined(__MSVCRT__) || defined(__OS2__)
+#if defined(__MSVCRT__) || defined(__OS2__) || defined(__DJGPP__)
   setmode( STDIN_FILENO, O_BINARY );
   setmode( STDOUT_FILENO, O_BINARY );
 #endif
@@ -900,7 +911,7 @@ int main( const int argc, const char * const argv[] )
 
   if( !to_stdout && program_mode != m_test &&
       ( filenames_given || default_output_filename.size() ) )
-    set_signals();
+    set_signals( signal_handler );
 
   Pretty_print pp( filenames );
 
@@ -979,6 +990,12 @@ int main( const int argc, const char * const argv[] )
     else
       tmp = decompress( cfile_size, infd, pp, ignore_trailing,
                         loose_trailing, program_mode == m_test );
+    if( close( infd ) != 0 )
+      {
+      show_error( input_filename.size() ? "Error closing input file" :
+                                          "Error closing stdin", errno );
+      if( tmp < 1 ) tmp = 1;
+      }
     if( tmp > retval ) retval = tmp;
     if( tmp )
       { if( program_mode != m_test ) cleanup_and_fail( retval );
@@ -988,7 +1005,6 @@ int main( const int argc, const char * const argv[] )
       close_and_set_permissions( in_statsp );
     if( input_filename.size() )
       {
-      close( infd );
       if( !keep_input_files && !to_stdout && program_mode != m_test &&
           ( program_mode != m_compress || volume_size == 0 ) )
         std::remove( input_filename.c_str() );

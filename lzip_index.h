@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2018 Antonio Diaz Diaz.
+    Copyright (C) 2008-2019 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -36,7 +36,7 @@ public:
   };
 
 
-class File_index
+class Lzip_index
   {
   struct Member
     {
@@ -50,7 +50,7 @@ class File_index
 
   std::vector< Member > member_vector;
   std::string error_;
-  const long long isize;
+  const long long insize;
   int retval_;
 
   void set_errno_error( const char * const msg );
@@ -59,7 +59,7 @@ class File_index
          const bool ignore_trailing, const bool loose_trailing );
 
 public:
-  File_index( const int infd, const bool ignore_trailing,
+  Lzip_index( const int infd, const bool ignore_trailing,
               const bool loose_trailing );
 
   long members() const { return member_vector.size(); }
@@ -76,7 +76,7 @@ public:
 
   // total size including trailing data (if any)
   long long file_size() const
-    { if( isize >= 0 ) return isize; else return 0; }
+    { if( insize >= 0 ) return insize; else return 0; }
 
   const Block & dblock( const long i ) const
     { return member_vector[i].dblock; }

@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2018 Antonio Diaz Diaz.
+    Copyright (C) 2008-2019 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -27,7 +27,7 @@
 #include <unistd.h>
 
 #include "lzip.h"
-#include "file_index.h"
+#include "lzip_index.h"
 
 
 namespace {
@@ -43,13 +43,13 @@ int seek_read( const int fd, uint8_t * const buf, const int size,
 } // end namespace
 
 
-void File_index::set_errno_error( const char * const msg )
+void Lzip_index::set_errno_error( const char * const msg )
   {
   error_ = msg; error_ += std::strerror( errno );
   retval_ = 1;
   }
 
-void File_index::set_num_error( const char * const msg, unsigned long long num )
+void Lzip_index::set_num_error( const char * const msg, unsigned long long num )
   {
   char buf[80];
   snprintf( buf, sizeof buf, "%s%llu", msg, num );
@@ -59,11 +59,11 @@ void File_index::set_num_error( const char * const msg, unsigned long long num )
 
 
 // If successful, push last member and set pos to member header.
-bool File_index::skip_trailing_data( const int fd, long long & pos,
+bool Lzip_index::skip_trailing_data( const int fd, long long & pos,
                    const bool ignore_trailing, const bool loose_trailing )
   {
   enum { block_size = 16384,
-         buffer_size = block_size + File_trailer::size - 1 + File_header::size };
+         buffer_size = block_size + Lzip_trailer::size - 1 + Lzip_header::size };
   uint8_t buffer[buffer_size];
   if( pos < min_member_size ) return false;
   int bsize = pos % block_size;			// total bytes in buffer
@@ -77,28 +77,28 @@ bool File_index::skip_trailing_data( const int fd, long long & pos,
     if( seek_read( fd, buffer, rd_size, ipos ) != rd_size )
       { set_errno_error( "Error seeking member trailer: " ); return false; }
     const uint8_t max_msb = ( ipos + search_size ) >> 56;
-    for( int i = search_size; i >= File_trailer::size; --i )
+    for( int i = search_size; i >= Lzip_trailer::size; --i )
       if( buffer[i-1] <= max_msb )	// most significant byte of member_size
         {
-        File_trailer & trailer =
-          *(File_trailer *)( buffer + i - File_trailer::size );
+        const Lzip_trailer & trailer =
+          *(const Lzip_trailer *)( buffer + i - Lzip_trailer::size );
         const unsigned long long member_size = trailer.member_size();
-        if( member_size == 0 )
-          { while( i > File_trailer::size && buffer[i-9] == 0 ) --i; continue; }
-        if( member_size < min_member_size || member_size > ipos + i )
+        if( member_size == 0 )			// skip trailing zeros
+          { while( i > Lzip_trailer::size && buffer[i-9] == 0 ) --i; continue; }
+        if( member_size > ipos + i || !trailer.verify_consistency() )
           continue;
-        File_header header;
-        if( seek_read( fd, header.data, File_header::size,
-                       ipos + i - member_size ) != File_header::size )
+        Lzip_header header;
+        if( seek_read( fd, header.data, Lzip_header::size,
+                       ipos + i - member_size ) != Lzip_header::size )
           { set_errno_error( "Error reading member header: " ); return false; }
         const unsigned dictionary_size = header.dictionary_size();
         if( !header.verify_magic() || !header.verify_version() ||
             !isvalid_ds( dictionary_size ) ) continue;
-        if( (*(File_header *)( buffer + i )).verify_prefix( bsize - i ) )
+        if( (*(const Lzip_header *)( buffer + i )).verify_prefix( bsize - i ) )
           { error_ = "Last member in input file is truncated or corrupt.";
             retval_ = 2; return false; }
-        if( !loose_trailing && bsize - i >= File_header::size &&
-            (*(File_header *)( buffer + i )).verify_corrupt() )
+        if( !loose_trailing && bsize - i >= Lzip_header::size &&
+            (*(const Lzip_header *)( buffer + i )).verify_corrupt() )
           { error_ = corrupt_mm_msg; retval_ = 2; return false; }
         if( !ignore_trailing )
           { error_ = trailing_msg; retval_ = 2; return false; }
@@ -108,10 +108,10 @@ bool File_index::skip_trailing_data( const int fd, long long & pos,
         return true;
         }
     if( ipos <= 0 )
-      { set_num_error( "Member size in trailer is corrupt at pos ", pos - 8 );
+      { set_num_error( "Bad trailer at pos ", pos - Lzip_trailer::size );
         return false; }
     bsize = buffer_size;
-    search_size = bsize - File_header::size;
+    search_size = bsize - Lzip_header::size;
     rd_size = block_size;
     ipos -= rd_size;
     std::memcpy( buffer + rd_size, buffer, buffer_size - rd_size );
@@ -119,20 +119,20 @@ bool File_index::skip_trailing_data( const int fd, long long & pos,
   }
 
 
-File_index::File_index( const int infd, const bool ignore_trailing,
+Lzip_index::Lzip_index( const int infd, const bool ignore_trailing,
                         const bool loose_trailing )
-  : isize( lseek( infd, 0, SEEK_END ) ), retval_( 0 )
+  : insize( lseek( infd, 0, SEEK_END ) ), retval_( 0 )
   {
-  if( isize < 0 )
+  if( insize < 0 )
     { set_errno_error( "Input file is not seekable: " ); return; }
-  if( isize < min_member_size )
+  if( insize < min_member_size )
     { error_ = "Input file is too short."; retval_ = 2; return; }
-  if( isize > INT64_MAX )
+  if( insize > INT64_MAX )
     { error_ = "Input file is too long (2^63 bytes or more).";
       retval_ = 2; return; }
 
-  File_header header;
-  if( seek_read( infd, header.data, File_header::size, 0 ) != File_header::size )
+  Lzip_header header;
+  if( seek_read( infd, header.data, Lzip_header::size, 0 ) != Lzip_header::size )
     { set_errno_error( "Error reading member header: " ); return; }
   if( !header.verify_magic() )
     { error_ = bad_magic_msg; retval_ = 2; return; }
@@ -141,24 +141,24 @@ File_index::File_index( const int infd, const bool ignore_trailing,
   if( !isvalid_ds( header.dictionary_size() ) )
     { error_ = bad_dict_msg; retval_ = 2; return; }
 
-  long long pos = isize;	// always points to a header or to EOF
+  long long pos = insize;	// always points to a header or to EOF
   while( pos >= min_member_size )
     {
-    File_trailer trailer;
-    if( seek_read( infd, trailer.data, File_trailer::size,
-                   pos - File_trailer::size ) != File_trailer::size )
+    Lzip_trailer trailer;
+    if( seek_read( infd, trailer.data, Lzip_trailer::size,
+                   pos - Lzip_trailer::size ) != Lzip_trailer::size )
       { set_errno_error( "Error reading member trailer: " ); break; }
     const unsigned long long member_size = trailer.member_size();
-    if( member_size < min_member_size || member_size > (unsigned long long)pos )
+    if( member_size > (unsigned long long)pos || !trailer.verify_consistency() )
       {
       if( member_vector.empty() )
         { if( skip_trailing_data( infd, pos, ignore_trailing, loose_trailing ) )
             continue; else return; }
-      set_num_error( "Member size in trailer is corrupt at pos ", pos - 8 );
+      set_num_error( "Bad trailer at pos ", pos - Lzip_trailer::size );
       break;
       }
-    if( seek_read( infd, header.data, File_header::size,
-                   pos - member_size ) != File_header::size )
+    if( seek_read( infd, header.data, Lzip_header::size,
+                   pos - member_size ) != Lzip_header::size )
       { set_errno_error( "Error reading member header: " ); break; }
     const unsigned dictionary_size = header.dictionary_size();
     if( !header.verify_magic() || !header.verify_version() ||
@@ -181,7 +181,7 @@ File_index::File_index( const int infd, const bool ignore_trailing,
     return;
     }
   std::reverse( member_vector.begin(), member_vector.end() );
-  for( unsigned long i = 0; i < member_vector.size() - 1; ++i )
+  for( unsigned long i = 0; ; ++i )
     {
     const long long end = member_vector[i].dblock.end();
     if( end < 0 || end > INT64_MAX )
@@ -190,6 +190,7 @@ File_index::File_index( const int infd, const bool ignore_trailing,
       error_ = "Data in input file is too long (2^63 bytes or more).";
       retval_ = 2; return;
       }
+    if( i + 1 >= member_vector.size() ) break;
     member_vector[i+1].dblock.pos( end );
     }
   }

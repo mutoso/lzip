@@ -1,5 +1,5 @@
 /*  Lzip - LZMA lossless data compressor
-    Copyright (C) 2008-2018 Antonio Diaz Diaz.
+    Copyright (C) 2008-2019 Antonio Diaz Diaz.
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -134,7 +134,7 @@ public:
       {
       const std::string & s = filenames[i];
       const unsigned len = ( s == "-" ) ? stdin_name_len : s.size();
-      if( len > longest_name ) longest_name = len;
+      if( longest_name < len ) longest_name = len;
       }
     if( longest_name == 0 ) longest_name = stdin_name_len;
     }
@@ -144,7 +144,7 @@ public:
     if( filename.size() && filename != "-" ) name_ = filename;
     else name_ = stdin_name;
     padded_name = "  "; padded_name += name_; padded_name += ": ";
-    if( name_.size() < longest_name )
+    if( longest_name > name_.size() )
       padded_name.append( longest_name - name_.size(), ' ' );
     first_post = true;
     }
@@ -202,30 +202,30 @@ inline int real_bits( unsigned value )
   }
 
 
-const uint8_t magic_string[4] = { 0x4C, 0x5A, 0x49, 0x50 };	// "LZIP"
+const uint8_t lzip_magic[4] = { 0x4C, 0x5A, 0x49, 0x50 };	// "LZIP"
 
-struct File_header
+struct Lzip_header
   {
   uint8_t data[6];			// 0-3 magic bytes
 					//   4 version
 					//   5 coded_dict_size
   enum { size = 6 };
 
-  void set_magic() { std::memcpy( data, magic_string, 4 ); data[4] = 1; }
+  void set_magic() { std::memcpy( data, lzip_magic, 4 ); data[4] = 1; }
   bool verify_magic() const
-    { return ( std::memcmp( data, magic_string, 4 ) == 0 ); }
+    { return ( std::memcmp( data, lzip_magic, 4 ) == 0 ); }
 
   bool verify_prefix( const int sz ) const	// detect (truncated) header
     {
     for( int i = 0; i < sz && i < 4; ++i )
-      if( data[i] != magic_string[i] ) return false;
+      if( data[i] != lzip_magic[i] ) return false;
     return ( sz > 0 );
     }
   bool verify_corrupt() const			// detect corrupt header
     {
     int matches = 0;
     for( int i = 0; i < 4; ++i )
-      if( data[i] == magic_string[i] ) ++matches;
+      if( data[i] == lzip_magic[i] ) ++matches;
     return ( matches > 1 && matches < 4 );
     }
 
@@ -257,12 +257,11 @@ struct File_header
   };
 
 
-struct File_trailer
+struct Lzip_trailer
   {
   uint8_t data[20];	//  0-3  CRC32 of the uncompressed data
 			//  4-11 size of the uncompressed data
 			// 12-19 member size including header and trailer
-
   enum { size = 20 };
 
   unsigned data_crc() const
@@ -294,6 +293,20 @@ struct File_trailer
 
   void member_size( unsigned long long sz )
     { for( int i = 12; i <= 19; ++i ) { data[i] = (uint8_t)sz; sz >>= 8; } }
+
+  bool verify_consistency() const	// check internal consistency
+    {
+    const unsigned crc = data_crc();
+    const unsigned long long dsize = data_size();
+    if( ( crc == 0 ) != ( dsize == 0 ) ) return false;
+    const unsigned long long msize = member_size();
+    if( msize < min_member_size ) return false;
+    const unsigned long long mlimit = ( 9 * dsize + 7 ) / 8 + min_member_size;
+    if( mlimit > dsize && msize > mlimit ) return false;
+    const unsigned long long dlimit = 7090 * ( msize - 26 ) - 1;
+    if( dlimit > msize && dsize > dlimit ) return false;
+    return true;
+    }
   };
 
 
